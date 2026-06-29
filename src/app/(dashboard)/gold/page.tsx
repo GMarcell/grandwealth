@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   Plus,
@@ -142,21 +142,27 @@ export default function GoldPage() {
     }
   }
 
-  const sorted = (deposits ?? []).sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  const sorted = useMemo(() =>
+    (deposits ?? []).sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    ),
+    [deposits]
   )
 
   // Calculate totals
-  let totalGoldWeight = 0
-  let totalGoldInvested = 0
-  for (const d of deposits ?? []) {
-    if (d.type === "BUY") {
-      totalGoldWeight += d.weightGram
-      totalGoldInvested += d.totalAmount
-    } else {
-      totalGoldWeight -= d.weightGram
+  const { totalGoldWeight, totalGoldInvested } = useMemo(() => {
+    let weight = 0
+    let invested = 0
+    for (const d of deposits ?? []) {
+      if (d.type === "BUY") {
+        weight += d.weightGram
+        invested += d.totalAmount
+      } else {
+        weight -= d.weightGram
+      }
     }
-  }
+    return { totalGoldWeight: weight, totalGoldInvested: invested }
+  }, [deposits])
 
   return (
     <div className="space-y-6">

@@ -1,6 +1,7 @@
 "use client"
 
 import { useQuery } from "@tanstack/react-query"
+import { useMemo } from "react"
 import {
   Plus,
   TrendingUp,
@@ -10,6 +11,9 @@ import {
   Wallet,
   RefreshCw,
   Landmark,
+  PiggyBank,
+  AlertTriangle,
+  CheckCircle2,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -52,6 +56,17 @@ interface DashboardData {
     income: number
     expenses: number
   }>
+  budgetSummary: {
+    totalBudgeted: number
+    totalEffective: number
+    totalRollover: number
+    totalSpent: number
+    remaining: number
+    budgetCount: number
+    overBudget: number
+    overBudgetEntries: Array<{ categoryName: string; overspent: number; percentUsed: number }>
+    nearLimitEntries: Array<{ categoryName: string; remaining: number; percentUsed: number }>
+  }
 }
 
 function StatCardSkeleton() {
@@ -77,10 +92,23 @@ export default function DashboardPage() {
     refetchInterval: 60_000,
   })
 
+  // Memoize computed values to prevent unnecessary recalculations
+  const netPositive = useMemo(() => (data?.netCashflow ?? 0) >= 0, [data?.netCashflow])
+
+  // Pie chart data for wealth breakdown
+  const pieData = useMemo(() =>
+    [
+      { name: "Cash Flow", value: Math.max(0, data?.netCashflow ?? 0) },
+      { name: "Gold", value: data?.totalGoldValue ?? 0 },
+      { name: "Stocks", value: data?.totalStockValue ?? 0 },
+    ].filter((d) => d.value > 0),
+    [data?.netCashflow, data?.totalGoldValue, data?.totalStockValue]
+  )
+
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
           <div>
             <Skeleton className="h-8 w-48" />
             <Skeleton className="h-4 w-64 mt-2" />
@@ -93,15 +121,6 @@ export default function DashboardPage() {
       </div>
     )
   }
-
-  const netPositive = (data?.netCashflow ?? 0) >= 0
-
-  // Pie chart data for wealth breakdown
-  const pieData = [
-    { name: "Cash Flow", value: Math.max(0, data?.netCashflow ?? 0) },
-    { name: "Gold", value: data?.totalGoldValue ?? 0 },
-    { name: "Stocks", value: data?.totalStockValue ?? 0 },
-  ].filter((d) => d.value > 0)
 
   return (
     <div className="space-y-6">
@@ -310,6 +329,127 @@ export default function DashboardPage() {
         </Card>
       </div>
 
+      {/* Budget Summary Card */}
+      {data?.budgetSummary && data.budgetSummary.budgetCount > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-sm font-medium">
+                Monthly Budget
+              </CardTitle>
+              {data.budgetSummary.overBudget > 0 && (
+                <Badge variant="loss" className="text-xs">
+                  <AlertTriangle className="h-3 w-3 mr-0.5" />
+                  {data.budgetSummary.overBudget} over
+                </Badge>
+              )}
+            </div>
+            <PiggyBank className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Overall Progress */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Budget vs Spent</span>
+                <span className="font-medium">
+                  {formatCompactIDR(data.budgetSummary.totalSpent)} /{" "}
+                  {formatCompactIDR(data.budgetSummary.totalEffective || data.budgetSummary.totalBudgeted)}
+                </span>
+              </div>
+              {data.budgetSummary.totalRollover > 0 && (
+                <div className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 className="h-3 w-3" />
+                  <span>+{formatCompactIDR(data.budgetSummary.totalRollover)} rollover from last month</span>
+                </div>
+              )}
+              <div className="h-2.5 w-full rounded-full bg-muted overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    (data.budgetSummary.totalEffective || data.budgetSummary.totalBudgeted) > 0 &&
+                    data.budgetSummary.totalSpent / (data.budgetSummary.totalEffective || data.budgetSummary.totalBudgeted) > 0.8
+                      ? "bg-amber-500"
+                      : "bg-emerald-500"
+                  }`}
+                  style={{
+                    width: `${
+                      (data.budgetSummary.totalEffective || data.budgetSummary.totalBudgeted) > 0
+                        ? Math.min(
+                            (data.budgetSummary.totalSpent /
+                              (data.budgetSummary.totalEffective || data.budgetSummary.totalBudgeted)) *
+                              100,
+                            100
+                          )
+                        : 0
+                    }%`,
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Over-budget alerts */}
+            {data.budgetSummary.overBudgetEntries?.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold text-red-600 dark:text-red-400 flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  Over Budget
+                </h4>
+                <div className="space-y-1.5">
+                  {data.budgetSummary.overBudgetEntries.map((entry) => (
+                    <div
+                      key={entry.categoryName}
+                      className="flex items-center justify-between rounded-md bg-red-500/5 border border-red-500/20 px-3 py-1.5"
+                    >
+                      <span className="text-xs font-medium">
+                        {entry.categoryName.replace("_", " ")}
+                      </span>
+                      <span className="text-xs text-red-600 dark:text-red-400 font-medium">
+                        {formatCompactIDR(entry.overspent)} over ({entry.percentUsed}%)
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Near-limit alerts */}
+            {data.budgetSummary.nearLimitEntries?.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  Near Limit (80%+)
+                </h4>
+                <div className="space-y-1.5">
+                  {data.budgetSummary.nearLimitEntries.map((entry) => (
+                    <div
+                      key={entry.categoryName}
+                      className="flex items-center justify-between rounded-md bg-amber-500/5 border border-amber-500/20 px-3 py-1.5"
+                    >
+                      <span className="text-xs font-medium">
+                        {entry.categoryName.replace("_", " ")}
+                      </span>
+                      <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                        {formatCompactIDR(entry.remaining)} left ({entry.percentUsed}%)
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-xs text-muted-foreground">
+                {data.budgetSummary.budgetCount} categories budgeted
+              </span>
+              <Link href="/budgets">
+                <Button variant="link" size="sm" className="text-xs h-auto p-0">
+                  Manage budgets
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Quick Actions & Recent Transactions */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Quick Actions */}
@@ -322,6 +462,12 @@ export default function DashboardPage() {
               <Button variant="outline" className="w-full justify-start" size="lg">
                 <ArrowLeftRight className="h-4 w-4 mr-2" />
                 Add Transaction
+              </Button>
+            </Link>
+            <Link href="/budgets" className="block">
+              <Button variant="outline" className="w-full justify-start" size="lg">
+                <PiggyBank className="h-4 w-4 mr-2" />
+                Set Budgets
               </Button>
             </Link>
             <Link href="/gold" className="block">

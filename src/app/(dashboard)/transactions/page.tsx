@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   Plus,
@@ -11,6 +11,8 @@ import {
   Search,
   Loader2,
   Filter,
+  Download,
+  FileUp,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -35,14 +37,55 @@ import {
 import { formatIDR, formatDateTime } from "@/lib/utils"
 import { toast } from "sonner"
 
+// Helper to check budget alert level
+function getBudgetAlert(category: string, newAmount: number, budgets: any[], transactions: any[]): { level: "near" | "over" | null; message: string } {
+  const now = new Date()
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+  
+  const budget = budgets?.find((b: any) => b.categoryName === category && b.month === monthKey)
+  if (!budget) return { level: null, message: "" }
+
+  // Calculate total spent for this category this month INCLUDING the new transaction
+  const [year, m] = monthKey.split("-")
+  const startDate = new Date(parseInt(year), parseInt(m) - 1, 1)
+  const endDate = new Date(parseInt(year), parseInt(m), 0)
+
+  let totalSpent = newAmount // include the new transaction
+  for (const tx of transactions ?? []) {
+    if (tx.type !== "EXPENSE" || tx.category !== category) continue
+    const txDate = new Date(tx.date)
+    if (txDate >= startDate && txDate <= endDate) {
+      totalSpent += tx.amount
+    }
+  }
+
+  const percentUsed = (totalSpent / budget.amount) * 100
+  const remaining = budget.amount - totalSpent
+
+  if (percentUsed > 100) {
+    return {
+      level: "over",
+      message: `${category.replace("_", " ")} budget exceeded! ${formatIDR(Math.abs(remaining))} over budget (${Math.round(percentUsed)}% used)`,
+    }
+  }
+  if (percentUsed >= 80) {
+    return {
+      level: "near",
+      message: `${category.replace("_", " ")} nearing budget limit: ${formatIDR(remaining)} remaining (${Math.round(percentUsed)}% used)`,
+    }
+  }
+
+  return { level: null, message: "" }
+}
+
 const TRANSACTION_TYPES = ["INCOME", "EXPENSE"] as const
 
-const INCOME_CATEGORIES = [
+const PREDEFINED_INCOME = [
   "SALARY", "FREELANCE", "BUSINESS", "INVESTMENT", "DIVIDEND",
   "INTEREST", "RENTAL", "GIFT", "REFUND", "OTHER_INCOME",
 ] as const
 
-const EXPENSE_CATEGORIES = [
+const PREDEFINED_EXPENSE = [
   "FOOD", "TRANSPORTATION", "HOUSING", "UTILITIES", "HEALTHCARE",
   "EDUCATION", "ENTERTAINMENT", "SHOPPING", "TRAVEL", "INSURANCE",
   "TAX", "SUBSCRIPTION", "OTHER_EXPENSE",
@@ -89,6 +132,16 @@ export default function TransactionsPage() {
     queryFn: () => fetch("/api/transactions").then((r) => r.json()),
   })
 
+  const { data: customCategories } = useQuery<Array<{ id: string; name: string; type: string; color: string }>>({
+    queryKey: ["categories"],
+    queryFn: () => fetch("/api/categories").then((r) => r.json()),
+  })
+
+  const { data: budgets } = useQuery<any[]>({
+    queryKey: ["budgets"],
+    queryFn: () => fetch("/api/budgets").then((r) => r.json()),
+  })
+
   const createMutation = useMutation({
     mutationFn: (data: any) =>
       fetch("/api/transactions", {
@@ -96,10 +149,22 @@ export default function TransactionsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       }),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
+      queryClient.invalidateQueries({ queryKey: ["budgets"] })
       toast.success("Transaction added")
+      
+      // Check budget alert for expense transactions
+      if (variables.type === "EXPENSE") {
+        const alert = getBudgetAlert(variables.category, parseFloat(variables.amount.toString()), budgets ?? [], transactions ?? [])
+        if (alert.level === "over") {
+          toast.error(alert.message, { duration: 6000 })
+        } else if (alert.level === "near") {
+          toast.warning(alert.message, { duration: 5000 })
+        }
+      }
+      
       resetForm()
     },
     onError: () => toast.error("Failed to add transaction"),
@@ -112,10 +177,25 @@ export default function TransactionsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       }),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
+      queryClient.invalidateQueries({ queryKey: ["budgets"] })
       toast.success("Transaction updated")
+      
+      // Check budget alert for expense transactions
+      if (variables.type === "EXPENSE") {
+        // When editing, subtract the old amount from the total since it's still in cached data
+        const oldAmount = editingTransaction?.amount ? parseFloat(editingTransaction.amount.toString()) : 0
+        const netAdditional = parseFloat(variables.amount.toString()) - oldAmount
+        const alert = getBudgetAlert(variables.category, netAdditional, budgets ?? [], transactions ?? [])
+        if (alert.level === "over") {
+          toast.error(alert.message, { duration: 6000 })
+        } else if (alert.level === "near") {
+          toast.warning(alert.message, { duration: 5000 })
+        }
+      }
+      
       resetForm()
     },
     onError: () => toast.error("Failed to update transaction"),
@@ -169,23 +249,38 @@ export default function TransactionsPage() {
     }
   }
 
-  const categories = formType === "INCOME" ? INCOME_CATEGORIES : EXPENSE_CATEGORIES
+  const filtered = useMemo(() =>
+    (transactions ?? [])
+      .filter((tx) => {
+        if (typeFilter !== "ALL" && tx.type !== typeFilter) return false
+        if (search && !tx.description.toLowerCase().includes(search.toLowerCase())) return false
+        return true
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    [transactions, typeFilter, search]
+  )
 
-  const filtered = (transactions ?? [])
-    .filter((tx) => {
-      if (typeFilter !== "ALL" && tx.type !== typeFilter) return false
-      if (search && !tx.description.toLowerCase().includes(search.toLowerCase())) return false
-      return true
-    })
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  const totalIncome = useMemo(() =>
+    (transactions ?? [])
+      .filter((tx) => tx.type === "INCOME")
+      .reduce((sum, tx) => sum + tx.amount, 0),
+    [transactions]
+  )
 
-  const totalIncome = (transactions ?? [])
-    .filter((tx) => tx.type === "INCOME")
-    .reduce((sum, tx) => sum + tx.amount, 0)
+  const totalExpenses = useMemo(() =>
+    (transactions ?? [])
+      .filter((tx) => tx.type === "EXPENSE")
+      .reduce((sum, tx) => sum + tx.amount, 0),
+    [transactions]
+  )
 
-  const totalExpenses = (transactions ?? [])
-    .filter((tx) => tx.type === "EXPENSE")
-    .reduce((sum, tx) => sum + tx.amount, 0)
+  const categories = useMemo(() => {
+    const userCats = (customCategories ?? [])
+      .filter((c) => c.type === formType)
+      .map((c) => c.name)
+    const predefined = formType === "INCOME" ? PREDEFINED_INCOME : PREDEFINED_EXPENSE
+    return [...predefined, ...userCats.filter((c) => !(predefined as readonly string[]).includes(c))]
+  }, [customCategories, formType])
 
   return (
     <div className="space-y-6">
@@ -197,6 +292,86 @@ export default function TransactionsPage() {
             Track your income and expenses
           </p>
         </div>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          {/* Import button */}
+          <div className="relative">
+            <input
+              type="file"
+              accept=".csv"
+              id="csv-import"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+
+                const formData = new FormData()
+                formData.append("file", file)
+
+                toast.loading("Importing transactions...")
+                try {
+                  const res = await fetch("/api/transactions/import", {
+                    method: "POST",
+                    body: formData,
+                  })
+                  const result = await res.json()
+                  toast.dismiss()
+
+                  if (!res.ok) {
+                    toast.error(result.error || "Import failed")
+                    if (result.importErrors?.length > 0) {
+                      console.error("Import errors:", result.importErrors)
+                    }
+                  } else {
+                    toast.success(result.message)
+                    queryClient.invalidateQueries({ queryKey: ["transactions"] })
+                    queryClient.invalidateQueries({ queryKey: ["dashboard"] })
+                  }
+                } catch {
+                  toast.dismiss()
+                  toast.error("Failed to import CSV")
+                }
+                // Reset input
+                e.target.value = ""
+              }}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => document.getElementById("csv-import")?.click()}
+              className="w-full sm:w-auto"
+            >
+              <FileUp className="h-4 w-4 mr-1" />
+              Import
+            </Button>
+          </div>
+
+          {/* Export button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              try {
+                const res = await fetch("/api/transactions/export")
+                if (!res.ok) throw new Error("Export failed")
+                const blob = await res.blob()
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement("a")
+                a.href = url
+                a.download = `transactions-${new Date().toISOString().split("T")[0]}.csv`
+                a.click()
+                URL.revokeObjectURL(url)
+                toast.success("Transactions exported")
+              } catch {
+                toast.error("Failed to export transactions")
+              }
+            }}
+            className="w-full sm:w-auto"
+          >
+            <Download className="h-4 w-4 mr-1" />
+            Export
+          </Button>
+        </div>
+
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button size="sm" onClick={() => resetForm()} className="w-full sm:w-auto">

@@ -33,6 +33,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             variant="ghost"
             size="icon-sm"
             onClick={() => setIsMobileOpen(true)}
+            className="min-w-[44px] min-h-[44px]"
           >
             <Menu className="h-5 w-5" />
           </Button>
@@ -41,7 +42,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <span className="font-bold">GrandWealth</span>
           </div>
         </div>
-        <div className="p-4 sm:p-6 lg:p-8">
+        <div className="p-3 sm:p-6 lg:p-8">
           {children}
         </div>
       </main>

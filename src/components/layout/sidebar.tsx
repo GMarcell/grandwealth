@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { useQuery } from "@tanstack/react-query"
 import {
   LayoutDashboard,
   ArrowLeftRight,
@@ -16,6 +17,9 @@ import {
   Monitor,
   Check,
   X,
+  PiggyBank,
+  Repeat,
+  BarChart3,
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import { signOut, useSession } from "next-auth/react"
@@ -26,12 +30,16 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu"
+import { Badge } from "@/components/ui/badge"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
+  { href: "/recurring", label: "Recurring", icon: Repeat },
+  { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/gold", label: "Gold", icon: CircleDollarSign },
   { href: "/stocks", label: "Stocks", icon: TrendingUp },
+  { href: "/budgets", label: "Budgets", icon: PiggyBank },
   { href: "/settings", label: "Settings", icon: Settings },
 ]
 
@@ -44,6 +52,15 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
   const { data: session } = useSession()
+
+  // Fetch budget alert count for sidebar badge
+  const { data: dashboardData } = useQuery<any>({
+    queryKey: ["dashboard"],
+    queryFn: () => fetch("/api/dashboard").then((r) => r.json()),
+    refetchInterval: 120_000,
+  })
+
+  const overBudgetCount = dashboardData?.budgetSummary?.overBudget ?? 0
 
   const renderNavItems = (onClick?: () => void) =>
     navItems.map((item) => {
@@ -61,7 +78,12 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
           )}
         >
           <item.icon className="h-4 w-4" />
-          {item.label}
+          <span className="flex-1">{item.label}</span>
+          {item.href === "/budgets" && overBudgetCount > 0 && (
+            <Badge variant="loss" className="h-5 min-w-5 px-1 text-[10px] flex items-center justify-center">
+              {overBudgetCount}
+            </Badge>
+          )}
         </Link>
       )
     })
@@ -71,7 +93,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
       {/* Mobile backdrop */}
       {isMobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden touch-none"
           onClick={onMobileClose}
         />
       )}
@@ -79,13 +101,13 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed left-0 top-0 z-50 flex h-full w-64 flex-col border-r bg-sidebar text-sidebar-foreground transition-transform duration-300 ease-in-out",
+          "fixed left-0 top-0 z-50 flex h-full w-64 max-w-[calc(100vw-3rem)] flex-col border-r bg-sidebar text-sidebar-foreground transition-transform duration-300 ease-in-out",
           "lg:translate-x-0 lg:z-40",
           isMobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
         {/* Logo + Close button */}
-        <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-6">
+        <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4 sm:px-6">
           <div className="flex items-center gap-2">
             <Wallet className="h-6 w-6 text-sidebar-primary" />
             <span className="text-lg font-bold tracking-tight">GrandWealth</span>
@@ -94,14 +116,14 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
             variant="ghost"
             size="icon-sm"
             onClick={onMobileClose}
-            className="lg:hidden text-sidebar-foreground/70 hover:text-sidebar-foreground"
+            className="lg:hidden text-sidebar-foreground/70 hover:text-sidebar-foreground min-w-[44px] min-h-[44px]"
           >
             <X className="h-5 w-5" />
           </Button>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-1 p-4">
+        <nav className="flex-1 space-y-1 overflow-y-auto p-4">
           {renderNavItems(onMobileClose)}
         </nav>
 

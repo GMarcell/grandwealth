@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   Plus,
@@ -138,19 +138,25 @@ export default function StocksPage() {
     }
   }
 
-  const filtered = (stocks ?? []).filter((s) => {
-    if (!search) return true
-    const q = search.toLowerCase()
-    return (
-      s.symbol.toLowerCase().includes(q) ||
-      s.name.toLowerCase().includes(q)
-    )
-  })
+  const filtered = useMemo(() =>
+    (stocks ?? []).filter((s) => {
+      if (!search) return true
+      const q = search.toLowerCase()
+      return (
+        s.symbol.toLowerCase().includes(q) ||
+        s.name.toLowerCase().includes(q)
+      )
+    }),
+    [stocks, search]
+  )
 
   // Calculate totals
-  const totalInvested = (stocks ?? []).reduce(
-    (sum, s) => sum + s.quantity * s.buyPrice,
-    0
+  const totalInvested = useMemo(() =>
+    (stocks ?? []).reduce(
+      (sum, s) => sum + s.quantity * s.buyPrice,
+      0
+    ),
+    [stocks]
   )
 
   return (

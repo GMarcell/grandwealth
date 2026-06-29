@@ -113,6 +113,7 @@
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -126,4 +127,51 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--muted-foreground);
+}
+
+/* Responsive table utilities */
+@layer utilities {
+  .table-container {
+    @apply overflow-x-auto -mx-3 sm:-mx-0;
+  }
+
+  .table-container > table {
+    @apply min-w-full;
+  }
+
+  .table-container > table th,
+  .table-container > table td {
+    @apply whitespace-nowrap;
+  }
+
+  .table-container > table th:first-child,
+  .table-container > table td:first-child {
+    @apply sticky left-0 z-10;
+  }
+
+  .table-scroll {
+    @apply overflow-x-auto;
+  }
+
+  .card-hover {
+    @apply transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md;
+  }
+}
+
+/* Improved touch targets for mobile */
+@media (max-width: 640px) {
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Smooth scroll for the whole page */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Prevent layout shift from scrollbar */
+body {
+  scrollbar-gutter: stable;
 }
