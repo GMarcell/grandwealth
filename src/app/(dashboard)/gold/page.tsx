@@ -57,7 +57,11 @@ export default function GoldPage() {
 
   const { data: deposits, isLoading } = useQuery<GoldDeposit[]>({
     queryKey: ["gold"],
-    queryFn: () => fetch("/api/gold").then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch("/api/gold");
+      if (!res.ok) throw new Error("Failed to fetch gold deposits");
+      return res.json();
+    },
   })
 
   const { data: livePrice, isLoading: priceLoading } = useQuery<{
@@ -67,7 +71,11 @@ export default function GoldPage() {
     updatedAt: string
   }>({
     queryKey: ["gold-price"],
-    queryFn: () => fetch("/api/gold/price").then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch("/api/gold/price")
+      if (!res.ok) throw new Error("Failed to fetch gold price")
+      return res.json()
+    },
     refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
   })
 
@@ -340,7 +348,7 @@ export default function GoldPage() {
               <>
                 <div className="text-2xl font-bold">{formatIDR(livePrice.pricePerGramIdr)}</div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  per gram &bull; USD {livePrice.pricePerOunceUsd.toFixed(2)}/oz
+                  per gram &bull; USD {(livePrice.pricePerOunceUsd ?? 0).toFixed(2)}/oz
                 </p>
               </>
             ) : (

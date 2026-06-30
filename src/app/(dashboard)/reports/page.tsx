@@ -108,7 +108,11 @@ export default function ReportsPage() {
 
   const { data, isLoading, refetch } = useQuery<ReportData>({
     queryKey: ["reports", monthRange],
-    queryFn: () => fetch(`/api/reports?months=${monthRange}`).then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch(`/api/reports?months=${monthRange}`);
+      if (!res.ok) throw new Error("Failed to fetch reports");
+      return res.json();
+    },
   })
 
   if (isLoading) return <ReportSkeleton />

@@ -127,22 +127,38 @@ export default function TransactionsPage() {
 
   const { data: transactions, isLoading } = useQuery<Transaction[]>({
     queryKey: ["transactions"],
-    queryFn: () => fetch("/api/transactions").then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch("/api/transactions");
+      if (!res.ok) throw new Error("Failed to fetch transactions");
+      return res.json();
+    },
   })
 
   const { data: customCategories } = useQuery<Array<{ id: string; name: string; type: string; color: string }>>({
     queryKey: ["categories"],
-    queryFn: () => fetch("/api/categories").then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch("/api/categories");
+      if (!res.ok) throw new Error("Failed to fetch categories");
+      return res.json();
+    },
   })
 
   const { data: budgets } = useQuery<any[]>({
     queryKey: ["budgets"],
-    queryFn: () => fetch("/api/budgets").then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch("/api/budgets");
+      if (!res.ok) throw new Error("Failed to fetch budgets");
+      return res.json();
+    },
   })
 
   const { data: budgetSettings } = useQuery<{ budgetStartDay: number }>({
     queryKey: ["budget-settings"],
-    queryFn: () => fetch("/api/user/budget-settings").then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch("/api/user/budget-settings");
+      if (!res.ok) throw new Error("Failed to fetch budget settings");
+      return res.json();
+    },
   })
   const startDay = budgetSettings?.budgetStartDay ?? 1
 

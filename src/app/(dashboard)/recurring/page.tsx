@@ -105,12 +105,20 @@ export default function RecurringPage() {
 
   const { data: recurring, isLoading } = useQuery<RecurringTransaction[]>({
     queryKey: ["recurring-transactions"],
-    queryFn: () => fetch("/api/recurring-transactions").then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch("/api/recurring-transactions");
+      if (!res.ok) throw new Error("Failed to fetch recurring transactions");
+      return res.json();
+    },
   })
 
   const { data: customCategories } = useQuery<Array<{ id: string; name: string; type: string }>>({
     queryKey: ["categories"],
-    queryFn: () => fetch("/api/categories").then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch("/api/categories");
+      if (!res.ok) throw new Error("Failed to fetch categories");
+      return res.json();
+    },
   })
 
   const createMutation = useMutation({

@@ -56,7 +56,11 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
   // Fetch budget alert count for sidebar badge
   const { data: dashboardData } = useQuery<any>({
     queryKey: ["dashboard"],
-    queryFn: () => fetch("/api/dashboard").then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch("/api/dashboard");
+      if (!res.ok) throw new Error("Failed to fetch dashboard");
+      return res.json();
+    },
     refetchInterval: 120_000,
   })
 

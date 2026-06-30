@@ -54,7 +54,11 @@ export default function StocksPage() {
 
   const { data: stocks, isLoading } = useQuery<Stock[]>({
     queryKey: ["stocks"],
-    queryFn: () => fetch("/api/stocks").then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch("/api/stocks");
+      if (!res.ok) throw new Error("Failed to fetch stocks");
+      return res.json();
+    },
   })
 
   const createMutation = useMutation({

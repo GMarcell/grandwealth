@@ -88,7 +88,11 @@ const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"]
 export default function DashboardPage() {
   const { data, isLoading, refetch } = useQuery<DashboardData>({
     queryKey: ["dashboard"],
-    queryFn: () => fetch("/api/dashboard").then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch("/api/dashboard");
+      if (!res.ok) throw new Error("Failed to fetch dashboard");
+      return res.json();
+    },
     refetchInterval: 60_000,
   })
 

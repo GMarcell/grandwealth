@@ -119,7 +119,11 @@ export default function BudgetsPage() {
 
   const { data: budgetSettings } = useQuery<{ budgetStartDay: number }>({
     queryKey: ["budget-settings"],
-    queryFn: () => fetch("/api/user/budget-settings").then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch("/api/user/budget-settings");
+      if (!res.ok) throw new Error("Failed to fetch budget settings");
+      return res.json();
+    },
   });
 
   const startDay = budgetSettings?.budgetStartDay ?? 1;
@@ -137,17 +141,29 @@ export default function BudgetsPage() {
 
   const { data: budgets, isLoading: budgetsLoading } = useQuery<Budget[]>({
     queryKey: ["budgets"],
-    queryFn: () => fetch("/api/budgets").then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch("/api/budgets");
+      if (!res.ok) throw new Error("Failed to fetch budgets");
+      return res.json();
+    },
   });
 
   const { data: categories } = useQuery<Category[]>({
     queryKey: ["categories"],
-    queryFn: () => fetch("/api/categories").then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch("/api/categories");
+      if (!res.ok) throw new Error("Failed to fetch categories");
+      return res.json();
+    },
   });
 
   const { data: transactions } = useQuery<any[]>({
     queryKey: ["transactions"],
-    queryFn: () => fetch("/api/transactions").then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch("/api/transactions");
+      if (!res.ok) throw new Error("Failed to fetch transactions");
+      return res.json();
+    },
   });
 
   const createMutation = useMutation({
@@ -325,7 +341,11 @@ export default function BudgetsPage() {
   // Rollover history data
   const { data: rolloverHistory, isLoading: historyLoading } = useQuery<any>({
     queryKey: ["rollover-history"],
-    queryFn: () => fetch("/api/budgets/rollover-history").then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch("/api/budgets/rollover-history");
+      if (!res.ok) throw new Error("Failed to fetch rollover history");
+      return res.json();
+    },
   });
 
   // Pie chart data for budget breakdown

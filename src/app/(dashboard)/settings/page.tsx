@@ -83,12 +83,20 @@ export default function SettingsPage() {
 
   const { data: categories } = useQuery<Category[]>({
     queryKey: ["categories"],
-    queryFn: () => fetch("/api/categories").then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch("/api/categories");
+      if (!res.ok) throw new Error("Failed to fetch categories");
+      return res.json();
+    },
   })
 
   const { data: budgetSettings } = useQuery<{ budgetStartDay: number }>({
     queryKey: ["budget-settings"],
-    queryFn: () => fetch("/api/user/budget-settings").then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch("/api/user/budget-settings");
+      if (!res.ok) throw new Error("Failed to fetch budget settings");
+      return res.json();
+    },
   })
 
   const [budgetStartDay, setBudgetStartDay] = useState(1)
