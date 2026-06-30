@@ -8,6 +8,7 @@ import {
   Trash2,
   Edit2,
   Loader2,
+  RefreshCw,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -57,6 +58,17 @@ export default function GoldPage() {
   const { data: deposits, isLoading } = useQuery<GoldDeposit[]>({
     queryKey: ["gold"],
     queryFn: () => fetch("/api/gold").then((r) => r.json()),
+  })
+
+  const { data: livePrice, isLoading: priceLoading } = useQuery<{
+    pricePerGramIdr: number
+    pricePerOunceUsd: number
+    usdIdrRate: number
+    updatedAt: string
+  }>({
+    queryKey: ["gold-price"],
+    queryFn: () => fetch("/api/gold/price").then((r) => r.json()),
+    refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
   })
 
   const createMutation = useMutation({
@@ -163,6 +175,16 @@ export default function GoldPage() {
     }
     return { totalGoldWeight: weight, totalGoldInvested: invested }
   }, [deposits])
+
+  const currentValue = useMemo(() => {
+    if (!livePrice) return null
+    return totalGoldWeight * livePrice.pricePerGramIdr
+  }, [totalGoldWeight, livePrice])
+
+  const unrealizedPnl = useMemo(() => {
+    if (currentValue == null) return null
+    return currentValue - totalGoldInvested
+  }, [currentValue, totalGoldInvested])
 
   return (
     <div className="space-y-6">
@@ -280,7 +302,7 @@ export default function GoldPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Total Gold</CardTitle>
@@ -305,6 +327,29 @@ export default function GoldPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Live Market Price</CardTitle>
+            <button
+              onClick={() => queryClient.invalidateQueries({ queryKey: ["gold-price"] })}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <RefreshCw className={`h-4 w-4 ${priceLoading ? "animate-spin" : ""}`} />
+            </button>
+          </CardHeader>
+          <CardContent>
+            {livePrice ? (
+              <>
+                <div className="text-2xl font-bold">{formatIDR(livePrice.pricePerGramIdr)}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  per gram &bull; USD {livePrice.pricePerOunceUsd.toFixed(2)}/oz
+                </p>
+              </>
+            ) : (
+              <Skeleton className="h-8 w-32" />
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Avg Price/Gram</CardTitle>
             <CircleDollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -314,6 +359,26 @@ export default function GoldPage() {
             </div>
           </CardContent>
         </Card>
+        {currentValue != null && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Current Value</CardTitle>
+              <CircleDollarSign className={`h-4 w-4 ${unrealizedPnl != null && unrealizedPnl >= 0 ? "text-emerald-500" : "text-red-500"}`} />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{formatIDR(currentValue)}</div>
+              {unrealizedPnl != null && (
+                <p className={`text-xs mt-1 ${unrealizedPnl >= 0 ? "text-emerald-500" : "text-red-500"}`}>
+                  {unrealizedPnl >= 0 ? "+" : ""}{formatIDR(unrealizedPnl)} (
+                  {totalGoldInvested > 0
+                    ? ((unrealizedPnl / totalGoldInvested) * 100).toFixed(1)
+                    : "0.0"}
+                  %)
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Gold Records */}

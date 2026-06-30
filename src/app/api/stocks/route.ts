@@ -20,7 +20,8 @@ export async function GET() {
       name: s.name,
       quantity: s.quantity,
       buyPrice: s.buyPrice,
-      currentPrice: null,
+      currentPrice: s.currentPrice,
+      lastPriceUpdated: s.lastPriceUpdated?.toISOString() ?? null,
       date: s.date.toISOString(),
       notes: s.notes,
     }))

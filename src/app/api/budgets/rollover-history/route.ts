@@ -1,19 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-
-function getMonthKey(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
-}
-
-function getMonthLabel(month: string): string {
-  const [year, m] = month.split("-")
-  const monthNames = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-  ]
-  return `${monthNames[parseInt(m) - 1]} ${year.slice(2)}`
-}
+import { getBudgetMonthKey, getBudgetMonthRange, getBudgetMonthLabel } from "@/lib/budget-months"
 
 export async function GET() {
   const session = await auth()
@@ -24,25 +12,37 @@ export async function GET() {
   const userId = session.user.id
 
   try {
-    // Get last 13 months of budgets (12 months + 1 extra for proper rollover calc)
+    // Get user's budget start day setting
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { budgetStartDay: true },
+    })
+    const startDay = user?.budgetStartDay ?? 1
+
+    // Get last 13 budget months (12 months + 1 extra for proper rollover calc)
     const months: string[] = []
     const now = new Date()
     for (let i = 12; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      months.push(getMonthKey(d))
+      const d = new Date(now.getFullYear(), now.getMonth() - i, startDay)
+      months.push(getBudgetMonthKey(d, startDay))
     }
+    // Deduplicate months (they can repeat with certain startDay values)
+    const uniqueMonths = [...new Set(months)]
 
     const budgets = await prisma.budget.findMany({
       where: {
         userId,
-        month: { in: months },
+        month: { in: uniqueMonths },
       },
       orderBy: [{ categoryName: "asc" }, { month: "asc" }],
     })
 
-    // Get all transactions (last 13 months + current)
-    const startDate = new Date(now.getFullYear(), now.getMonth() - 12, 1)
-    const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    // Get all transactions across the full range
+    const firstMonthKey = uniqueMonths[uniqueMonths.length - 1]
+    const lastMonthKey = uniqueMonths[0]
+    const { start: startDate } = getBudgetMonthRange(firstMonthKey, startDay)
+    const { end: endDate } = getBudgetMonthRange(lastMonthKey, startDay)
+
     const transactions = await prisma.transaction.findMany({
       where: {
         userId,
@@ -52,10 +52,10 @@ export async function GET() {
       orderBy: { date: "asc" },
     })
 
-    // Index transactions by month + category
+    // Index transactions by budget month + category
     const expenseByMonthCategory = new Map<string, Map<string, number>>()
     for (const tx of transactions) {
-      const monthKey = getMonthKey(tx.date)
+      const monthKey = getBudgetMonthKey(tx.date, startDay)
       if (!expenseByMonthCategory.has(monthKey)) {
         expenseByMonthCategory.set(monthKey, new Map())
       }
@@ -83,7 +83,7 @@ export async function GET() {
 
       let previousUnused = 0
 
-      for (const month of months) {
+      for (const month of uniqueMonths) {
         const budget = budgets.find(
           (b) => b.categoryName === categoryName && b.month === month
         )
@@ -110,7 +110,7 @@ export async function GET() {
 
         monthEntries.push({
           month,
-          monthLabel: getMonthLabel(month),
+          monthLabel: getBudgetMonthLabel(month, startDay),
           budgetAmount: budget.amount,
           spent,
           rolloverReceived,
@@ -138,7 +138,7 @@ export async function GET() {
     const categoriesWithData = categories.filter((c) => c.months.length > 0)
 
     return NextResponse.json({
-      months: months.map((m) => ({ key: m, label: getMonthLabel(m) })),
+      months: uniqueMonths.map((m) => ({ key: m, label: getBudgetMonthLabel(m, startDay) })),
       categories: categoriesWithData,
     })
   } catch (error) {

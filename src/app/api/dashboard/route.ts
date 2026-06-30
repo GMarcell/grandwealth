@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { getBudgetMonthKey, getBudgetMonthRange } from "@/lib/budget-months"
 
 export async function GET() {
   const session = await auth()
@@ -11,10 +12,20 @@ export async function GET() {
   const userId = session.user.id
 
   try {
-    const currentMonth = new Date()
-    const monthKey = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}`
-    const prevMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1)
-    const prevMonthKey = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, "0")}`
+    // Get user's budget start day setting
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { budgetStartDay: true },
+    })
+    const startDay = user?.budgetStartDay ?? 1
+
+    const currentMonthKey = getBudgetMonthKey(new Date(), startDay)
+    const prevMonthKey = getBudgetMonthKey(
+      new Date(new Date().getFullYear(), new Date().getMonth() - 1, startDay),
+      startDay
+    )
+    const { start: monthStart, end: monthEnd } = getBudgetMonthRange(currentMonthKey, startDay)
+    const { start: prevMonthStart, end: prevMonthEnd } = getBudgetMonthRange(prevMonthKey, startDay)
 
     const [
       transactions,
@@ -37,7 +48,7 @@ export async function GET() {
         orderBy: { date: "desc" },
       }),
       prisma.budget.findMany({
-        where: { userId, month: monthKey },
+        where: { userId, month: currentMonthKey },
       }),
       prisma.budget.findMany({
         where: { userId, month: prevMonthKey },
@@ -67,9 +78,9 @@ export async function GET() {
       }
     }
 
-    // Stock calculations
+    // Stock calculations (use currentPrice when available)
     const totalStockValue = stocks.reduce(
-      (sum, s) => sum + s.quantity * s.buyPrice,
+      (sum, s) => sum + s.quantity * (s.currentPrice ?? s.buyPrice),
       0
     )
 
@@ -102,10 +113,7 @@ export async function GET() {
         }
       })
 
-    // Budget calculations
-    const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1)
-    const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0)
-
+    // Budget calculations using budget month ranges
     const monthExpenses = transactions.filter((tx) => {
       const d = new Date(tx.date)
       return tx.type === "EXPENSE" && d >= monthStart && d <= monthEnd
@@ -118,9 +126,6 @@ export async function GET() {
     }
 
     // Previous month expense totals for rollover
-    const prevMonthStart = new Date(prevMonth.getFullYear(), prevMonth.getMonth(), 1)
-    const prevMonthEnd = new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0)
-
     const prevMonthExpenses = transactions.filter((tx) => {
       const d = new Date(tx.date)
       return tx.type === "EXPENSE" && d >= prevMonthStart && d <= prevMonthEnd

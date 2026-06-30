@@ -41,7 +41,10 @@ import {
   Tag,
   TrendingUp,
   TrendingDown,
+  CalendarDays,
+  Save,
 } from "lucide-react"
+import { getBudgetMonthLabel } from "@/lib/budget-months"
 import { toast } from "sonner"
 
 interface Category {
@@ -81,6 +84,36 @@ export default function SettingsPage() {
   const { data: categories } = useQuery<Category[]>({
     queryKey: ["categories"],
     queryFn: () => fetch("/api/categories").then((r) => r.json()),
+  })
+
+  const { data: budgetSettings } = useQuery<{ budgetStartDay: number }>({
+    queryKey: ["budget-settings"],
+    queryFn: () => fetch("/api/user/budget-settings").then((r) => r.json()),
+  })
+
+  const [budgetStartDay, setBudgetStartDay] = useState(1)
+  const [settingsChanged, setSettingsChanged] = useState(false)
+
+  // Sync local state when data loads
+  if (budgetSettings && !settingsChanged && budgetStartDay !== budgetSettings.budgetStartDay) {
+    setBudgetStartDay(budgetSettings.budgetStartDay)
+  }
+
+  const updateBudgetSettingsMutation = useMutation({
+    mutationFn: (data: { budgetStartDay: number }) =>
+      fetch("/api/user/budget-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["budget-settings"] })
+      queryClient.invalidateQueries({ queryKey: ["budgets"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
+      toast.success("Budget settings updated")
+      setSettingsChanged(false)
+    },
+    onError: () => toast.error("Failed to update budget settings"),
   })
 
   const createMutation = useMutation({
@@ -159,6 +192,88 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Budget Cycle */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CalendarDays className="h-5 w-5" />
+            Budget Cycle
+          </CardTitle>
+          <CardDescription>
+            Set the day your budget month starts (default: 1st)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="budgetStartDay">Budget Month Starts On</Label>
+            <div className="flex items-center gap-3">
+              <Select
+                value={budgetStartDay.toString()}
+                onValueChange={(v) => {
+                  setBudgetStartDay(parseInt(v))
+                  setSettingsChanged(true)
+                }}
+              >
+                <SelectTrigger className="w-28">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => (
+                    <SelectItem key={day} value={day.toString()}>
+                      {day}
+                      {day === 1
+                        ? "st"
+                        : day === 2
+                          ? "nd"
+                          : day === 3
+                            ? "rd"
+                            : "th"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-muted-foreground">
+                {budgetStartDay === 1
+                  ? "Budget months align with calendar months"
+                  : `Budget months run from the ${budgetStartDay}th to the ${budgetStartDay - 1}st of the next month`}
+              </p>
+            </div>
+          </div>
+
+          {budgetStartDay > 1 && budgetSettings && (
+            <div className="rounded-lg bg-muted p-3 text-sm space-y-1">
+              <p className="text-muted-foreground">
+                Example: With this setting,{" "}
+                <span className="font-medium text-foreground">
+                  {getBudgetMonthLabel(
+                    `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`,
+                    budgetStartDay,
+                    true
+                  )}
+                </span>
+              </p>
+            </div>
+          )}
+
+          {settingsChanged && (
+            <Button
+              size="sm"
+              onClick={() =>
+                updateBudgetSettingsMutation.mutate({ budgetStartDay })
+              }
+              disabled={updateBudgetSettingsMutation.isPending}
+            >
+              {updateBudgetSettingsMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+              ) : (
+                <Save className="h-4 w-4 mr-1" />
+              )}
+              Save Budget Settings
+            </Button>
+          )}
         </CardContent>
       </Card>
 

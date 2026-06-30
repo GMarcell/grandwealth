@@ -36,6 +36,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatIDR, formatCompactIDR } from "@/lib/utils";
+import {
+  getBudgetMonthKey,
+  getCurrentBudgetMonthKey,
+  getPreviousBudgetMonthKey,
+  getBudgetMonthRange,
+  getBudgetMonthLabel,
+  generateBudgetMonths,
+} from "@/lib/budget-months";
 import { toast } from "sonner";
 import {
   Cell,
@@ -82,41 +90,7 @@ interface TransactionSummary {
   total: number;
 }
 
-function getCurrentMonth(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function getMonthLabel(month: string): string {
-  const [year, m] = month.split("-");
-  const monthNames = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-  return `${monthNames[parseInt(m) - 1]} ${year}`;
-}
-
-function getPreviousMonth(month: string): string {
-  const [year, m] = month.split("-");
-  const d = new Date(parseInt(year), parseInt(m) - 2, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-const MONTHS = Array.from({ length: 12 }, (_, i) => {
-  const d = new Date();
-  d.setMonth(d.getMonth() - i);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-});
+// These are replaced by budget-months.ts helpers using the user's budgetStartDay
 
 const BUDGET_COLORS = [
   "#3b82f6",
@@ -136,13 +110,30 @@ const BUDGET_COLORS = [
 
 export default function BudgetsPage() {
   const queryClient = useQueryClient();
-  const [selectedMonth, setSelectedMonth] = useState(getCurrentMonth());
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [formCategory, setFormCategory] = useState("");
   const [formAmount, setFormAmount] = useState("");
   const [formRolloverEnabled, setFormRolloverEnabled] = useState(true);
   const [formRolloverCap, setFormRolloverCap] = useState("");
+
+  const { data: budgetSettings } = useQuery<{ budgetStartDay: number }>({
+    queryKey: ["budget-settings"],
+    queryFn: () => fetch("/api/user/budget-settings").then((r) => r.json()),
+  });
+
+  const startDay = budgetSettings?.budgetStartDay ?? 1;
+
+  const currentMonthKey = useMemo(() => getCurrentBudgetMonthKey(startDay), [startDay]);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthKey);
+  const MONTHS = useMemo(() => generateBudgetMonths(12, startDay), [startDay]);
+
+  // Sync to current month when startDay changes
+  const [prevStartDay, setPrevStartDay] = useState(startDay);
+  if (prevStartDay !== startDay) {
+    setPrevStartDay(startDay);
+    setSelectedMonth(getCurrentBudgetMonthKey(startDay));
+  }
 
   const { data: budgets, isLoading: budgetsLoading } = useQuery<Budget[]>({
     queryKey: ["budgets"],
@@ -233,43 +224,39 @@ export default function BudgetsPage() {
   );
 
   // Previous month for rollover calculation
-  const prevMonthKey = getPreviousMonth(selectedMonth);
+  const prevMonthKey = getPreviousBudgetMonthKey(selectedMonth, startDay);
 
-  // Expense totals by category for the selected month
+  // Expense totals by category for the selected month using budget month range
   const expenseByCategory = useMemo(() => {
     const map = new Map<string, number>();
-    const [year, m] = selectedMonth.split("-");
-    const startDate = new Date(parseInt(year), parseInt(m) - 1, 1);
-    const endDate = new Date(parseInt(year), parseInt(m), 0);
+    const { start, end } = getBudgetMonthRange(selectedMonth, startDay);
 
     for (const tx of transactions ?? []) {
       if (tx.type !== "EXPENSE") continue;
       const txDate = new Date(tx.date);
-      if (txDate >= startDate && txDate <= endDate) {
+      if (txDate >= start && txDate <= end) {
         const current = map.get(tx.category) || 0;
         map.set(tx.category, current + tx.amount);
       }
     }
     return map;
-  }, [transactions, selectedMonth]);
+  }, [transactions, selectedMonth, startDay]);
 
   // Previous month expense totals for rollover calculation
   const prevExpenseByCategory = useMemo(() => {
     const map = new Map<string, number>();
-    const [year, m] = prevMonthKey.split("-");
-    const startDate = new Date(parseInt(year), parseInt(m) - 1, 1);
-    const endDate = new Date(parseInt(year), parseInt(m), 0);
+    const { start, end } = getBudgetMonthRange(prevMonthKey, startDay);
 
     for (const tx of transactions ?? []) {
       if (tx.type !== "EXPENSE") continue;
       const txDate = new Date(tx.date);
-      if (txDate >= startDate && txDate <= endDate) {
+      if (txDate >= start && txDate <= end) {
         const current = map.get(tx.category) || 0;
         map.set(tx.category, current + tx.amount);
       }
     }
     return map;
-  }, [transactions, prevMonthKey]);
+  }, [transactions, prevMonthKey, startDay]);
 
   // Previous month budgets
   const prevMonthBudgets = useMemo(
@@ -368,7 +355,7 @@ export default function BudgetsPage() {
             <SelectContent>
               {MONTHS.map((m, index) => (
                 <SelectItem key={`${m}-${index}`} value={m}>
-                  {getMonthLabel(m)}
+                  {getBudgetMonthLabel(m, startDay)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -499,7 +486,7 @@ export default function BudgetsPage() {
           <CardContent>
             <div className="text-2xl font-bold">{formatIDR(totalBudgeted)}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              {getMonthLabel(selectedMonth)}
+              {getBudgetMonthLabel(selectedMonth, startDay)}
             </p>
           </CardContent>
         </Card>
@@ -735,7 +722,7 @@ export default function BudgetsPage() {
           <CardTitle>
             Budget Details{" "}
             <span className="text-sm font-normal text-muted-foreground">
-              ({getMonthLabel(selectedMonth)})
+              ({getBudgetMonthLabel(selectedMonth, startDay)})
             </span>
           </CardTitle>
         </CardHeader>
@@ -748,7 +735,7 @@ export default function BudgetsPage() {
             <div className="text-center py-8">
               <Wallet className="h-12 w-12 mx-auto text-muted-foreground/40 mb-3" />
               <p className="text-sm text-muted-foreground mb-1">
-                No budgets set for {getMonthLabel(selectedMonth)}
+                No budgets set for {getBudgetMonthLabel(selectedMonth, startDay)}
               </p>
               <p className="text-xs text-muted-foreground">
                 Click "Add Budget" to set spending limits for your expense

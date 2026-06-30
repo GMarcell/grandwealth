@@ -15,6 +15,7 @@ model User {
   emailVerified DateTime?
   image         String?
   password      String?
+  budgetStartDay Int           @default(1)
   transactions         Transaction[]
   goldDeposits         GoldDeposit[]
   stocks               Stock[]
@@ -127,17 +128,19 @@ model GoldDeposit {
 }
 
 model Stock {
-  id        String   @id @default(cuid())
-  symbol    String
-  name      String
-  quantity  Int
-  buyPrice  Float
-  date      DateTime @default(now())
-  notes     String?
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String    @id @default(cuid())
+  symbol           String
+  name             String
+  quantity         Int
+  buyPrice         Float
+  currentPrice     Float?
+  lastPriceUpdated DateTime?
+  date             DateTime  @default(now())
+  notes            String?
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 }
 
 enum RecurringFrequency {

@@ -35,26 +35,24 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { formatIDR, formatDateTime } from "@/lib/utils"
+import { getBudgetMonthKey, getBudgetMonthRange } from "@/lib/budget-months"
 import { toast } from "sonner"
 
 // Helper to check budget alert level
-function getBudgetAlert(category: string, newAmount: number, budgets: any[], transactions: any[]): { level: "near" | "over" | null; message: string } {
-  const now = new Date()
-  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+function getBudgetAlert(category: string, newAmount: number, budgets: any[], transactions: any[], startDay: number = 1): { level: "near" | "over" | null; message: string } {
+  const monthKey = getBudgetMonthKey(new Date(), startDay)
   
   const budget = budgets?.find((b: any) => b.categoryName === category && b.month === monthKey)
   if (!budget) return { level: null, message: "" }
 
-  // Calculate total spent for this category this month INCLUDING the new transaction
-  const [year, m] = monthKey.split("-")
-  const startDate = new Date(parseInt(year), parseInt(m) - 1, 1)
-  const endDate = new Date(parseInt(year), parseInt(m), 0)
+  // Calculate total spent for this category this budget month INCLUDING the new transaction
+  const { start, end } = getBudgetMonthRange(monthKey, startDay)
 
   let totalSpent = newAmount // include the new transaction
   for (const tx of transactions ?? []) {
     if (tx.type !== "EXPENSE" || tx.category !== category) continue
     const txDate = new Date(tx.date)
-    if (txDate >= startDate && txDate <= endDate) {
+    if (txDate >= start && txDate <= end) {
       totalSpent += tx.amount
     }
   }
@@ -142,6 +140,12 @@ export default function TransactionsPage() {
     queryFn: () => fetch("/api/budgets").then((r) => r.json()),
   })
 
+  const { data: budgetSettings } = useQuery<{ budgetStartDay: number }>({
+    queryKey: ["budget-settings"],
+    queryFn: () => fetch("/api/user/budget-settings").then((r) => r.json()),
+  })
+  const startDay = budgetSettings?.budgetStartDay ?? 1
+
   const createMutation = useMutation({
     mutationFn: (data: any) =>
       fetch("/api/transactions", {
@@ -157,7 +161,7 @@ export default function TransactionsPage() {
       
       // Check budget alert for expense transactions
       if (variables.type === "EXPENSE") {
-        const alert = getBudgetAlert(variables.category, parseFloat(variables.amount.toString()), budgets ?? [], transactions ?? [])
+        const alert = getBudgetAlert(variables.category, parseFloat(variables.amount.toString()), budgets ?? [], transactions ?? [], startDay)
         if (alert.level === "over") {
           toast.error(alert.message, { duration: 6000 })
         } else if (alert.level === "near") {
@@ -188,7 +192,7 @@ export default function TransactionsPage() {
         // When editing, subtract the old amount from the total since it's still in cached data
         const oldAmount = editingTransaction?.amount ? parseFloat(editingTransaction.amount.toString()) : 0
         const netAdditional = parseFloat(variables.amount.toString()) - oldAmount
-        const alert = getBudgetAlert(variables.category, netAdditional, budgets ?? [], transactions ?? [])
+        const alert = getBudgetAlert(variables.category, netAdditional, budgets ?? [], transactions ?? [], startDay)
         if (alert.level === "over") {
           toast.error(alert.message, { duration: 6000 })
         } else if (alert.level === "near") {
