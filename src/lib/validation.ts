@@ -57,6 +57,17 @@ export const createStockSchema = z.object({
   notes: z.string().max(500).optional(),
 })
 
+// ─── Bank Savings ────────────────────────────
+export const createBankSavingSchema = z.object({
+  type: z.enum(["DEPOSIT", "WITHDRAWAL"], { message: "Type must be DEPOSIT or WITHDRAWAL" }),
+  accountName: z.string().min(1, "Account name is required").max(100),
+  amount: z.number().positive("Amount must be positive").finite(),
+  date: z.string().optional(),
+  notes: z.string().max(500).optional(),
+})
+
+export const updateBankSavingSchema = createBankSavingSchema.partial()
+
 // ─── Recurring Transactions ──────────────────
 export const createRecurringSchema = z.object({
   type: z.enum(["INCOME", "EXPENSE"]),
@@ -67,6 +78,87 @@ export const createRecurringSchema = z.object({
   startDate: z.string().datetime(),
   endDate: z.string().datetime().optional().nullable(),
   nextDate: z.string().datetime(),
+})
+
+// ─── Form Schemas (for react-hook-form validation) ───
+// These use z.string() with .refine() for numeric fields
+// since HTML inputs always produce strings.
+
+export const budgetFormSchema = z.object({
+  categoryName: z.string().min(1, "Category is required"),
+  amount: z.string()
+    .min(1, "Amount is required")
+    .refine((v) => !isNaN(Number(v)) && Number(v) > 0, "Amount must be a positive number"),
+  rolloverEnabled: z.boolean(),
+  rolloverCap: z.string().optional(),
+})
+
+export const goldFormSchema = z.object({
+  type: z.enum(["BUY", "SELL"], { message: "Type must be BUY or SELL" }),
+  weight: z.string()
+    .min(1, "Weight is required")
+    .refine((v) => !isNaN(Number(v)) && Number(v) > 0, "Weight must be a positive number"),
+  price: z.string()
+    .min(1, "Price is required")
+    .refine((v) => !isNaN(Number(v)) && Number(v) > 0, "Price must be a positive number"),
+  date: z.string().min(1, "Date is required"),
+  notes: z.string().optional(),
+})
+
+export const recurringFormSchema = z.object({
+  type: z.enum(["INCOME", "EXPENSE"]),
+  category: z.string().min(1, "Category is required"),
+  amount: z.string()
+    .min(1, "Amount is required")
+    .refine((v) => !isNaN(Number(v)) && Number(v) > 0, "Amount must be a positive number"),
+  description: z.string().min(1, "Description is required").max(500),
+  frequency: z.enum(["WEEKLY", "MONTHLY", "YEARLY"]),
+  startDate: z.string().min(1, "Start date is required"),
+  endDate: z.string().optional(),
+  nextDate: z.string().min(1, "Next date is required"),
+})
+
+export const savingsFormSchema = z.object({
+  type: z.enum(["DEPOSIT", "WITHDRAWAL"], { message: "Type must be DEPOSIT or WITHDRAWAL" }),
+  accountName: z.string().min(1, "Account name is required").max(100),
+  amount: z.string().min(1, "Amount is required").refine(
+    (v) => !isNaN(Number(v)) && Number(v) > 0,
+    "Amount must be a positive number"
+  ),
+  date: z.string().min(1, "Date is required"),
+  notes: z.string().max(500).optional(),
+})
+
+export const categoryFormSchema = z.object({
+  name: z.string().min(1, "Name is required").max(50),
+  type: z.enum(["INCOME", "EXPENSE"], { message: "Type must be INCOME or EXPENSE" }),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color").optional(),
+})
+
+export const stockFormSchema = z.object({
+  symbol: z.string().min(1, "Symbol is required"),
+  name: z.string().min(1, "Name is required").max(200),
+  quantity: z.string().min(1, "Quantity is required").refine(
+    (v) => !isNaN(Number(v)) && Number.isInteger(Number(v)) && Number(v) > 0,
+    "Quantity must be a positive integer"
+  ),
+  buyPrice: z.string().min(1, "Buy price is required").refine(
+    (v) => !isNaN(Number(v)) && Number(v) > 0,
+    "Buy price must be a positive number"
+  ),
+  date: z.string().min(1, "Date is required"),
+  notes: z.string().max(500).optional(),
+})
+
+export const transactionFormSchema = z.object({
+  type: z.enum(["INCOME", "EXPENSE"], { message: "Type must be INCOME or EXPENSE" }),
+  category: z.string().min(1, "Category is required"),
+  amount: z.string().min(1, "Amount is required").refine(
+    (v) => !isNaN(Number(v)) && Number(v) > 0,
+    "Amount must be a positive number"
+  ),
+  description: z.string().min(1, "Description is required").max(500),
+  date: z.string().min(1, "Date is required"),
 })
 
 // ─── Helpers ─────────────────────────────────

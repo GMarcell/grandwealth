@@ -1,6 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useForm, Controller } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
+import { categoryFormSchema } from "@/lib/validation"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useSession } from "next-auth/react"
 import { useTheme } from "next-themes"
@@ -48,6 +52,8 @@ import {
   PiggyBank,
 } from "lucide-react"
 import { getBudgetMonthLabel } from "@/lib/budget-months"
+import { RULE_TYPE_ORDER, RULE_TYPE_CONFIGS } from "@/lib/rule-type"
+import { FormError } from "@/components/ui/form-error"
 import { toast } from "sonner"
 
 interface Category {
@@ -57,6 +63,8 @@ interface Category {
   color: string
   ruleType: string | null
 }
+
+type CategoryFormData = z.infer<typeof categoryFormSchema>
 
 const PREDEFINED_EXPENSE_CATEGORIES = [
   "FOOD", "TRANSPORTATION", "HOUSING", "UTILITIES", "HEALTHCARE",
@@ -80,10 +88,27 @@ export default function SettingsPage() {
   const { theme, setTheme } = useTheme()
   const queryClient = useQueryClient()
 
+  const [mounted, setMounted] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [formName, setFormName] = useState("")
-  const [formType, setFormType] = useState("EXPENSE")
-  const [formColor, setFormColor] = useState("#6366f1")
+
+  const {
+    register,
+    handleSubmit: formSubmit,
+    control,
+    reset,
+    watch,
+    formState: { errors },
+  } = useForm<CategoryFormData>({
+    resolver: zodResolver(categoryFormSchema),
+    defaultValues: {
+      name: "",
+      type: "EXPENSE",
+      color: "#6366f1",
+    },
+  })
+
+  const formType = watch("type")
+  const formColor = watch("color")
 
   const { data: categories } = useQuery<Category[]>({
     queryKey: ["categories"],
@@ -106,10 +131,11 @@ export default function SettingsPage() {
   const [budgetStartDay, setBudgetStartDay] = useState(1)
   const [settingsChanged, setSettingsChanged] = useState(false)
 
-  // Sync local state when data loads
   if (budgetSettings && !settingsChanged && budgetStartDay !== budgetSettings.budgetStartDay) {
     setBudgetStartDay(budgetSettings.budgetStartDay)
   }
+
+  useEffect(() => { setMounted(true) }, [])
 
   const updateBudgetSettingsMutation = useMutation({
     mutationFn: (data: { budgetStartDay: number }) =>
@@ -158,6 +184,41 @@ export default function SettingsPage() {
     onError: () => toast.error("Failed to update rule type"),
   })
 
+  const upsertRuleTypeMutation = useMutation({
+    mutationFn: async ({ name, type, ruleType }: { name: string; type: string; ruleType: string | null }) => {
+      const existing = userCategories.find((c) => c.name === name)
+      if (existing) {
+        const res = await fetch(`/api/categories/${existing.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ruleType }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: "Failed to update" }))
+          throw new Error(err.error || "Failed to update rule type")
+        }
+        return res.json()
+      } else {
+        const res = await fetch("/api/categories", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, type, color: type === "INCOME" ? "#10b981" : "#6366f1", ruleType }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: "Failed to create" }))
+          throw new Error(err.error || "Failed to create category")
+        }
+        return res.json()
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
+      toast.success("Rule type updated")
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update rule type"),
+  })
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
       fetch(`/api/categories/${id}`, { method: "DELETE" }),
@@ -169,24 +230,49 @@ export default function SettingsPage() {
   })
 
   function resetForm() {
-    setFormName("")
-    setFormType("EXPENSE")
-    setFormColor("#6366f1")
+    reset({ name: "", type: "EXPENSE", color: "#6366f1" })
     setIsDialogOpen(false)
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  function onFormSubmit(data: CategoryFormData) {
     createMutation.mutate({
-      name: formName.toUpperCase().replace(/\s+/g, "_"),
-      type: formType,
-      color: formColor,
+      name: data.name.toUpperCase().replace(/\s+/g, "_"),
+      type: data.type,
+      color: data.color,
     })
   }
 
   const userCategories = categories ?? []
   const userExpenseCategories = userCategories.filter((c) => c.type === "EXPENSE")
   const userIncomeCategories = userCategories.filter((c) => c.type === "INCOME")
+
+  const RULE_TYPE_ICONS: Record<string, React.ElementType> = {
+    NEED: Home,
+    WANT: Sparkles,
+    SAVINGS: PiggyBank,
+  }
+
+  function RuleTypeSelectItems() {
+    return (
+      <>
+        {RULE_TYPE_ORDER.map((type) => {
+          const cfg = RULE_TYPE_CONFIGS[type]
+          const Icon = RULE_TYPE_ICONS[type]
+          return (
+            <SelectItem key={type} value={type} className="text-xs">
+              <div className="flex items-center gap-1">
+                <Icon className={`h-3 w-3 ${cfg.color}`} />
+                {cfg.label}
+              </div>
+            </SelectItem>
+          )
+        })}
+        <SelectItem value="" className="text-xs text-muted-foreground">
+          None
+        </SelectItem>
+      </>
+    )
+  }
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -316,7 +402,7 @@ export default function SettingsPage() {
         <CardContent>
           <div className="flex flex-col sm:flex-row gap-3">
             <Button
-              variant={theme === "light" ? "default" : "outline"}
+              variant={!mounted ? "outline" : theme === "light" ? "default" : "outline"}
               onClick={() => setTheme("light")}
               className="flex-1"
             >
@@ -324,7 +410,7 @@ export default function SettingsPage() {
               Light
             </Button>
             <Button
-              variant={theme === "dark" ? "default" : "outline"}
+              variant={!mounted ? "outline" : theme === "dark" ? "default" : "outline"}
               onClick={() => setTheme("dark")}
               className="flex-1"
             >
@@ -332,7 +418,7 @@ export default function SettingsPage() {
               Dark
             </Button>
             <Button
-              variant={theme === "system" ? "default" : "outline"}
+              variant={!mounted ? "outline" : theme === "system" ? "default" : "outline"}
               onClick={() => setTheme("system")}
               className="flex-1"
             >
@@ -368,62 +454,74 @@ export default function SettingsPage() {
                   Create Category
                 </DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={formSubmit(onFormSubmit)} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="catName">Category Name</Label>
                   <Input
                     id="catName"
                     placeholder="e.g., PETROL"
-                    value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
-                    required
+                    {...register("name", { required: true })}
                   />
+                  <FormError errors={errors} name="name" />
                   <p className="text-xs text-muted-foreground">
                     Will be converted to UPPER_CASE format
                   </p>
                 </div>
                 <div className="space-y-2">
                   <Label>Type</Label>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant={formType === "INCOME" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setFormType("INCOME")}
-                      className="flex-1"
-                    >
-                      <TrendingUp className="h-4 w-4 mr-1" />
-                      Income
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={formType === "EXPENSE" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setFormType("EXPENSE")}
-                      className="flex-1"
-                    >
-                      <TrendingDown className="h-4 w-4 mr-1" />
-                      Expense
-                    </Button>
-                  </div>
+                  <Controller
+                    name="type"
+                    control={control}
+                    render={({ field }) => (
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant={field.value === "INCOME" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => field.onChange("INCOME")}
+                          className="flex-1"
+                        >
+                          <TrendingUp className="h-4 w-4 mr-1" />
+                          Income
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={field.value === "EXPENSE" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => field.onChange("EXPENSE")}
+                          className="flex-1"
+                        >
+                          <TrendingDown className="h-4 w-4 mr-1" />
+                          Expense
+                        </Button>
+                      </div>
+                    )}
+                  />
+                  <FormError errors={errors} name="type" />
                 </div>
                 <div className="space-y-2">
                   <Label>Color</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {COLOR_OPTIONS.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        onClick={() => setFormColor(color)}
-                        className={`h-8 w-8 rounded-full border-2 transition-all ${
-                          formColor === color
-                            ? "border-foreground scale-110"
-                            : "border-transparent hover:scale-110"
-                        }`}
-                        style={{ backgroundColor: color }}
-                      />
-                    ))}
-                  </div>
+                  <Controller
+                    name="color"
+                    control={control}
+                    render={({ field }) => (
+                      <div className="flex flex-wrap gap-2">
+                        {COLOR_OPTIONS.map((color) => (
+                          <button
+                            key={color}
+                            type="button"
+                            onClick={() => field.onChange(color)}
+                            className={`h-8 w-8 rounded-full border-2 transition-all ${
+                              field.value === color
+                                ? "border-foreground scale-110"
+                                : "border-transparent hover:scale-110"
+                            }`}
+                            style={{ backgroundColor: color }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  />
                 </div>
                 <Button
                   type="submit"
@@ -457,44 +555,26 @@ export default function SettingsPage() {
                     <Select
                       value={userCat?.ruleType ?? ""}
                       onValueChange={(v) =>
-                        updateRuleTypeMutation.mutate({
-                          id: userCat!.id,
+                        upsertRuleTypeMutation.mutate({
+                          name: cat,
+                          type: "EXPENSE",
                           ruleType: v || null,
                         })
                       }
-                      disabled={!userCat}
                     >
                       <SelectTrigger className="h-6 w-24 text-[10px]">
                         <SelectValue placeholder="50/30/20" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="NEED" className="text-xs">
-                          <div className="flex items-center gap-1">
-                            <Home className="h-3 w-3 text-blue-500" />
-                            Need
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="WANT" className="text-xs">
-                          <div className="flex items-center gap-1">
-                            <Sparkles className="h-3 w-3 text-amber-500" />
-                            Want
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="SAVINGS" className="text-xs">
-                          <div className="flex items-center gap-1">
-                            <PiggyBank className="h-3 w-3 text-emerald-500" />
-                            Savings
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="" className="text-xs text-muted-foreground">
-                          None
-                        </SelectItem>
+                        <RuleTypeSelectItems />
                       </SelectContent>
                     </Select>
                   </div>
                 )
               })}
-              {userExpenseCategories.map((cat) => (
+              {userExpenseCategories
+                .filter((cat) => ![...PREDEFINED_EXPENSE_CATEGORIES, ...PREDEFINED_INCOME_CATEGORIES].includes(cat.name))
+                .map((cat) => (
                 <div key={cat.id} className="flex items-center gap-2">
                   <Badge
                     className="text-xs gap-1 group"
@@ -529,27 +609,7 @@ export default function SettingsPage() {
                       <SelectValue placeholder="50/30/20" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="NEED" className="text-xs">
-                        <div className="flex items-center gap-1">
-                          <Home className="h-3 w-3 text-blue-500" />
-                          Need
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="WANT" className="text-xs">
-                        <div className="flex items-center gap-1">
-                          <Sparkles className="h-3 w-3 text-amber-500" />
-                          Want
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="SAVINGS" className="text-xs">
-                        <div className="flex items-center gap-1">
-                          <PiggyBank className="h-3 w-3 text-emerald-500" />
-                          Savings
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="" className="text-xs text-muted-foreground">
-                        None
-                      </SelectItem>
+                      <RuleTypeSelectItems />
                     </SelectContent>
                   </Select>
                 </div>
@@ -574,38 +634,18 @@ export default function SettingsPage() {
                     <Select
                       value={userCat?.ruleType ?? ""}
                       onValueChange={(v) =>
-                        updateRuleTypeMutation.mutate({
-                          id: userCat!.id,
+                        upsertRuleTypeMutation.mutate({
+                          name: cat,
+                          type: "INCOME",
                           ruleType: v || null,
                         })
                       }
-                      disabled={!userCat}
                     >
                       <SelectTrigger className="h-6 w-24 text-[10px]">
                         <SelectValue placeholder="50/30/20" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="NEED" className="text-xs">
-                          <div className="flex items-center gap-1">
-                            <Home className="h-3 w-3 text-blue-500" />
-                            Need
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="WANT" className="text-xs">
-                          <div className="flex items-center gap-1">
-                            <Sparkles className="h-3 w-3 text-amber-500" />
-                            Want
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="SAVINGS" className="text-xs">
-                          <div className="flex items-center gap-1">
-                            <PiggyBank className="h-3 w-3 text-emerald-500" />
-                            Savings
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="" className="text-xs text-muted-foreground">
-                          None
-                        </SelectItem>
+                        <RuleTypeSelectItems />
                       </SelectContent>
                     </Select>
                   </div>
@@ -613,7 +653,7 @@ export default function SettingsPage() {
               })}
               {userIncomeCategories.map((cat) => {
                 const isPredefined = [...PREDEFINED_INCOME_CATEGORIES, ...PREDEFINED_EXPENSE_CATEGORIES].includes(cat.name)
-                if (isPredefined) return null // already shown above
+                if (isPredefined) return null
                 return (
                   <div key={cat.id} className="flex items-center gap-2">
                     <Badge
@@ -649,27 +689,7 @@ export default function SettingsPage() {
                         <SelectValue placeholder="50/30/20" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="NEED" className="text-xs">
-                          <div className="flex items-center gap-1">
-                            <Home className="h-3 w-3 text-blue-500" />
-                            Need
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="WANT" className="text-xs">
-                          <div className="flex items-center gap-1">
-                            <Sparkles className="h-3 w-3 text-amber-500" />
-                            Want
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="SAVINGS" className="text-xs">
-                          <div className="flex items-center gap-1">
-                            <PiggyBank className="h-3 w-3 text-emerald-500" />
-                            Savings
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="" className="text-xs text-muted-foreground">
-                          None
-                        </SelectItem>
+                        <RuleTypeSelectItems />
                       </SelectContent>
                     </Select>
                   </div>

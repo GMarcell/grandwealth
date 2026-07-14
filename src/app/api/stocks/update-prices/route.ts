@@ -24,6 +24,7 @@ export async function POST() {
 
     let updatedCount = 0
     const now = new Date()
+    const failed: string[] = []
 
     for (const stock of stocks) {
       const price = prices.get(stock.symbol)
@@ -36,15 +37,37 @@ export async function POST() {
           },
         })
         updatedCount++
+      } else {
+        failed.push(stock.symbol)
       }
     }
 
-    return NextResponse.json({
-      message: "Stock prices updated",
+    if (failed.length > 0 && updatedCount === 0) {
+      return NextResponse.json(
+        {
+          error: `Could not fetch live prices from Yahoo Finance for: ${failed.join(", ")}. The market may be closed or the symbol may be invalid.`,
+          failed,
+          count: 0,
+          total: stocks.length,
+        },
+        { status: 502 }
+      )
+    }
+
+    const response: any = {
+      message: updatedCount === stocks.length
+        ? "Stock prices updated"
+        : `Partially updated: ${updatedCount}/${stocks.length} stocks`,
       count: updatedCount,
       total: stocks.length,
       updatedAt: now.toISOString(),
-    })
+    }
+    if (failed.length > 0) {
+      response.failed = failed
+      response.warning = `Could not fetch prices for: ${failed.join(", ")}`
+    }
+
+    return NextResponse.json(response)
   } catch (error) {
     console.error("Update stock prices error:", error)
     return NextResponse.json(

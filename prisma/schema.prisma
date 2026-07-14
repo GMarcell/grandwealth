@@ -23,6 +23,7 @@ model User {
   budgets              Budget[]
   recurringTransactions RecurringTransaction[]
   monthlyAnalyses       MonthlyAnalysis[]
+  bankSavings           BankSaving[]
   accounts              Account[]
   sessions              Session[]
   createdAt     DateTime      @default(now())
@@ -172,6 +173,24 @@ model RecurringTransaction {
   user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
+}
+
+enum SavingType {
+  DEPOSIT
+  WITHDRAWAL
+}
+
+model BankSaving {
+  id          String     @id @default(cuid())
+  type        SavingType
+  accountName String
+  amount      Float
+  date        DateTime   @default(now())
+  notes       String?
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 }
 
 model MonthlyAnalysis {

@@ -1,6 +1,10 @@
 "use client"
 
 import { useState, useMemo, useEffect, useRef, useCallback } from "react"
+import { useForm, Controller } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
+import { stockFormSchema } from "@/lib/validation"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   Plus,
@@ -13,6 +17,7 @@ import {
   RefreshCw,
   Check,
   ChevronsUpDown,
+  X,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -41,6 +46,7 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import { formatIDR, formatDate, cn } from "@/lib/utils"
+import { FormError } from "@/components/ui/form-error"
 import { toast } from "sonner"
 
 interface Stock {
@@ -55,17 +61,13 @@ interface Stock {
   notes: string | null
 }
 
+type StockFormData = z.infer<typeof stockFormSchema>
+
 export default function StocksPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Stock | null>(null)
-  const [formSymbol, setFormSymbol] = useState("")
-  const [formName, setFormName] = useState("")
-  const [formQuantity, setFormQuantity] = useState("")
-  const [formBuyPrice, setFormBuyPrice] = useState("")
-  const [formDate, setFormDate] = useState(new Date().toISOString().split("T")[0])
-  const [formNotes, setFormNotes] = useState("")
 
   // Stock search combobox state
   const [searchOpen, setSearchOpen] = useState(false)
@@ -73,6 +75,29 @@ export default function StocksPage() {
   const [searchResults, setSearchResults] = useState<Array<{ symbol: string; name: string; exchange: string }>>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const {
+    register,
+    handleSubmit: formSubmit,
+    control,
+    reset,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm<StockFormData>({
+    resolver: zodResolver(stockFormSchema),
+    defaultValues: {
+      symbol: "",
+      name: "",
+      quantity: "",
+      buyPrice: "",
+      date: new Date().toISOString().split("T")[0],
+      notes: "",
+    },
+  })
+
+  const formQuantity = watch("quantity")
+  const formBuyPrice = watch("buyPrice")
 
   // Debounced stock search via Yahoo Finance API
   const doSearch = useCallback(async (q: string) => {
@@ -123,40 +148,55 @@ export default function StocksPage() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: any) =>
-      fetch("/api/stocks", {
+    mutationFn: async (data: any) => {
+      const res = await fetch("/api/stocks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
-      }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Unknown error" }))
+        throw new Error(err.error || "Failed to add stock")
+      }
+      return res.json()
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["stocks"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
       toast.success("Stock added")
       resetForm()
     },
-    onError: () => toast.error("Failed to add stock"),
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to add stock"),
   })
 
   const updateMutation = useMutation({
-    mutationFn: (data: any) =>
-      fetch(`/api/stocks/${data.id}`, {
+    mutationFn: async (data: any) => {
+      const res = await fetch(`/api/stocks/${data.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
-      }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Unknown error" }))
+        throw new Error(err.error || "Failed to update stock")
+      }
+      return res.json()
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["stocks"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
       toast.success("Stock updated")
       resetForm()
     },
-    onError: () => toast.error("Failed to update stock"),
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update stock"),
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) =>
-      fetch(`/api/stocks/${id}`, { method: "DELETE" }),
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/stocks/${id}`, { method: "DELETE" })
+      if (!res.ok) throw new Error("Failed to delete stock")
+      return res.json()
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["stocks"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
@@ -166,28 +206,36 @@ export default function StocksPage() {
   })
 
   const refreshPricesMutation = useMutation({
-    mutationFn: () =>
-      fetch("/api/stocks/update-prices", { method: "POST" }),
-    onSuccess: (res) => {
-      if (res.ok) {
-        queryClient.invalidateQueries({ queryKey: ["stocks"] })
-        queryClient.invalidateQueries({ queryKey: ["dashboard"] })
-        toast.success("Stock prices refreshed")
+    mutationFn: async () => {
+      const res = await fetch("/api/stocks/update-prices", { method: "POST" })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed to refresh prices" }))
+        throw new Error(err.error || "Failed to refresh prices")
+      }
+      return res.json()
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["stocks"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
+      if (data?.warning) {
+        toast.warning(data.warning, { duration: 8000 })
       } else {
-        toast.error("Failed to refresh prices")
+        toast.success("Stock prices refreshed")
       }
     },
-    onError: () => toast.error("Failed to refresh prices"),
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to refresh prices"),
   })
 
   function resetForm() {
     setEditing(null)
-    setFormSymbol("")
-    setFormName("")
-    setFormQuantity("")
-    setFormBuyPrice("")
-    setFormDate(new Date().toISOString().split("T")[0])
-    setFormNotes("")
+    reset({
+      symbol: "",
+      name: "",
+      quantity: "",
+      buyPrice: "",
+      date: new Date().toISOString().split("T")[0],
+      notes: "",
+    })
     setSearchQuery("")
     setSearchResults([])
     setIsDialogOpen(false)
@@ -195,24 +243,25 @@ export default function StocksPage() {
 
   function openEdit(stock: Stock) {
     setEditing(stock)
-    setFormSymbol(stock.symbol)
-    setFormName(stock.name)
-    setFormQuantity(stock.quantity.toString())
-    setFormBuyPrice(stock.buyPrice.toString())
-    setFormDate(new Date(stock.date).toISOString().split("T")[0])
-    setFormNotes(stock.notes ?? "")
+    reset({
+      symbol: stock.symbol,
+      name: stock.name,
+      quantity: stock.quantity.toString(),
+      buyPrice: stock.buyPrice.toString(),
+      date: new Date(stock.date).toISOString().split("T")[0],
+      notes: stock.notes ?? "",
+    })
     setIsDialogOpen(true)
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  function onFormSubmit(data: StockFormData) {
     const payload = {
-      symbol: formSymbol.toUpperCase(),
-      name: formName,
-      quantity: parseInt(formQuantity),
-      buyPrice: parseFloat(formBuyPrice),
-      date: new Date(formDate).toISOString(),
-      notes: formNotes || null,
+      symbol: data.symbol.toUpperCase(),
+      name: data.name,
+      quantity: parseInt(data.quantity),
+      buyPrice: parseFloat(data.buyPrice),
+      date: new Date(data.date).toISOString(),
+      notes: data.notes || undefined,
     }
 
     if (editing) {
@@ -235,6 +284,9 @@ export default function StocksPage() {
   )
 
   // Calculate totals
+  // 1 lot = 100 shares
+  const SHARES_PER_LOT = 100
+
   const totalInvested = useMemo(() =>
     (stocks ?? []).reduce(
       (sum, s) => sum + s.quantity * s.buyPrice,
@@ -245,7 +297,7 @@ export default function StocksPage() {
 
   const totalMarketValue = useMemo(() =>
     (stocks ?? []).reduce(
-      (sum, s) => sum + s.quantity * (s.currentPrice ?? s.buyPrice),
+      (sum, s) => sum + s.quantity * (s.currentPrice != null ? s.currentPrice * SHARES_PER_LOT : s.buyPrice),
       0
     ),
     [stocks]
@@ -293,109 +345,130 @@ export default function StocksPage() {
                   {editing ? "Edit Stock" : "Add Stock"}
                 </DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={formSubmit(onFormSubmit)} className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label htmlFor="symbol">Symbol</Label>
-                    <Popover open={searchOpen} onOpenChange={setSearchOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          aria-expanded={searchOpen}
-                          className={cn(
-                            "w-full justify-between",
-                            !formSymbol && "text-muted-foreground"
-                          )}
-                        >
-                          {formSymbol
-                            ? `${formSymbol}${formName ? ` — ${formName}` : ""}`
-                            : "Search stock symbol..."}
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                        <Command shouldFilter={false}>
-                          <CommandInput
-                            placeholder="Type company name or symbol..."
-                            value={searchQuery}
-                            onValueChange={setSearchQuery}
-                          />
-                          <CommandList>
-                            {searchLoading ? (
-                              <div className="flex items-center justify-center py-6">
-                                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                              </div>
-                            ) : searchQuery.length < 2 ? (
-                              <CommandEmpty>Type at least 2 characters to search.</CommandEmpty>
-                            ) : searchResults.length === 0 ? (
-                              <CommandEmpty>No stocks found for "{searchQuery}".</CommandEmpty>
-                            ) : (
-                              <CommandGroup>
-                                {searchResults.map((stock) => (
-                                  <CommandItem
-                                    key={stock.symbol}
-                                    value={stock.symbol}
-                                    onSelect={(currentValue) => {
-                                      setFormSymbol(currentValue)
-                                      setFormName(stock.name)
-                                      setSearchOpen(false)
-                                      setSearchQuery("")
-                                      setSearchResults([])
+                    <Controller
+                      name="symbol"
+                      control={control}
+                      render={({ field }) => (
+                        <Popover open={searchOpen} onOpenChange={setSearchOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={searchOpen}
+                              className={cn(
+                                "w-full justify-between overflow-hidden",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              <span className="truncate">
+                                {field.value
+                                  ? `${field.value}${watch("name") ? ` — ${watch("name")}` : ""}`
+                                  : "Search stock symbol..."}
+                              </span>
+                              <span className="flex items-center gap-1 shrink-0">
+                                {field.value && (
+                                  <span
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      field.onChange("")
+                                      setValue("name", "")
                                     }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter" || e.key === " ") {
+                                        e.stopPropagation()
+                                        field.onChange("")
+                                        setValue("name", "")
+                                      }
+                                    }}
+                                    className="text-muted-foreground hover:text-destructive transition-colors"
                                   >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4",
-                                        formSymbol === stock.symbol ? "opacity-100" : "opacity-0"
-                                      )}
-                                    />
-                                    <div className="flex flex-col">
-                                      <div className="flex items-center gap-2">
-                                        <span className="font-medium">{stock.symbol}</span>
-                                        {stock.exchange && (
-                                          <span className="text-[10px] uppercase text-muted-foreground">
-                                            {stock.exchange}
+                                    <X className="h-4 w-4" />
+                                  </span>
+                                )}
+                                <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+                              </span>
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                            <Command shouldFilter={false}>
+                              <CommandInput
+                                placeholder="Type company name or symbol..."
+                                value={searchQuery}
+                                onValueChange={setSearchQuery}
+                              />
+                              <CommandList>
+                                {searchLoading ? (
+                                  <div className="flex items-center justify-center py-6">
+                                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                                  </div>
+                                ) : searchQuery.length < 2 ? (
+                                  <CommandEmpty>Type at least 2 characters to search.</CommandEmpty>
+                                ) : searchResults.length === 0 ? (
+                                  <CommandEmpty>No stocks found for "{searchQuery}".</CommandEmpty>
+                                ) : (
+                                  <CommandGroup>
+                                    {searchResults.map((stock) => (
+                                      <CommandItem
+                                        key={stock.symbol}
+                                        value={stock.symbol}
+                                        onSelect={() => {
+                                          field.onChange(stock.symbol)
+                                          setValue("name", stock.name)
+                                          setSearchOpen(false)
+                                          setSearchQuery("")
+                                          setSearchResults([])
+                                        }}
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-4 w-4",
+                                            field.value === stock.symbol ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        <div className="flex flex-col">
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-medium">{stock.symbol}</span>
+                                            {stock.exchange && (
+                                              <span className="text-[10px] uppercase text-muted-foreground">
+                                                {stock.exchange}
+                                              </span>
+                                            )}
+                                          </div>
+                                          <span className="text-xs text-muted-foreground truncate max-w-[280px]">
+                                            {stock.name}
                                           </span>
-                                        )}
-                                      </div>
-                                      <span className="text-xs text-muted-foreground truncate max-w-[280px]">
-                                        {stock.name}
-                                      </span>
-                                    </div>
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            )}
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    {formSymbol && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setFormSymbol("")
-                          setFormName("")
-                        }}
-                        className="text-xs text-muted-foreground hover:text-destructive transition-colors"
-                      >
-                        Clear selection
-                      </button>
-                    )}
+                                        </div>
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                )}
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                      )}
+                    />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="quantity">Quantity</Label>
+                    <Label htmlFor="quantity">Quantity (lots)</Label>
                     <Input
                       id="quantity"
                       type="number"
                       min="1"
-                      step="1"
-                      placeholder="100"
-                      value={formQuantity}
-                      onChange={(e) => setFormQuantity(e.target.value)}
-                      required
+                      placeholder="1"
+                      className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      {...register("quantity", { required: true })}
                     />
+                    <FormError errors={errors} name="quantity" />
+                    <p className="text-[10px] text-muted-foreground">
+                      1 lot = 100 shares
+                    </p>
                   </div>
                 </div>
 
@@ -404,23 +477,22 @@ export default function StocksPage() {
                   <Input
                     id="name"
                     placeholder="e.g., Bank Central Asia Tbk."
-                    value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
-                    required
+                    {...register("name", { required: true })}
                   />
+                  <FormError errors={errors} name="name" />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="buyPrice">Buy Price (Rp)</Label>                    <Input
-                      id="buyPrice"
-                      type="number"
-                      min="0"
-                      step="any"
-                      placeholder="10250"
-                      value={formBuyPrice}
-                      onChange={(e) => setFormBuyPrice(e.target.value)}
-                      required
-                    />
+                  <Label htmlFor="buyPrice">Buy Price per Lot (Rp)</Label>
+                  <Input
+                    id="buyPrice"
+                    type="number"
+                    min="0"
+                    placeholder="1025000"
+                    className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    {...register("buyPrice", { required: true })}
+                  />
+                  <FormError errors={errors} name="buyPrice" />
                 </div>
 
                 {formQuantity && formBuyPrice && (
@@ -429,6 +501,9 @@ export default function StocksPage() {
                     <span className="font-semibold">
                       {formatIDR(parseInt(formQuantity || "0") * parseFloat(formBuyPrice || "0"))}
                     </span>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      {parseInt(formQuantity || "0")} lot × {formatIDR(parseFloat(formBuyPrice || "0"))}/lot
+                    </p>
                   </div>
                 )}
 
@@ -437,10 +512,9 @@ export default function StocksPage() {
                   <Input
                     id="date"
                     type="date"
-                    value={formDate}
-                    onChange={(e) => setFormDate(e.target.value)}
-                    required
+                    {...register("date", { required: true })}
                   />
+                  <FormError errors={errors} name="date" />
                 </div>
 
                 <div className="space-y-2">
@@ -448,8 +522,7 @@ export default function StocksPage() {
                   <Input
                     id="notes"
                     placeholder="Any notes about this purchase"
-                    value={formNotes}
-                    onChange={(e) => setFormNotes(e.target.value)}
+                    {...register("notes")}
                   />
                 </div>
 
@@ -483,13 +556,16 @@ export default function StocksPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Shares</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Lots</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
               {(stocks ?? []).reduce((sum, s) => sum + s.quantity, 0).toLocaleString("id-ID")}
             </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {(stocks ?? []).reduce((sum, s) => sum + s.quantity, 0) * 100} shares
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -550,9 +626,11 @@ export default function StocksPage() {
             </div>
           ) : (
             filtered.map((s) => {
+              const shares = s.quantity * SHARES_PER_LOT
               const totalCost = s.quantity * s.buyPrice
-              const hasPrice = s.currentPrice != null
-              const marketValue = hasPrice ? s.quantity * s.currentPrice! : null
+              // currentPrice from Yahoo is per share, convert to per lot
+              const currentPricePerLot = s.currentPrice != null ? s.currentPrice * SHARES_PER_LOT : null
+              const marketValue = currentPricePerLot != null ? s.quantity * currentPricePerLot : null
               const pnl = marketValue != null ? marketValue - totalCost : null
               const pnlPercent = pnl != null && totalCost > 0 ? (pnl / totalCost) * 100 : null
 
@@ -569,21 +647,21 @@ export default function StocksPage() {
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-semibold">{s.symbol}</p>
                         <Badge variant="secondary" className="text-xs shrink-0">
-                          {s.quantity} shares
+                          {s.quantity} {s.quantity === 1 ? "lot" : "lots"}
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                        {s.name} &bull; Bought {formatDate(s.date)}
+                        {shares.toLocaleString("id-ID")} shares &bull; {s.name} &bull; {formatDate(s.date)}
                         {s.notes && ` • ${s.notes}`}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4 shrink-0">
                     <div className="text-right hidden sm:block">
-                      {hasPrice ? (
+                      {currentPricePerLot != null ? (
                         <>
                           <p className="text-sm font-medium">{formatIDR(s.currentPrice!)}</p>
-                          <p className="text-xs text-muted-foreground">Current</p>
+                          <p className="text-xs text-muted-foreground">/share</p>
                         </>
                       ) : (
                         <>
@@ -594,7 +672,7 @@ export default function StocksPage() {
                     </div>
                     <div className="text-right hidden md:block">
                       <p className="text-sm font-muted-foreground">{formatIDR(s.buyPrice)}</p>
-                      <p className="text-xs text-muted-foreground">Buy price</p>
+                      <p className="text-xs text-muted-foreground">/lot</p>
                     </div>
                     <div className="text-right">
                       {pnl != null ? (

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { RULE_TYPES } from "@/lib/rule-type"
 
 export async function GET() {
   const session = await auth()
@@ -23,7 +24,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { name, type, color } = await req.json()
+    const { name, type, color, ruleType } = await req.json()
 
     if (!name || !type) {
       return NextResponse.json(
@@ -35,6 +36,13 @@ export async function POST(req: Request) {
     if (!["INCOME", "EXPENSE"].includes(type)) {
       return NextResponse.json(
         { error: "Type must be INCOME or EXPENSE" },
+        { status: 400 }
+      )
+    }
+
+    if (ruleType !== undefined && ruleType !== null && !RULE_TYPES.includes(ruleType)) {
+      return NextResponse.json(
+        { error: "ruleType must be NEED, WANT, SAVINGS, or null" },
         { status: 400 }
       )
     }
@@ -55,6 +63,7 @@ export async function POST(req: Request) {
         name,
         type,
         color: color || "#6366f1",
+        ruleType: ruleType ?? null,
         userId: session.user.id,
       },
     })

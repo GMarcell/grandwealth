@@ -136,10 +136,12 @@ export async function GET(request: Request) {
           })
         }
 
-        // Stocks
+        // Stocks — quantity is in lots (1 lot = 100 shares)
+        // currentPrice from Yahoo Finance is per-share, buyPrice is stored as per-lot
         const stocks = await prisma.stock.findMany({
           where: { userId: user.id },
         })
+        const SHARES_PER_LOT = 100
         let stockValue = 0
         const stockDetails: Array<{
           symbol: string
@@ -151,8 +153,10 @@ export async function GET(request: Request) {
         }> = []
 
         for (const stock of stocks) {
-          const price = stock.currentPrice ?? stock.buyPrice
-          const value = price * stock.quantity
+          const pricePerLot = stock.currentPrice != null
+            ? stock.currentPrice * SHARES_PER_LOT
+            : stock.buyPrice
+          const value = pricePerLot * stock.quantity
           stockValue += value
           stockDetails.push({
             symbol: stock.symbol,
@@ -243,7 +247,7 @@ Anggaran Bulanan:
 ${budgetDetails.map((b) => `- ${b.category}: anggaran Rp ${b.budgeted.toLocaleString("id-ID")}, terpakai Rp ${b.spent.toLocaleString("id-ID")}, sisa Rp ${b.remaining.toLocaleString("id-ID")}${b.remaining < 0 ? " (OVER BUDGET!)" : ""}`).join("\n") || "Tidak ada anggaran yang ditetapkan."}
 
 Portofolio Saham:
-${stockDetails.map((s) => `- ${s.symbol} (${s.name}): ${s.quantity} lembar @ Rp ${s.currentPrice?.toLocaleString("id-ID") ?? s.buyPrice.toLocaleString("id-ID")} = Rp ${s.value.toLocaleString("id-ID")}`).join("\n") || "Tidak ada kepemilikan saham."}
+${stockDetails.map((s) => `- ${s.symbol} (${s.name}): ${s.quantity} lot (${(s.quantity * SHARES_PER_LOT).toLocaleString("id-ID")} lembar) @ Rp ${s.currentPrice?.toLocaleString("id-ID") ?? (s.buyPrice / SHARES_PER_LOT).toLocaleString("id-ID")}/saham = Rp ${s.value.toLocaleString("id-ID")}`).join("\n") || "Tidak ada kepemilikan saham."}
 
 ${totalGoldWeight > 0 ? `Emas: ${totalGoldWeight.toFixed(2)} gram, nilai Rp ${totalGoldValue.toLocaleString("id-ID")}` : "Tidak ada kepemilikan emas."}
 

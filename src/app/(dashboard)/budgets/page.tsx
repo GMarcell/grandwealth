@@ -1,6 +1,10 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { budgetFormSchema } from "@/lib/validation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
@@ -21,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FormError } from "@/components/ui/form-error";
 import {
   Dialog,
   DialogContent,
@@ -90,7 +95,7 @@ interface TransactionSummary {
   total: number;
 }
 
-// These are replaced by budget-months.ts helpers using the user's budgetStartDay
+type BudgetFormData = z.infer<typeof budgetFormSchema>;
 
 const BUDGET_COLORS = [
   "#3b82f6",
@@ -112,10 +117,25 @@ export default function BudgetsPage() {
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
-  const [formCategory, setFormCategory] = useState("");
-  const [formAmount, setFormAmount] = useState("");
-  const [formRolloverEnabled, setFormRolloverEnabled] = useState(true);
-  const [formRolloverCap, setFormRolloverCap] = useState("");
+
+  const {
+    register,
+    handleSubmit: formSubmit,
+    control,
+    reset,
+    watch,
+    formState: { errors },
+  } = useForm<BudgetFormData>({
+    resolver: zodResolver(budgetFormSchema),
+    defaultValues: {
+      categoryName: "",
+      amount: "",
+      rolloverEnabled: true,
+      rolloverCap: "",
+    },
+  });
+
+  const formRolloverEnabled = watch("rolloverEnabled");
 
   const { data: budgetSettings } = useQuery<{ budgetStartDay: number }>({
     queryKey: ["budget-settings"],
@@ -167,58 +187,70 @@ export default function BudgetsPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: any) =>
-      fetch("/api/budgets", {
+    mutationFn: async (data: any) => {
+      const res = await fetch("/api/budgets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
-      }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed to save budget" }))
+        throw new Error(err.error || "Failed to save budget")
+      }
+      return res.json()
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
       toast.success("Budget saved");
       resetForm();
     },
-    onError: () => toast.error("Failed to save budget"),
+    onError: (err) => toast.error(err.message || "Failed to save budget"),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) =>
-      fetch(`/api/budgets/${id}`, { method: "DELETE" }),
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/budgets/${id}`, { method: "DELETE" })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed to delete budget" }))
+        throw new Error(err.error || "Failed to delete budget")
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
       toast.success("Budget deleted");
     },
-    onError: () => toast.error("Failed to delete budget"),
+    onError: (err) => toast.error(err.message || "Failed to delete budget"),
   });
 
   function resetForm() {
     setEditingBudget(null);
-    setFormCategory("");
-    setFormAmount("");
-    setFormRolloverEnabled(true);
-    setFormRolloverCap("");
+    reset({
+      categoryName: "",
+      amount: "",
+      rolloverEnabled: true,
+      rolloverCap: "",
+    });
     setIsDialogOpen(false);
   }
 
   function openEdit(budget: Budget) {
     setEditingBudget(budget);
-    setFormCategory(budget.categoryName);
-    setFormAmount(budget.amount.toString());
-    setFormRolloverEnabled(budget.rolloverEnabled);
-    setFormRolloverCap(
-      budget.rolloverCap != null ? budget.rolloverCap.toString() : "",
-    );
+    reset({
+      categoryName: budget.categoryName,
+      amount: budget.amount.toString(),
+      rolloverEnabled: budget.rolloverEnabled,
+      rolloverCap: budget.rolloverCap != null ? budget.rolloverCap.toString() : "",
+    });
     setIsDialogOpen(true);
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  function onFormSubmit(data: BudgetFormData) {
     createMutation.mutate({
-      categoryName: formCategory,
-      amount: parseFloat(formAmount),
+      categoryName: data.categoryName,
+      amount: parseFloat(data.amount),
       month: selectedMonth,
-      rolloverEnabled: formRolloverEnabled,
-      rolloverCap: formRolloverCap ? parseFloat(formRolloverCap) : null,
+      rolloverEnabled: data.rolloverEnabled,
+      rolloverCap: data.rolloverCap ? parseFloat(data.rolloverCap) : null,
     });
   }
 
@@ -400,29 +432,36 @@ export default function BudgetsPage() {
                   {editingBudget ? "Edit Budget" : "Add Budget"}
                 </DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={formSubmit(onFormSubmit)} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="category">Category</Label>
-                  <Select
-                    value={formCategory}
-                    onValueChange={setFormCategory}
-                    required
-                    disabled={!!editingBudget}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(editingBudget
-                        ? [editingBudget.categoryName]
-                        : categoriesWithoutBudget
-                      ).map((cat) => (
-                        <SelectItem key={cat} value={cat}>
-                          {cat.replace("_", " ")}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Controller
+                    name="categoryName"
+                    control={control}
+                    render={({ field }) => (
+                      <Select
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        required
+                        disabled={!!editingBudget}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(editingBudget
+                            ? [editingBudget.categoryName]
+                            : categoriesWithoutBudget
+                          ).map((cat) => (
+                            <SelectItem key={cat} value={cat}>
+                              {cat.replace("_", " ")}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  <FormError errors={errors} name="categoryName" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="amount">Monthly Budget (Rp)</Label>
@@ -430,30 +469,34 @@ export default function BudgetsPage() {
                     id="amount"
                     type="number"
                     min="0"
-                    step="10000"
                     placeholder="1000000"
-                    value={formAmount}
-                    onChange={(e) => setFormAmount(e.target.value)}
-                    required
+                    {...register("amount", { required: true })}
                   />
+                  <FormError errors={errors} name="amount" />
                 </div>
 
                 {/* Rollover toggle */}
-                <div className="flex items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="rollover" className="text-sm font-medium">
-                      Rollover unused budget
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      Carry unused amount to next month
-                    </p>
-                  </div>
-                  <Switch
-                    id="rollover"
-                    checked={formRolloverEnabled}
-                    onCheckedChange={setFormRolloverEnabled}
-                  />
-                </div>
+                <Controller
+                  name="rolloverEnabled"
+                  control={control}
+                  render={({ field }) => (
+                    <div className="flex items-center justify-between rounded-lg border p-3">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="rollover" className="text-sm font-medium">
+                          Rollover unused budget
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Carry unused amount to next month
+                        </p>
+                      </div>
+                      <Switch
+                        id="rollover"
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </div>
+                  )}
+                />
 
                 {/* Rollover cap */}
                 {formRolloverEnabled && (
@@ -468,10 +511,8 @@ export default function BudgetsPage() {
                       id="rolloverCap"
                       type="number"
                       min="0"
-                      step="10000"
                       placeholder="No limit"
-                      value={formRolloverCap}
-                      onChange={(e) => setFormRolloverCap(e.target.value)}
+                      {...register("rolloverCap")}
                     />
                     <p className="text-xs text-muted-foreground">
                       Maximum amount that can roll over. Leave empty for no

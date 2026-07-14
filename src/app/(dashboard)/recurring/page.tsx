@@ -1,6 +1,10 @@
 "use client"
 
 import { useState } from "react"
+import { useForm, Controller } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
+import { recurringFormSchema } from "@/lib/validation"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   Plus,
@@ -36,6 +40,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { formatIDR, formatDate } from "@/lib/utils"
+import { FormError } from "@/components/ui/form-error"
 import { toast } from "sonner"
 
 interface RecurringTransaction {
@@ -50,6 +55,8 @@ interface RecurringTransaction {
   nextDate: string
   active: boolean
 }
+
+type RecurringFormData = z.infer<typeof recurringFormSchema>
 
 const PREDEFINED_INCOME = [
   "SALARY", "FREELANCE", "BUSINESS", "INVESTMENT", "DIVIDEND",
@@ -94,14 +101,30 @@ export default function RecurringPage() {
   const queryClient = useQueryClient()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editing, setEditing] = useState<RecurringTransaction | null>(null)
-  const [formType, setFormType] = useState("EXPENSE")
-  const [formCategory, setFormCategory] = useState("")
-  const [formAmount, setFormAmount] = useState("")
-  const [formDescription, setFormDescription] = useState("")
-  const [formFrequency, setFormFrequency] = useState("MONTHLY")
-  const [formStartDate, setFormStartDate] = useState(new Date().toISOString().split("T")[0])
-  const [formEndDate, setFormEndDate] = useState("")
-  const [formNextDate, setFormNextDate] = useState(new Date().toISOString().split("T")[0])
+
+  const {
+    register,
+    handleSubmit: formSubmit,
+    control,
+    reset,
+    watch,
+    formState: { errors },
+  } = useForm<RecurringFormData>({
+    resolver: zodResolver(recurringFormSchema),
+    defaultValues: {
+      type: "EXPENSE",
+      category: "",
+      amount: "",
+      description: "",
+      frequency: "MONTHLY",
+      startDate: new Date().toISOString().split("T")[0],
+      endDate: "",
+      nextDate: new Date().toISOString().split("T")[0],
+    },
+  })
+
+  const formType = watch("type")
+  const formFrequency = watch("frequency")
 
   const { data: recurring, isLoading } = useQuery<RecurringTransaction[]>({
     queryKey: ["recurring-transactions"],
@@ -122,95 +145,120 @@ export default function RecurringPage() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: any) =>
-      fetch("/api/recurring-transactions", {
+    mutationFn: async (data: any) => {
+      const res = await fetch("/api/recurring-transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
-      }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed to create recurring transaction" }))
+        throw new Error(err.error || "Failed to create recurring transaction")
+      }
+      return res.json()
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recurring-transactions"] })
       toast.success("Recurring transaction created")
       resetForm()
     },
-    onError: () => toast.error("Failed to create recurring transaction"),
+    onError: (err) => toast.error(err.message || "Failed to create recurring transaction"),
   })
 
   const updateMutation = useMutation({
-    mutationFn: (data: any) =>
-      fetch(`/api/recurring-transactions/${data.id}`, {
+    mutationFn: async (data: any) => {
+      const res = await fetch(`/api/recurring-transactions/${data.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
-      }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed to update recurring transaction" }))
+        throw new Error(err.error || "Failed to update recurring transaction")
+      }
+      return res.json()
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recurring-transactions"] })
       toast.success("Recurring transaction updated")
       resetForm()
     },
-    onError: () => toast.error("Failed to update recurring transaction"),
+    onError: (err) => toast.error(err.message || "Failed to update recurring transaction"),
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) =>
-      fetch(`/api/recurring-transactions/${id}`, { method: "DELETE" }),
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/recurring-transactions/${id}`, { method: "DELETE" })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed to delete recurring transaction" }))
+        throw new Error(err.error || "Failed to delete recurring transaction")
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recurring-transactions"] })
       toast.success("Recurring transaction deleted")
     },
-    onError: () => toast.error("Failed to delete recurring transaction"),
+    onError: (err) => toast.error(err.message || "Failed to delete recurring transaction"),
   })
 
   const toggleMutation = useMutation({
-    mutationFn: (data: { id: string; active: boolean }) =>
-      fetch(`/api/recurring-transactions/${data.id}`, {
+    mutationFn: async (data: { id: string; active: boolean }) => {
+      const res = await fetch(`/api/recurring-transactions/${data.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ active: data.active }),
-      }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed to toggle recurring transaction" }))
+        throw new Error(err.error || "Failed to toggle recurring transaction")
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recurring-transactions"] })
     },
-    onError: () => toast.error("Failed to toggle recurring transaction"),
+    onError: (err) => toast.error(err.message || "Failed to toggle recurring transaction"),
   })
 
   function resetForm() {
     setEditing(null)
-    setFormType("EXPENSE")
-    setFormCategory("")
-    setFormAmount("")
-    setFormDescription("")
-    setFormFrequency("MONTHLY")
-    setFormStartDate(new Date().toISOString().split("T")[0])
-    setFormEndDate("")
-    setFormNextDate(new Date().toISOString().split("T")[0])
+    reset({
+      type: "EXPENSE",
+      category: "",
+      amount: "",
+      description: "",
+      frequency: "MONTHLY",
+      startDate: new Date().toISOString().split("T")[0],
+      endDate: "",
+      nextDate: new Date().toISOString().split("T")[0],
+    })
     setIsDialogOpen(false)
   }
 
   function openEdit(item: RecurringTransaction) {
     setEditing(item)
-    setFormType(item.type)
-    setFormCategory(item.category)
-    setFormAmount(item.amount.toString())
-    setFormDescription(item.description)
-    setFormFrequency(item.frequency)
-    setFormStartDate(new Date(item.startDate).toISOString().split("T")[0])
-    setFormEndDate(item.endDate ? new Date(item.endDate).toISOString().split("T")[0] : "")
-    setFormNextDate(new Date(item.nextDate).toISOString().split("T")[0])
+    reset({
+      type: item.type as "INCOME" | "EXPENSE",
+      category: item.category,
+      amount: item.amount.toString(),
+      description: item.description,
+      frequency: item.frequency as "WEEKLY" | "MONTHLY" | "YEARLY",
+      startDate: new Date(item.startDate).toISOString().split("T")[0],
+      endDate: item.endDate ? new Date(item.endDate).toISOString().split("T")[0] : "",
+      nextDate: new Date(item.nextDate).toISOString().split("T")[0],
+    })
     setIsDialogOpen(true)
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  function onFormSubmit(data: RecurringFormData) {
     const payload = {
-      type: formType,
-      category: formCategory,
-      amount: parseFloat(formAmount),
-      description: formDescription,
-      frequency: formFrequency,
-      startDate: new Date(formStartDate).toISOString(),
-      endDate: formEndDate ? new Date(formEndDate).toISOString() : null,
-      nextDate: new Date(formNextDate).toISOString(),
+      type: data.type,
+      category: data.category,
+      amount: parseFloat(data.amount),
+      description: data.description,
+      frequency: data.frequency,
+      startDate: new Date(data.startDate).toISOString(),
+      endDate: data.endDate ? new Date(data.endDate).toISOString() : null,
+      nextDate: new Date(data.nextDate).toISOString(),
     }
 
     if (editing) {
@@ -255,44 +303,57 @@ export default function RecurringPage() {
                 {editing ? "Edit Recurring Transaction" : "New Recurring Transaction"}
               </DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={formSubmit(onFormSubmit)} className="space-y-4">
               <div className="space-y-2">
                 <Label>Type</Label>
-                <div className="flex gap-2">
-                  {["INCOME", "EXPENSE"].map((t) => (
-                    <Button
-                      key={t}
-                      type="button"
-                      variant={formType === t ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => { setFormType(t); setFormCategory("") }}
-                      className="flex-1"
-                    >
-                      {t === "INCOME" ? (
-                        <TrendingUp className="h-4 w-4 mr-1" />
-                      ) : (
-                        <TrendingDown className="h-4 w-4 mr-1" />
-                      )}
-                      {t.charAt(0) + t.slice(1).toLowerCase()}
-                    </Button>
-                  ))}
-                </div>
+                <Controller
+                  name="type"
+                  control={control}
+                  render={({ field }) => (
+                    <div className="flex gap-2">
+                      {["INCOME", "EXPENSE"].map((t) => (
+                        <Button
+                          key={t}
+                          type="button"
+                          variant={field.value === t ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => { field.onChange(t); }}
+                          className="flex-1"
+                        >
+                          {t === "INCOME" ? (
+                            <TrendingUp className="h-4 w-4 mr-1" />
+                          ) : (
+                            <TrendingDown className="h-4 w-4 mr-1" />
+                          )}
+                          {t.charAt(0) + t.slice(1).toLowerCase()}
+                        </Button>
+                      ))}
+                    </div>                    )}
+                />
+                <FormError errors={errors} name="type" />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="cat">Category</Label>
-                <Select value={formCategory} onValueChange={setFormCategory} required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat} value={cat}>
-                        {cat.replace("_", " ")}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Controller
+                  name="category"
+                  control={control}
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange} required>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map((cat) => (
+                          <SelectItem key={cat} value={cat}>
+                            {cat.replace("_", " ")}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                <FormError errors={errors} name="category" />
               </div>
 
               <div className="space-y-2">
@@ -301,12 +362,10 @@ export default function RecurringPage() {
                   id="amount"
                   type="number"
                   min="0"
-                  step="100"
                   placeholder="100000"
-                  value={formAmount}
-                  onChange={(e) => setFormAmount(e.target.value)}
-                  required
+                  {...register("amount", { required: true })}
                 />
+                <FormError errors={errors} name="amount" />
               </div>
 
               <div className="space-y-2">
@@ -314,29 +373,34 @@ export default function RecurringPage() {
                 <Input
                   id="desc"
                   placeholder="e.g., Monthly salary"
-                  value={formDescription}
-                  onChange={(e) => setFormDescription(e.target.value)}
-                  required
+                  {...register("description", { required: true })}
                 />
+                <FormError errors={errors} name="description" />
               </div>
 
               <div className="space-y-2">
                 <Label>Frequency</Label>
-                <div className="flex gap-2">
-                  {FREQUENCIES.map((f) => (
-                    <Button
-                      key={f.value}
-                      type="button"
-                      variant={formFrequency === f.value ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setFormFrequency(f.value)}
-                      className="flex-1"
-                    >
-                      <Clock className="h-4 w-4 mr-1" />
-                      {f.label}
-                    </Button>
-                  ))}
-                </div>
+                <Controller
+                  name="frequency"
+                  control={control}
+                  render={({ field }) => (
+                    <div className="flex gap-2">
+                      {FREQUENCIES.map((f) => (
+                        <Button
+                          key={f.value}
+                          type="button"
+                          variant={field.value === f.value ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => field.onChange(f.value)}
+                          className="flex-1"
+                        >
+                          <Clock className="h-4 w-4 mr-1" />
+                          {f.label}
+                        </Button>
+                      ))}
+                    </div>                    )}
+                />
+                <FormError errors={errors} name="frequency" />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -345,20 +409,18 @@ export default function RecurringPage() {
                   <Input
                     id="startDate"
                     type="date"
-                    value={formStartDate}
-                    onChange={(e) => setFormStartDate(e.target.value)}
-                    required
+                    {...register("startDate", { required: true })}
                   />
+                  <FormError errors={errors} name="startDate" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="nextDate">Next Occurrence</Label>
                   <Input
                     id="nextDate"
                     type="date"
-                    value={formNextDate}
-                    onChange={(e) => setFormNextDate(e.target.value)}
-                    required
+                    {...register("nextDate", { required: true })}
                   />
+                  <FormError errors={errors} name="nextDate" />
                 </div>
               </div>
 
@@ -369,8 +431,7 @@ export default function RecurringPage() {
                 <Input
                   id="endDate"
                   type="date"
-                  value={formEndDate}
-                  onChange={(e) => setFormEndDate(e.target.value)}
+                  {...register("endDate")}
                 />
                 <p className="text-xs text-muted-foreground">
                   Leave empty for no end date (repeats indefinitely)

@@ -46,6 +46,8 @@ interface DashboardData {
   totalGoldWeight: number
   totalStockValue: number
   stockCount: number
+  totalSavings: number
+  savingsAccountCount: number
   totalWealth: number
   recentTransactions: Array<{
     id: string
@@ -129,8 +131,9 @@ export default function DashboardPage() {
       { name: "Cash Flow", value: Math.max(0, data?.netCashflow ?? 0) },
       { name: "Gold", value: data?.totalGoldValue ?? 0 },
       { name: "Stocks", value: data?.totalStockValue ?? 0 },
+      { name: "Savings", value: Math.max(0, data?.totalSavings ?? 0) },
     ].filter((d) => d.value > 0),
-    [data?.netCashflow, data?.totalGoldValue, data?.totalStockValue]
+    [data?.netCashflow, data?.totalGoldValue, data?.totalStockValue, data?.totalSavings]
   )
 
   if (isLoading) {
@@ -178,7 +181,7 @@ export default function DashboardPage() {
                 {formatCompactIDR(data?.totalWealth ?? 0)}
               </p>
               <p className="text-xs text-muted-foreground mt-2">
-                Sum of cash flow, gold, and stock values
+                Cash flow + gold + stocks + bank savings
               </p>
             </div>
             <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
@@ -233,15 +236,18 @@ export default function DashboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Gold & Stocks</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Assets</CardTitle>
             <Landmark className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatCompactIDR((data?.totalGoldValue ?? 0) + (data?.totalStockValue ?? 0))}
+              {formatCompactIDR((data?.totalGoldValue ?? 0) + (data?.totalStockValue ?? 0) + (data?.totalSavings ?? 0))}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               {(data?.totalGoldWeight ?? 0).toFixed(2)}g gold &bull; {data?.stockCount ?? 0} stocks
+              {data?.savingsAccountCount != null && data.savingsAccountCount > 0 && (
+                <> &bull; {data.savingsAccountCount} {data.savingsAccountCount === 1 ? "account" : "accounts"}</>
+              )}
             </p>
           </CardContent>
         </Card>
@@ -767,6 +773,12 @@ export default function DashboardPage() {
               <Button variant="outline" className="w-full justify-start" size="lg">
                 <TrendingUp className="h-4 w-4 mr-2" />
                 Add Stock
+              </Button>
+            </Link>
+            <Link href="/savings" className="block">
+              <Button variant="outline" className="w-full justify-start" size="lg">
+                <Landmark className="h-4 w-4 mr-2" />
+                Record Savings
               </Button>
             </Link>
           </CardContent>

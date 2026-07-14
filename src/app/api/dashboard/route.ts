@@ -35,6 +35,7 @@ export async function GET() {
       prevBudgets,
       latestAnalysis,
       categories,
+      bankSavings,
     ] = await Promise.all([
       prisma.transaction.findMany({
         where: { userId },
@@ -74,6 +75,9 @@ export async function GET() {
         where: { userId, ruleType: { not: null } },
         select: { name: true, ruleType: true },
       }),
+      prisma.bankSaving.findMany({
+        where: { userId },
+      }),
     ])
 
     // Calculate totals
@@ -99,11 +103,23 @@ export async function GET() {
       }
     }
 
-    // Stock calculations (use currentPrice when available)
+    // Stock calculations: quantity is in lots (1 lot = 100 shares)
+    // currentPrice from Yahoo Finance is per share, so multiply by 100 for per-lot value
+    // buyPrice is already stored as per-lot
+    const SHARES_PER_LOT = 100
     const totalStockValue = stocks.reduce(
-      (sum, s) => sum + s.quantity * (s.currentPrice ?? s.buyPrice),
+      (sum, s) => sum + s.quantity * (s.currentPrice != null ? s.currentPrice * SHARES_PER_LOT : s.buyPrice),
       0
     )
+
+    // Bank savings calculations
+    let totalSavingsDeposits = 0
+    let totalSavingsWithdrawals = 0
+    for (const s of bankSavings) {
+      if (s.type === "DEPOSIT") totalSavingsDeposits += s.amount
+      else totalSavingsWithdrawals += s.amount
+    }
+    const totalSavingsValue = totalSavingsDeposits - totalSavingsWithdrawals
 
     // Monthly aggregation for chart
     const monthlyMap = new Map<string, { income: number; expenses: number }>()
@@ -289,7 +305,9 @@ export async function GET() {
       totalGoldWeight,
       totalStockValue,
       stockCount: stocks.length,
-      totalWealth: netCashflow + totalGoldInvested + totalStockValue,
+      totalWealth: netCashflow + totalGoldInvested + totalStockValue + totalSavingsValue,
+      totalSavings: totalSavingsValue,
+      savingsAccountCount: bankSavings.length > 0 ? new Set(bankSavings.map((s) => s.accountName)).size : 0,
       recentTransactions,
       monthlyData,
       budgetSummary,
@@ -306,6 +324,7 @@ export async function GET() {
             createdAt: latestAnalysis.createdAt.toISOString(),
           }
         : null,
+      budget5050: budget5050Data,
     })
   } catch (error) {
     console.error("Dashboard error:", error)

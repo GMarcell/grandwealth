@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { createStockSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
+import { fetchStockPrice } from "@/lib/prices"
 
 export async function GET() {
   const session = await auth()
@@ -50,6 +51,7 @@ export async function POST(req: Request) {
 
     const { symbol, name, quantity, buyPrice, date, notes } = parsed.data
 
+    // Create the stock record
     const stock = await prisma.stock.create({
       data: {
         symbol,
@@ -62,6 +64,28 @@ export async function POST(req: Request) {
       },
     })
 
+    // Auto-fetch live price from Yahoo Finance
+    let currentPrice = stock.currentPrice
+    let lastPriceUpdated = stock.lastPriceUpdated
+    try {
+      const priceResult = await fetchStockPrice(symbol)
+      if (priceResult?.price != null) {
+        currentPrice = priceResult.price
+        lastPriceUpdated = new Date()
+        // Update the stock with the live price
+        await prisma.stock.update({
+          where: { id: stock.id },
+          data: {
+            currentPrice: currentPrice,
+            lastPriceUpdated: lastPriceUpdated,
+          },
+        })
+      }
+    } catch {
+      // Non-blocking — auto-fetch failed, stock still created without live price
+      console.warn(`Could not auto-fetch price for ${symbol}`)
+    }
+
     return NextResponse.json(
       {
         id: stock.id,
@@ -69,8 +93,8 @@ export async function POST(req: Request) {
         name: stock.name,
         quantity: stock.quantity,
         buyPrice: stock.buyPrice,
-        currentPrice: stock.currentPrice,
-        lastPriceUpdated: stock.lastPriceUpdated?.toISOString() ?? null,
+        currentPrice,
+        lastPriceUpdated: lastPriceUpdated?.toISOString() ?? null,
         date: stock.date.toISOString(),
         notes: stock.notes,
       },

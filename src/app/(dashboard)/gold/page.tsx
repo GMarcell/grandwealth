@@ -1,6 +1,10 @@
 "use client"
 
 import { useState, useMemo } from "react"
+import { useForm, Controller } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { z } from "zod"
+import { goldFormSchema } from "@/lib/validation"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   Plus,
@@ -31,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { formatIDR, formatDate } from "@/lib/utils"
+import { FormError } from "@/components/ui/form-error"
 import { toast } from "sonner"
 
 interface GoldDeposit {
@@ -43,17 +48,36 @@ interface GoldDeposit {
   notes: string | null
 }
 
+type GoldFormData = z.infer<typeof goldFormSchema>
+
 const GOLD_TYPES = ["BUY", "SELL"] as const
 
 export default function GoldPage() {
   const queryClient = useQueryClient()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editing, setEditing] = useState<GoldDeposit | null>(null)
-  const [formType, setFormType] = useState("BUY")
-  const [formWeight, setFormWeight] = useState("")
-  const [formPrice, setFormPrice] = useState("")
-  const [formDate, setFormDate] = useState(new Date().toISOString().split("T")[0])
-  const [formNotes, setFormNotes] = useState("")
+
+  const {
+    register,
+    handleSubmit: formSubmit,
+    control,
+    reset,
+    watch,
+    formState: { errors },
+  } = useForm<GoldFormData>({
+    resolver: zodResolver(goldFormSchema),
+    defaultValues: {
+      type: "BUY",
+      weight: "",
+      price: "",
+      date: new Date().toISOString().split("T")[0],
+      notes: "",
+    },
+  })
+
+  const formType = watch("type")
+  const formWeight = watch("weight")
+  const formPrice = watch("price")
 
   const { data: deposits, isLoading } = useQuery<GoldDeposit[]>({
     queryKey: ["gold"],
@@ -77,83 +101,103 @@ export default function GoldPage() {
       if (!res.ok) throw new Error("Failed to fetch gold price")
       return res.json()
     },
-    refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
+    refetchInterval: 5 * 60 * 1000,
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: any) =>
-      fetch("/api/gold", {
+    mutationFn: async (data: any) => {
+      const res = await fetch("/api/gold", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
-      }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed to add gold record" }))
+        throw new Error(err.error || "Failed to add gold record")
+      }
+      return res.json()
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["gold"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
       toast.success("Gold record added")
       resetForm()
     },
-    onError: () => toast.error("Failed to add gold record"),
+    onError: (err) => toast.error(err.message || "Failed to add gold record"),
   })
 
   const updateMutation = useMutation({
-    mutationFn: (data: any) =>
-      fetch(`/api/gold/${data.id}`, {
+    mutationFn: async (data: any) => {
+      const res = await fetch(`/api/gold/${data.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
-      }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed to update gold record" }))
+        throw new Error(err.error || "Failed to update gold record")
+      }
+      return res.json()
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["gold"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
       toast.success("Gold record updated")
       resetForm()
     },
-    onError: () => toast.error("Failed to update gold record"),
+    onError: (err) => toast.error(err.message || "Failed to update gold record"),
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) =>
-      fetch(`/api/gold/${id}`, { method: "DELETE" }),
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/gold/${id}`, { method: "DELETE" })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed to delete gold record" }))
+        throw new Error(err.error || "Failed to delete gold record")
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["gold"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
       toast.success("Gold record deleted")
     },
-    onError: () => toast.error("Failed to delete gold record"),
+    onError: (err) => toast.error(err.message || "Failed to delete gold record"),
   })
 
   function resetForm() {
     setEditing(null)
-    setFormType("BUY")
-    setFormWeight("")
-    setFormPrice("")
-    setFormDate(new Date().toISOString().split("T")[0])
-    setFormNotes("")
+    reset({
+      type: "BUY",
+      weight: "",
+      price: "",
+      date: new Date().toISOString().split("T")[0],
+      notes: "",
+    })
     setIsDialogOpen(false)
   }
 
   function openEdit(deposit: GoldDeposit) {
     setEditing(deposit)
-    setFormType(deposit.type)
-    setFormWeight(deposit.weightGram.toString())
-    setFormPrice(deposit.pricePerGram.toString())
-    setFormDate(new Date(deposit.date).toISOString().split("T")[0])
-    setFormNotes(deposit.notes ?? "")
+    reset({
+      type: deposit.type as "BUY" | "SELL",
+      weight: deposit.weightGram.toString(),
+      price: deposit.pricePerGram.toString(),
+      date: new Date(deposit.date).toISOString().split("T")[0],
+      notes: deposit.notes ?? "",
+    })
     setIsDialogOpen(true)
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    const weight = parseFloat(formWeight)
-    const price = parseFloat(formPrice)
+  function onFormSubmit(data: GoldFormData) {
+    const weight = parseFloat(data.weight)
+    const price = parseFloat(data.price)
     const payload = {
-      type: formType,
+      type: data.type,
       weightGram: weight,
       pricePerGram: price,
       totalAmount: weight * price,
-      date: new Date(formDate).toISOString(),
-      notes: formNotes || null,
+      date: new Date(data.date).toISOString(),
+      notes: data.notes || undefined,
     }
 
     if (editing) {
@@ -170,7 +214,6 @@ export default function GoldPage() {
     [deposits]
   )
 
-  // Calculate totals
   const { totalGoldWeight, totalGoldInvested } = useMemo(() => {
     let weight = 0
     let invested = 0
@@ -207,7 +250,16 @@ export default function GoldPage() {
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" onClick={() => resetForm()} className="w-full sm:w-auto">
+            <Button size="sm" onClick={() => {
+              setEditing(null)
+              reset({
+                type: "BUY",
+                weight: "",
+                price: livePrice ? livePrice.pricePerGramIdr.toString() : "",
+                date: new Date().toISOString().split("T")[0],
+                notes: "",
+              })
+            }} className="w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-1" />
               Record Gold
             </Button>
@@ -218,23 +270,29 @@ export default function GoldPage() {
                 {editing ? "Edit Gold Record" : "Record Gold Transaction"}
               </DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={formSubmit(onFormSubmit)} className="space-y-4">
               <div className="space-y-2">
                 <Label>Type</Label>
-                <div className="flex gap-2">
-                  {GOLD_TYPES.map((t) => (
-                    <Button
-                      key={t}
-                      type="button"
-                      variant={formType === t ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setFormType(t)}
-                      className="flex-1"
-                    >
-                      {t === "BUY" ? "Buy" : "Sell"}
-                    </Button>
-                  ))}
-                </div>
+                <Controller
+                  name="type"
+                  control={control}
+                  render={({ field }) => (
+                    <div className="flex gap-2">
+                      {GOLD_TYPES.map((t) => (
+                        <Button
+                          key={t}
+                          type="button"
+                          variant={field.value === t ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => field.onChange(t)}
+                          className="flex-1"
+                        >
+                          {t === "BUY" ? "Buy" : "Sell"}
+                        </Button>
+                      ))}
+                    </div>                    )}
+                />
+                <FormError errors={errors} name="type" />
               </div>
 
               <div className="space-y-2">
@@ -243,12 +301,10 @@ export default function GoldPage() {
                   id="weight"
                   type="number"
                   min="0"
-                  step="0.01"
                   placeholder="10.00"
-                  value={formWeight}
-                  onChange={(e) => setFormWeight(e.target.value)}
-                  required
+                  {...register("weight", { required: true })}
                 />
+                <FormError errors={errors} name="weight" />
               </div>
 
               <div className="space-y-2">
@@ -257,12 +313,10 @@ export default function GoldPage() {
                   id="price"
                   type="number"
                   min="0"
-                  step="100"
                   placeholder="1000000"
-                  value={formPrice}
-                  onChange={(e) => setFormPrice(e.target.value)}
-                  required
+                  {...register("price", { required: true })}
                 />
+                <FormError errors={errors} name="price" />
               </div>
 
               {formWeight && formPrice && (
@@ -279,10 +333,9 @@ export default function GoldPage() {
                 <Input
                   id="date"
                   type="date"
-                  value={formDate}
-                  onChange={(e) => setFormDate(e.target.value)}
-                  required
+                  {...register("date", { required: true })}
                 />
+                <FormError errors={errors} name="date" />
               </div>
 
               <div className="space-y-2">
@@ -290,8 +343,7 @@ export default function GoldPage() {
                 <Input
                   id="notes"
                   placeholder="e.g., Antam 10g"
-                  value={formNotes}
-                  onChange={(e) => setFormNotes(e.target.value)}
+                  {...register("notes")}
                 />
               </div>
 

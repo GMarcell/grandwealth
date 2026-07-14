@@ -9,6 +9,8 @@ import {
   createGoldSchema,
   createStockSchema,
   createRecurringSchema,
+  createBankSavingSchema,
+  updateBankSavingSchema,
   safeParseBody,
 } from "../validation"
 import { z } from "zod"
@@ -375,7 +377,7 @@ describe("updateBudgetSchema", () => {
     expect(result.success).toBe(true)
     // categoryName should be undefined in the output
     if (result.success) {
-      expect(result.data.categoryName).toBeUndefined()
+      expect((result.data as Record<string, unknown>).categoryName).toBeUndefined()
     }
   })
 })
@@ -518,6 +520,123 @@ describe("createStockSchema", () => {
       quantity: 100,
       buyPrice: -100,
     })
+    expect(result.success).toBe(false)
+  })
+})
+
+// ─── createBankSavingSchema ─────────────────
+
+describe("createBankSavingSchema", () => {
+  it("accepts a valid deposit", () => {
+    const result = createBankSavingSchema.safeParse({
+      type: "DEPOSIT",
+      accountName: "BCA",
+      amount: 1000000,
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it("accepts a valid withdrawal", () => {
+    const result = createBankSavingSchema.safeParse({
+      type: "WITHDRAWAL",
+      accountName: "Mandiri",
+      amount: 500000,
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it("accepts a record with all optional fields", () => {
+    const result = createBankSavingSchema.safeParse({
+      type: "DEPOSIT",
+      accountName: "BCA",
+      amount: 1000000,
+      date: "2026-07-15T00:00:00.000Z",
+      notes: "Monthly savings",
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it("rejects invalid type", () => {
+    const result = createBankSavingSchema.safeParse({
+      type: "TRANSFER",
+      accountName: "BCA",
+      amount: 1000000,
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it("rejects empty account name", () => {
+    const result = createBankSavingSchema.safeParse({
+      type: "DEPOSIT",
+      accountName: "",
+      amount: 1000000,
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it("rejects negative amount", () => {
+    const result = createBankSavingSchema.safeParse({
+      type: "DEPOSIT",
+      accountName: "BCA",
+      amount: -100,
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it("rejects zero amount", () => {
+    const result = createBankSavingSchema.safeParse({
+      type: "DEPOSIT",
+      accountName: "BCA",
+      amount: 0,
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it("rejects account name over 100 characters", () => {
+    const result = createBankSavingSchema.safeParse({
+      type: "DEPOSIT",
+      accountName: "x".repeat(101),
+      amount: 1000000,
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it("rejects notes over 500 characters", () => {
+    const result = createBankSavingSchema.safeParse({
+      type: "DEPOSIT",
+      accountName: "BCA",
+      amount: 1000000,
+      notes: "x".repeat(501),
+    })
+    expect(result.success).toBe(false)
+  })
+})
+
+// ─── updateBankSavingSchema ─────────────────
+
+describe("updateBankSavingSchema", () => {
+  it("accepts a partial update with just amount", () => {
+    const result = updateBankSavingSchema.safeParse({ amount: 75000 })
+    expect(result.success).toBe(true)
+  })
+
+  it("accepts a partial update changing account name", () => {
+    const result = updateBankSavingSchema.safeParse({ accountName: "BNI" })
+    expect(result.success).toBe(true)
+  })
+
+  it("accepts empty object (no fields to update)", () => {
+    const result = updateBankSavingSchema.safeParse({})
+    expect(result.success).toBe(true)
+  })
+
+  it("rejects invalid type in partial update", () => {
+    const result = updateBankSavingSchema.safeParse({ type: "INVALID" })
+    expect(result.success).toBe(false)
+  })
+
+  it("rejects negative amount in partial update", () => {
+    const result = updateBankSavingSchema.safeParse({ amount: -100 })
     expect(result.success).toBe(false)
   })
 })

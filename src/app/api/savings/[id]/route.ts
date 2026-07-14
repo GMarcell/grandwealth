@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { RULE_TYPES } from "@/lib/rule-type"
+import { updateBankSavingSchema, safeParseBody } from "@/lib/validation"
 
 export async function PATCH(
   req: Request,
@@ -15,36 +15,35 @@ export async function PATCH(
   const { id } = await params
 
   try {
-    const existing = await prisma.category.findUnique({ where: { id } })
+    const existing = await prisma.bankSaving.findUnique({ where: { id } })
     if (!existing || existing.userId !== session.user.id) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
-    const { name, type, color, ruleType } = await req.json()
+    const parsed = await safeParseBody(req, updateBankSavingSchema)
+    if ("error" in parsed) return parsed.error
 
-    if (ruleType !== undefined && ruleType !== null && !RULE_TYPES.includes(ruleType)) {
-      return NextResponse.json(
-        { error: "ruleType must be NEED, WANT, SAVINGS, or null" },
-        { status: 400 }
-      )
-    }
-
+    const { type, accountName, amount, date, notes } = parsed.data
     const data: any = {}
-    if (name) data.name = name
     if (type) data.type = type
-    if (color) data.color = color
-    if (ruleType !== undefined) data.ruleType = ruleType
+    if (accountName) data.accountName = accountName
+    if (amount) data.amount = amount
+    if (date) data.date = new Date(date)
+    if (notes !== undefined) data.notes = notes
 
-    const updated = await prisma.category.update({
-      where: { id },
-      data,
+    const updated = await prisma.bankSaving.update({ where: { id }, data })
+    return NextResponse.json({
+      id: updated.id,
+      type: updated.type,
+      accountName: updated.accountName,
+      amount: updated.amount,
+      date: updated.date.toISOString(),
+      notes: updated.notes,
     })
-
-    return NextResponse.json(updated)
   } catch (error) {
-    console.error("Update category error:", error)
+    console.error("Update saving error:", error)
     return NextResponse.json(
-      { error: "Failed to update category" },
+      { error: "Failed to update savings record" },
       { status: 500 }
     )
   }
@@ -62,17 +61,17 @@ export async function DELETE(
   const { id } = await params
 
   try {
-    const existing = await prisma.category.findUnique({ where: { id } })
+    const existing = await prisma.bankSaving.findUnique({ where: { id } })
     if (!existing || existing.userId !== session.user.id) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
-    await prisma.category.delete({ where: { id } })
+    await prisma.bankSaving.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("Delete category error:", error)
+    console.error("Delete saving error:", error)
     return NextResponse.json(
-      { error: "Failed to delete category" },
+      { error: "Failed to delete savings record" },
       { status: 500 }
     )
   }

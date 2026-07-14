@@ -72,8 +72,35 @@ async function main() {
 
   console.log(`  ✓ Created demo user: demo@example.com / demo123456`)
 
-  // Create custom categories
-  const customCategories = [
+  // Create category records for all predefined categories
+  // so the rule type selector (NEED/WANT/SAVINGS) is enabled on the settings page
+  const predefinedCategories = [
+    // Expense categories
+    { name: "FOOD", type: "EXPENSE", color: "#ef4444" },
+    { name: "TRANSPORTATION", type: "EXPENSE", color: "#f97316" },
+    { name: "HOUSING", type: "EXPENSE", color: "#3b82f6" },
+    { name: "UTILITIES", type: "EXPENSE", color: "#06b6d4" },
+    { name: "HEALTHCARE", type: "EXPENSE", color: "#10b981" },
+    { name: "EDUCATION", type: "EXPENSE", color: "#8b5cf6" },
+    { name: "ENTERTAINMENT", type: "EXPENSE", color: "#ec4899" },
+    { name: "SHOPPING", type: "EXPENSE", color: "#f59e0b" },
+    { name: "TRAVEL", type: "EXPENSE", color: "#14b8a6" },
+    { name: "INSURANCE", type: "EXPENSE", color: "#6366f1" },
+    { name: "TAX", type: "EXPENSE", color: "#e11d48" },
+    { name: "SUBSCRIPTION", type: "EXPENSE", color: "#a855f7" },
+    { name: "OTHER_EXPENSE", type: "EXPENSE", color: "#6b7280" },
+    // Income categories
+    { name: "SALARY", type: "INCOME", color: "#10b981" },
+    { name: "FREELANCE", type: "INCOME", color: "#3b82f6" },
+    { name: "BUSINESS", type: "INCOME", color: "#8b5cf6" },
+    { name: "INVESTMENT", type: "INCOME", color: "#f59e0b" },
+    { name: "DIVIDEND", type: "INCOME", color: "#06b6d4" },
+    { name: "INTEREST", type: "INCOME", color: "#10b981" },
+    { name: "RENTAL", type: "INCOME", color: "#f97316" },
+    { name: "GIFT", type: "INCOME", color: "#ec4899" },
+    { name: "REFUND", type: "INCOME", color: "#14b8a6" },
+    { name: "OTHER_INCOME", type: "INCOME", color: "#6b7280" },
+    // Custom categories
     { name: "PETROL", type: "EXPENSE", color: "#f97316" },
     { name: "COFFEE", type: "EXPENSE", color: "#8b5cf6" },
     { name: "CLOUD_SERVICES", type: "EXPENSE", color: "#06b6d4" },
@@ -81,13 +108,13 @@ async function main() {
     { name: "CRYPTO", type: "INCOME", color: "#f59e0b" },
   ]
 
-  for (const cat of customCategories) {
+  for (const cat of predefinedCategories) {
     await prisma.category.create({
       data: { ...cat, userId: user.id },
     })
   }
 
-  console.log(`  ✓ Created ${customCategories.length} custom categories`)
+  console.log(`  ✓ Created ${predefinedCategories.length} category records`)
 
   // Generate transactions for the past 12 months
   const now = new Date()
