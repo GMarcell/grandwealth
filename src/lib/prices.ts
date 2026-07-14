@@ -23,6 +23,21 @@ function getPrice(quote: any): number | undefined {
   return quote?.regularMarketPrice ?? undefined
 }
 
+/**
+ * Safely extract regularMarketPreviousClose from a Quote-like object.
+ */
+function getPreviousClose(quote: any): number | undefined {
+  return quote?.regularMarketPreviousClose ?? undefined
+}
+
+/**
+ * Get the best available price: prefer live regularMarketPrice, fall back to
+ * regularMarketPreviousClose (e.g., when the market is closed).
+ */
+function getPriceWithFallback(quote: any): number | undefined {
+  return getPrice(quote) ?? getPreviousClose(quote) ?? undefined
+}
+
 function getSymbol(quote: any): string | undefined {
   return quote?.symbol ?? undefined
 }
@@ -65,7 +80,7 @@ export async function fetchStockPrice(symbol: string): Promise<StockPriceResult 
     // Append .JK if not already present (IDX stocks on Yahoo Finance)
     const yahooSymbol = symbol.includes(".") ? symbol : `${symbol}.JK`
     const quote = await yahooFinance.quote(yahooSymbol) as any
-    const price = getPrice(quote)
+    const price = getPriceWithFallback(quote)
     if (price == null) return null
     return {
       symbol,
@@ -100,7 +115,7 @@ export async function fetchStockPrices(symbols: string[]): Promise<Map<string, n
 
     const quoteArray = Array.isArray(quotes) ? quotes : [quotes]
     for (const q of quoteArray) {
-      const price = getPrice(q)
+      const price = getPriceWithFallback(q)
       const sym = getSymbol(q)
       if (price != null && sym) {
         // Map back to the original stored symbol

@@ -49,7 +49,9 @@ export async function POST(req: Request) {
     const parsed = await safeParseBody(req, createStockSchema)
     if ("error" in parsed) return parsed.error
 
-    const { symbol, name, quantity, buyPrice, date, notes } = parsed.data
+    const { name, quantity, buyPrice, date, notes } = parsed.data
+    // Normalize symbol: strip .JK suffix if present (e.g., "ANTM.JK" → "ANTM")
+    const symbol = parsed.data.symbol.toUpperCase().replace(/\.JK$/, "")
 
     // Create the stock record
     const stock = await prisma.stock.create({

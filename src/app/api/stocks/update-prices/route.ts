@@ -45,7 +45,7 @@ export async function POST() {
     if (failed.length > 0 && updatedCount === 0) {
       return NextResponse.json(
         {
-          error: `Could not fetch live prices from Yahoo Finance for: ${failed.join(", ")}. The market may be closed or the symbol may be invalid.`,
+          error: `Could not fetch any prices from Yahoo Finance for: ${failed.join(", ")}. These symbols may be invalid or delisted.`,
           failed,
           count: 0,
           total: stocks.length,

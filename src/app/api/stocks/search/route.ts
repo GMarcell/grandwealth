@@ -35,7 +35,8 @@ export async function GET(req: NextRequest) {
     const stocks = quotes
       .filter((q: any) => q.quoteType === "EQUITY" && q.symbol)
       .map((q: any) => ({
-        symbol: q.symbol,
+        // Strip .JK suffix from IDX stocks so symbols are stored clean (e.g., "ANTM.JK" → "ANTM")
+        symbol: q.symbol.replace(/\.JK$/, ""),
         name: q.shortname || q.longname || q.symbol,
         exchange: q.exchange || "",
       }))

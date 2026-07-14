@@ -21,7 +21,7 @@ export async function PATCH(
 
     const { symbol, name, quantity, buyPrice, date, notes } = await req.json()
     const data: any = {}
-    if (symbol) data.symbol = symbol.toUpperCase()
+    if (symbol) data.symbol = symbol.toUpperCase().replace(/\.JK$/, "")
     if (name) data.name = name
     if (quantity) data.quantity = quantity
     if (buyPrice) data.buyPrice = buyPrice
