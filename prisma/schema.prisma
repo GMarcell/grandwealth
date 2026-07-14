@@ -22,8 +22,9 @@ model User {
   categories           Category[]
   budgets              Budget[]
   recurringTransactions RecurringTransaction[]
-  accounts             Account[]
-  sessions             Session[]
+  monthlyAnalyses       MonthlyAnalysis[]
+  accounts              Account[]
+  sessions              Session[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 }
@@ -80,15 +81,22 @@ model Transaction {
   updatedAt   DateTime        @updatedAt
 }
 
+enum RuleType {
+  NEED
+  WANT
+  SAVINGS
+}
+
 model Category {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   name      String
-  type      String   // INCOME or EXPENSE
-  color     String   @default("#6366f1")
+  type      String    // INCOME or EXPENSE
+  color     String    @default("#6366f1")
+  ruleType  RuleType? // NEED, WANT, or SAVINGS for 50/30/20 budget rule
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@unique([name, userId])
 }
@@ -164,4 +172,28 @@ model RecurringTransaction {
   user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
+}
+
+model MonthlyAnalysis {
+  id              String   @id @default(cuid())
+  month           String   // format: "YYYY-MM"
+  summary         String   // AI-generated analysis text (Markdown)
+  totalIncome     Float
+  totalExpenses   Float
+  netSavings      Float
+  savingsRate     Float    // percentage
+  topCategory     String?  // top spending category
+  topCategoryAmount Float?
+  stockValue      Float?   // total stock portfolio value at month end
+  goldValue       Float?   // total gold holdings value at month end
+  budgetCount     Int      @default(0)  // number of budgets tracked
+  overBudgetCount Int      @default(0)  // number of budgets exceeded
+  transactionCount Int     @default(0)
+  rawData         String   // JSON: snapshot of underlying data used
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([month, userId])
 }

@@ -1,30 +1,33 @@
 import { NextResponse } from "next/server"
 import { hash } from "bcryptjs"
 import { prisma } from "@/lib/prisma"
+import { registerSchema, safeParseBody } from "@/lib/validation"
+import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 
 export async function POST(req: Request) {
+  // Rate limit: 5 registration attempts per 10 minutes per IP
+  const limiter = rateLimit(`register:${getRateLimitKey(req)}`, {
+    limit: 5,
+    windowMs: 10 * 60 * 1000,
+  })
+  if (!limiter.allowed) {
+    return NextResponse.json(
+      { error: "Too many attempts. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(Math.ceil((limiter.resetTime - Date.now()) / 1000)) } }
+    )
+  }
+
   try {
-    const { name, email, password } = await req.json()
+    const parsed = await safeParseBody(req, registerSchema)
+    if ("error" in parsed) return parsed.error
 
-    if (!email || !password) {
-      return NextResponse.json(
-        { error: "Email and password are required" },
-        { status: 400 }
-      )
-    }
-
-    if (password.length < 6) {
-      return NextResponse.json(
-        { error: "Password must be at least 6 characters" },
-        { status: 400 }
-      )
-    }
+    const { name, email, password } = parsed.data
 
     const existing = await prisma.user.findUnique({ where: { email } })
     if (existing) {
       return NextResponse.json(
         { error: "Email already registered" },
-        { status: 400 }
+        { status: 409 }
       )
     }
 

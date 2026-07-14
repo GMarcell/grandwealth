@@ -14,6 +14,10 @@ import {
   PiggyBank,
   AlertTriangle,
   CheckCircle2,
+  Brain,
+  Sparkles,
+  Percent,
+  Home,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -67,6 +71,26 @@ interface DashboardData {
     overBudgetEntries: Array<{ categoryName: string; overspent: number; percentUsed: number }>
     nearLimitEntries: Array<{ categoryName: string; remaining: number; percentUsed: number }>
   }
+  latestAnalysis: {
+    id: string
+    month: string
+    summary: string
+    totalIncome: number
+    totalExpenses: number
+    netSavings: number
+    savingsRate: number
+    overBudgetCount: number
+    createdAt: string
+  } | null
+  budget5050: {
+    totalIncome: number
+    needs: { total: number; target: number; percent: number }
+    wants: { total: number; target: number; percent: number }
+    savings: { total: number; target: number; percent: number }
+    uncategorized: { total: number; percent: number }
+    categorizedCount: number
+    isHealthy: boolean
+  } | null
 }
 
 function StatCardSkeleton() {
@@ -222,6 +246,265 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* 50/30/20 Budget Rule Widget */}
+      {data?.budget5050 && data.budget5050.totalIncome > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-1.5">
+                <Percent className="h-4 w-4" />
+                50/30/20 Budget Rule
+              </CardTitle>
+              {data.budget5050.isHealthy ? (
+                <Badge variant="profit" className="text-xs">
+                  <CheckCircle2 className="h-3 w-3 mr-0.5" />
+                  On Track
+                </Badge>
+              ) : (
+                <Badge variant="loss" className="text-xs">
+                  <AlertTriangle className="h-3 w-3 mr-0.5" />
+                  Needs Attention
+                </Badge>
+              )}
+            </div>
+            <Button variant="link" size="sm" className="text-xs h-auto p-0" asChild>
+              <Link href="/settings">Configure</Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Progress bars */}
+              <div className="space-y-3">
+                {/* Needs - 50% */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <Home className="h-3.5 w-3.5 text-blue-500" />
+                      <span className="font-medium">Needs</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">
+                        {formatCompactIDR(data.budget5050.needs.total)} / {formatCompactIDR(data.budget5050.needs.target)}
+                      </span>
+                      <span className={`font-semibold min-w-[3rem] text-right ${
+                        data.budget5050.needs.percent <= 50
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-red-600 dark:text-red-400"
+                      }`}>
+                        {data.budget5050.needs.percent.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        data.budget5050.needs.percent <= 50
+                          ? "bg-blue-500"
+                          : "bg-red-500"
+                      }`}
+                      style={{ width: `${Math.min(data.budget5050.needs.percent, 100)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[10px] text-muted-foreground">
+                    <span>Target: 50%</span>
+                    {data.budget5050.needs.percent > 50 && (
+                      <span className="text-red-500">
+                        {formatCompactIDR(data.budget5050.needs.total - data.budget5050.needs.target)} over
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Wants - 30% */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                      <span className="font-medium">Wants</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">
+                        {formatCompactIDR(data.budget5050.wants.total)} / {formatCompactIDR(data.budget5050.wants.target)}
+                      </span>
+                      <span className={`font-semibold min-w-[3rem] text-right ${
+                        data.budget5050.wants.percent <= 30
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-red-600 dark:text-red-400"
+                      }`}>
+                        {data.budget5050.wants.percent.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        data.budget5050.wants.percent <= 30
+                          ? "bg-amber-500"
+                          : "bg-red-500"
+                      }`}
+                      style={{ width: `${Math.min(data.budget5050.wants.percent, 100)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[10px] text-muted-foreground">
+                    <span>Target: 30%</span>
+                    {data.budget5050.wants.percent > 30 && (
+                      <span className="text-red-500">
+                        {formatCompactIDR(data.budget5050.wants.total - data.budget5050.wants.target)} over
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Savings - 20% */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <PiggyBank className="h-3.5 w-3.5 text-emerald-500" />
+                      <span className="font-medium">Savings</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">
+                        {formatCompactIDR(data.budget5050.savings.total)} / {formatCompactIDR(data.budget5050.savings.target)}
+                      </span>
+                      <span className={`font-semibold min-w-[3rem] text-right ${
+                        data.budget5050.savings.percent >= 20
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-red-600 dark:text-red-400"
+                      }`}>
+                        {data.budget5050.savings.percent.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        data.budget5050.savings.percent >= 20
+                          ? "bg-emerald-500"
+                          : "bg-red-500"
+                      }`}
+                      style={{ width: `${Math.min(data.budget5050.savings.percent, 100)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[10px] text-muted-foreground">
+                    <span>Target: 20%</span>
+                    {data.budget5050.savings.percent < 20 && (
+                      <span className="text-red-500">
+                        {formatCompactIDR(data.budget5050.savings.target - data.budget5050.savings.total)} short
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Uncategorized warning */}
+              {data.budget5050.uncategorized.total > 0 && (
+                <div className="flex items-start gap-2 rounded-md bg-amber-500/5 border border-amber-500/20 px-3 py-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+                      {formatCompactIDR(data.budget5050.uncategorized.total)} uncategorized
+                    </p>
+                    <p className="text-[10px] text-amber-700 dark:text-amber-400">
+                      Assign rule types to all expense categories in Settings for an accurate breakdown.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* AI Analysis Widget */}
+      {data?.latestAnalysis && (
+        <Link href="/analysis">
+          <Card className="border-purple-200 dark:border-purple-800 hover:border-purple-300 dark:hover:border-purple-700 transition-all cursor-pointer group">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/50">
+                    <Brain className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold flex items-center gap-1.5">
+                      AI Monthly Analysis
+                      <Sparkles className="h-3.5 w-3.5 text-purple-500" />
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {data.latestAnalysis.month} &bull; Generated {new Date(data.latestAnalysis.createdAt).toLocaleDateString("id-ID")}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                  View full report
+                  <span className="text-lg leading-none">&rarr;</span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">Income</p>
+                  <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                    {formatCompactIDR(data.latestAnalysis.totalIncome)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Expenses</p>
+                  <p className="text-sm font-semibold text-red-600 dark:text-red-400">
+                    {formatCompactIDR(data.latestAnalysis.totalExpenses)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Net Savings</p>
+                  <p className={`text-sm font-semibold ${
+                    data.latestAnalysis.netSavings >= 0
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-red-600 dark:text-red-400"
+                  }`}>
+                    {formatCompactIDR(data.latestAnalysis.netSavings)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground flex items-center gap-0.5">
+                    <Percent className="h-3 w-3" />
+                    Savings Rate
+                  </p>
+                  <p className={`text-sm font-semibold ${
+                    data.latestAnalysis.savingsRate >= 20
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : data.latestAnalysis.savingsRate >= 10
+                      ? "text-amber-600 dark:text-amber-400"
+                      : "text-red-600 dark:text-red-400"
+                  }`}>
+                    {data.latestAnalysis.savingsRate.toFixed(1)}%
+                  </p>
+                </div>
+                {data.latestAnalysis.overBudgetCount > 0 && (
+                  <div>
+                    <p className="text-xs text-muted-foreground">Over Budget</p>
+                    <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+                      {data.latestAnalysis.overBudgetCount} {data.latestAnalysis.overBudgetCount === 1 ? "category" : "categories"}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* AI Summary Preview */}
+              <p className="text-xs text-muted-foreground mt-3 line-clamp-2 leading-relaxed">
+                {data.latestAnalysis.summary
+                  .replace(/## /g, "")
+                  .replace(/### /g, "")
+                  .replace(/[*_]/g, "")
+                  .split("\n")
+                  .filter((l) => l.trim())
+                  .slice(0, 2)
+                  .join(" · ")}
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+      )}
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

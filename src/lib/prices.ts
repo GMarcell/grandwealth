@@ -1,7 +1,10 @@
-import yahooFinance from "yahoo-finance2"
+import YahooFinance from "yahoo-finance2"
+
+const yahooFinance = new YahooFinance()
 
 export interface GoldPriceResult {
   pricePerGramIdr: number
+  pricePerOunceIdr: number
   pricePerOunceUsd: number
   usdIdrRate: number
   updatedAt: string
@@ -30,11 +33,11 @@ function getCurrency(quote: any): string | undefined {
 
 /**
  * Fetch the current gold spot price in IDR per gram.
- * Uses XAU/USD spot price + USD/IDR exchange rate from Yahoo Finance.
+ * Uses GC=F (Gold Futures) for the gold price and IDR=X for USD/IDR exchange rate.
  */
 export async function fetchGoldPriceIdr(): Promise<GoldPriceResult> {
   const [goldQuote, usdIdrQuote] = await Promise.all([
-    yahooFinance.quote("XAUUSD=X") as any,
+    yahooFinance.quote("GC=F") as any,
     yahooFinance.quote("IDR=X") as any,
   ])
 
@@ -43,9 +46,11 @@ export async function fetchGoldPriceIdr(): Promise<GoldPriceResult> {
 
   // 1 troy ounce = 31.1035 grams
   const pricePerGramIdr = (pricePerOunceUsd / 31.1035) * usdIdrRate
+  const pricePerOunceIdr = pricePerOunceUsd * usdIdrRate
 
   return {
     pricePerGramIdr: Math.round(pricePerGramIdr),
+    pricePerOunceIdr: Math.round(pricePerOunceIdr),
     pricePerOunceUsd: pricePerOunceUsd,
     usdIdrRate: usdIdrRate,
     updatedAt: new Date().toISOString(),

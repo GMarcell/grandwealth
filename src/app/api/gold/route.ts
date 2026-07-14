@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { createGoldSchema, safeParseBody } from "@/lib/validation"
+import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 
 export async function GET() {
   const session = await auth()
@@ -32,30 +34,44 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  try {
-    const { type, weightGram, pricePerGram, totalAmount, date, notes } =
-      await req.json()
+  const limiter = rateLimit(`gold:${getRateLimitKey(req)}`, {
+    limit: 20,
+    windowMs: 60_000,
+  })
+  if (!limiter.allowed) {
+    return NextResponse.json({ error: "Too many requests. Please slow down." }, { status: 429 })
+  }
 
-    if (!type || !weightGram || !pricePerGram) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      )
-    }
+  try {
+    const parsed = await safeParseBody(req, createGoldSchema)
+    if ("error" in parsed) return parsed.error
+
+    const { type, weightGram, pricePerGram, totalAmount, date, notes } = parsed.data
 
     const deposit = await prisma.goldDeposit.create({
       data: {
         type,
         weightGram,
         pricePerGram,
-        totalAmount,
+        totalAmount: totalAmount ?? weightGram * pricePerGram,
         date: date ? new Date(date) : new Date(),
-        notes,
+        notes: notes ?? null,
         userId: session.user.id,
       },
     })
 
-    return NextResponse.json(deposit, { status: 201 })
+    return NextResponse.json(
+      {
+        id: deposit.id,
+        type: deposit.type,
+        weightGram: deposit.weightGram,
+        pricePerGram: deposit.pricePerGram,
+        totalAmount: deposit.totalAmount,
+        date: deposit.date.toISOString(),
+        notes: deposit.notes,
+      },
+      { status: 201 }
+    )
   } catch (error) {
     console.error("Create gold deposit error:", error)
     return NextResponse.json(

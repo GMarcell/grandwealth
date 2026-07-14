@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { createBudgetSchema, safeParseBody } from "@/lib/validation"
+import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 
 export async function GET() {
   const session = await auth()
@@ -22,22 +24,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
+  const limiter = rateLimit(`budgets:${getRateLimitKey(req)}`, {
+    limit: 20,
+    windowMs: 60_000,
+  })
+  if (!limiter.allowed) {
+    return NextResponse.json({ error: "Too many requests. Please slow down." }, { status: 429 })
+  }
+
   try {
-    const { categoryName, amount, month, rolloverEnabled, rolloverCap } = await req.json()
+    const parsed = await safeParseBody(req, createBudgetSchema)
+    if ("error" in parsed) return parsed.error
 
-    if (!categoryName || amount == null || !month) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      )
-    }
-
-    if (amount <= 0) {
-      return NextResponse.json(
-        { error: "Budget amount must be greater than 0" },
-        { status: 400 }
-      )
-    }
+    const { categoryName, amount, month, rolloverEnabled, rolloverCap } = parsed.data
 
     // Check if budget already exists for this category/month
     const existing = await prisma.budget.findUnique({
@@ -45,16 +44,22 @@ export async function POST(req: Request) {
     })
 
     if (existing) {
-      // Update instead of creating
-      const updateData: any = { amount }
-      if (rolloverEnabled !== undefined) updateData.rolloverEnabled = rolloverEnabled
-      if (rolloverCap !== undefined) updateData.rolloverCap = rolloverCap
-
       const updated = await prisma.budget.update({
         where: { id: existing.id },
-        data: updateData,
+        data: {
+          amount,
+          ...(rolloverEnabled !== undefined ? { rolloverEnabled } : {}),
+          ...(rolloverCap !== undefined ? { rolloverCap } : {}),
+        },
       })
-      return NextResponse.json(updated)
+      return NextResponse.json({
+        id: updated.id,
+        categoryName: updated.categoryName,
+        amount: updated.amount,
+        month: updated.month,
+        rolloverEnabled: updated.rolloverEnabled,
+        rolloverCap: updated.rolloverCap,
+      })
     }
 
     const budget = await prisma.budget.create({
@@ -68,7 +73,17 @@ export async function POST(req: Request) {
       },
     })
 
-    return NextResponse.json(budget, { status: 201 })
+    return NextResponse.json(
+      {
+        id: budget.id,
+        categoryName: budget.categoryName,
+        amount: budget.amount,
+        month: budget.month,
+        rolloverEnabled: budget.rolloverEnabled,
+        rolloverCap: budget.rolloverCap,
+      },
+      { status: 201 }
+    )
   } catch (error) {
     console.error("Create budget error:", error)
     return NextResponse.json(

@@ -43,6 +43,9 @@ import {
   TrendingDown,
   CalendarDays,
   Save,
+  Home,
+  Sparkles,
+  PiggyBank,
 } from "lucide-react"
 import { getBudgetMonthLabel } from "@/lib/budget-months"
 import { toast } from "sonner"
@@ -52,6 +55,7 @@ interface Category {
   name: string
   type: string
   color: string
+  ruleType: string | null
 }
 
 const PREDEFINED_EXPENSE_CATEGORIES = [
@@ -137,6 +141,21 @@ export default function SettingsPage() {
       resetForm()
     },
     onError: () => toast.error("Failed to create category"),
+  })
+
+  const updateRuleTypeMutation = useMutation({
+    mutationFn: ({ id, ruleType }: { id: string; ruleType: string | null }) =>
+      fetch(`/api/categories/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ruleType }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] })
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
+      toast.success("Rule type updated")
+    },
+    onError: () => toast.error("Failed to update rule type"),
   })
 
   const deleteMutation = useMutation({
@@ -428,37 +447,112 @@ export default function SettingsPage() {
               Expense Categories
             </h4>
             <div className="flex flex-wrap gap-2">
-              {PREDEFINED_EXPENSE_CATEGORIES.map((cat) => (
-                <Badge
-                  key={cat}
-                  variant="secondary"
-                  className="text-xs"
-                >
-                  {cat.replace("_", " ")}
-                </Badge>
-              ))}
-              {userExpenseCategories.map((cat) => (
-                <Badge
-                  key={cat.id}
-                  className="text-xs gap-1 group"
-                  style={{
-                    backgroundColor: `${cat.color}20`,
-                    borderColor: cat.color,
-                    color: cat.color,
-                  }}
-                >
-                  {cat.name.replace("_", " ")}
-                  <button
-                    onClick={() => {
-                      if (confirm(`Delete "${cat.name}" category?`)) {
-                        deleteMutation.mutate(cat.id)
+              {PREDEFINED_EXPENSE_CATEGORIES.map((cat) => {
+                const userCat = userExpenseCategories.find((c) => c.name === cat)
+                return (
+                  <div key={cat} className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-xs">
+                      {cat.replace("_", " ")}
+                    </Badge>
+                    <Select
+                      value={userCat?.ruleType ?? ""}
+                      onValueChange={(v) =>
+                        updateRuleTypeMutation.mutate({
+                          id: userCat!.id,
+                          ruleType: v || null,
+                        })
                       }
+                      disabled={!userCat}
+                    >
+                      <SelectTrigger className="h-6 w-24 text-[10px]">
+                        <SelectValue placeholder="50/30/20" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="NEED" className="text-xs">
+                          <div className="flex items-center gap-1">
+                            <Home className="h-3 w-3 text-blue-500" />
+                            Need
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="WANT" className="text-xs">
+                          <div className="flex items-center gap-1">
+                            <Sparkles className="h-3 w-3 text-amber-500" />
+                            Want
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="SAVINGS" className="text-xs">
+                          <div className="flex items-center gap-1">
+                            <PiggyBank className="h-3 w-3 text-emerald-500" />
+                            Savings
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="" className="text-xs text-muted-foreground">
+                          None
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )
+              })}
+              {userExpenseCategories.map((cat) => (
+                <div key={cat.id} className="flex items-center gap-2">
+                  <Badge
+                    className="text-xs gap-1 group"
+                    style={{
+                      backgroundColor: `${cat.color}20`,
+                      borderColor: cat.color,
+                      color: cat.color,
                     }}
-                    className="hover:opacity-70"
                   >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </Badge>
+                    {cat.name.replace("_", " ")}
+                    <button
+                      onClick={() => {
+                        if (confirm(`Delete "${cat.name}" category?`)) {
+                          deleteMutation.mutate(cat.id)
+                        }
+                      }}
+                      className="hover:opacity-70"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                  <Select
+                    value={cat.ruleType ?? ""}
+                    onValueChange={(v) =>
+                      updateRuleTypeMutation.mutate({
+                        id: cat.id,
+                        ruleType: v || null,
+                      })
+                    }
+                  >
+                    <SelectTrigger className="h-6 w-24 text-[10px]">
+                      <SelectValue placeholder="50/30/20" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NEED" className="text-xs">
+                        <div className="flex items-center gap-1">
+                          <Home className="h-3 w-3 text-blue-500" />
+                          Need
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="WANT" className="text-xs">
+                        <div className="flex items-center gap-1">
+                          <Sparkles className="h-3 w-3 text-amber-500" />
+                          Want
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="SAVINGS" className="text-xs">
+                        <div className="flex items-center gap-1">
+                          <PiggyBank className="h-3 w-3 text-emerald-500" />
+                          Savings
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="" className="text-xs text-muted-foreground">
+                        None
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               ))}
             </div>
           </div>
@@ -470,38 +564,117 @@ export default function SettingsPage() {
               Income Categories
             </h4>
             <div className="flex flex-wrap gap-2">
-              {PREDEFINED_INCOME_CATEGORIES.map((cat) => (
-                <Badge
-                  key={cat}
-                  variant="secondary"
-                  className="text-xs"
-                >
-                  {cat.replace("_", " ")}
-                </Badge>
-              ))}
-              {userIncomeCategories.map((cat) => (
-                <Badge
-                  key={cat.id}
-                  className="text-xs gap-1 group"
-                  style={{
-                    backgroundColor: `${cat.color}20`,
-                    borderColor: cat.color,
-                    color: cat.color,
-                  }}
-                >
-                  {cat.name.replace("_", " ")}
-                  <button
-                    onClick={() => {
-                      if (confirm(`Delete "${cat.name}" category?`)) {
-                        deleteMutation.mutate(cat.id)
+              {PREDEFINED_INCOME_CATEGORIES.map((cat) => {
+                const userCat = userIncomeCategories.find((c) => c.name === cat)
+                return (
+                  <div key={cat} className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-xs">
+                      {cat.replace("_", " ")}
+                    </Badge>
+                    <Select
+                      value={userCat?.ruleType ?? ""}
+                      onValueChange={(v) =>
+                        updateRuleTypeMutation.mutate({
+                          id: userCat!.id,
+                          ruleType: v || null,
+                        })
                       }
-                    }}
-                    className="hover:opacity-70"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
+                      disabled={!userCat}
+                    >
+                      <SelectTrigger className="h-6 w-24 text-[10px]">
+                        <SelectValue placeholder="50/30/20" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="NEED" className="text-xs">
+                          <div className="flex items-center gap-1">
+                            <Home className="h-3 w-3 text-blue-500" />
+                            Need
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="WANT" className="text-xs">
+                          <div className="flex items-center gap-1">
+                            <Sparkles className="h-3 w-3 text-amber-500" />
+                            Want
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="SAVINGS" className="text-xs">
+                          <div className="flex items-center gap-1">
+                            <PiggyBank className="h-3 w-3 text-emerald-500" />
+                            Savings
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="" className="text-xs text-muted-foreground">
+                          None
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )
+              })}
+              {userIncomeCategories.map((cat) => {
+                const isPredefined = [...PREDEFINED_INCOME_CATEGORIES, ...PREDEFINED_EXPENSE_CATEGORIES].includes(cat.name)
+                if (isPredefined) return null // already shown above
+                return (
+                  <div key={cat.id} className="flex items-center gap-2">
+                    <Badge
+                      className="text-xs gap-1 group"
+                      style={{
+                        backgroundColor: `${cat.color}20`,
+                        borderColor: cat.color,
+                        color: cat.color,
+                      }}
+                    >
+                      {cat.name.replace("_", " ")}
+                      <button
+                        onClick={() => {
+                          if (confirm(`Delete "${cat.name}" category?`)) {
+                            deleteMutation.mutate(cat.id)
+                          }
+                        }}
+                        className="hover:opacity-70"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                    <Select
+                      value={cat.ruleType ?? ""}
+                      onValueChange={(v) =>
+                        updateRuleTypeMutation.mutate({
+                          id: cat.id,
+                          ruleType: v || null,
+                        })
+                      }
+                    >
+                      <SelectTrigger className="h-6 w-24 text-[10px]">
+                        <SelectValue placeholder="50/30/20" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="NEED" className="text-xs">
+                          <div className="flex items-center gap-1">
+                            <Home className="h-3 w-3 text-blue-500" />
+                            Need
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="WANT" className="text-xs">
+                          <div className="flex items-center gap-1">
+                            <Sparkles className="h-3 w-3 text-amber-500" />
+                            Want
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="SAVINGS" className="text-xs">
+                          <div className="flex items-center gap-1">
+                            <PiggyBank className="h-3 w-3 text-emerald-500" />
+                            Savings
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="" className="text-xs text-muted-foreground">
+                          None
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )
+              })}
             </div>
           </div>
         </CardContent>

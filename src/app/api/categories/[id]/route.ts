@@ -19,11 +19,20 @@ export async function PATCH(
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
-    const { name, type, color } = await req.json()
+    const { name, type, color, ruleType } = await req.json()
+
+    if (ruleType !== undefined && ruleType !== null && !["NEED", "WANT", "SAVINGS"].includes(ruleType)) {
+      return NextResponse.json(
+        { error: "ruleType must be NEED, WANT, SAVINGS, or null" },
+        { status: 400 }
+      )
+    }
+
     const data: any = {}
     if (name) data.name = name
     if (type) data.type = type
     if (color) data.color = color
+    if (ruleType !== undefined) data.ruleType = ruleType
 
     const updated = await prisma.category.update({
       where: { id },

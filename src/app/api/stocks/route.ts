@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { createStockSchema, safeParseBody } from "@/lib/validation"
+import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 
 export async function GET() {
   const session = await auth()
@@ -34,29 +36,46 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  try {
-    const { symbol, name, quantity, buyPrice, date, notes } = await req.json()
+  const limiter = rateLimit(`stocks:${getRateLimitKey(req)}`, {
+    limit: 20,
+    windowMs: 60_000,
+  })
+  if (!limiter.allowed) {
+    return NextResponse.json({ error: "Too many requests. Please slow down." }, { status: 429 })
+  }
 
-    if (!symbol || !name || !quantity || !buyPrice) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      )
-    }
+  try {
+    const parsed = await safeParseBody(req, createStockSchema)
+    if ("error" in parsed) return parsed.error
+
+    const { symbol, name, quantity, buyPrice, date, notes } = parsed.data
 
     const stock = await prisma.stock.create({
       data: {
-        symbol: symbol.toUpperCase(),
+        symbol,
         name,
         quantity,
         buyPrice,
         date: date ? new Date(date) : new Date(),
-        notes,
+        notes: notes ?? null,
         userId: session.user.id,
       },
     })
 
-    return NextResponse.json(stock, { status: 201 })
+    return NextResponse.json(
+      {
+        id: stock.id,
+        symbol: stock.symbol,
+        name: stock.name,
+        quantity: stock.quantity,
+        buyPrice: stock.buyPrice,
+        currentPrice: stock.currentPrice,
+        lastPriceUpdated: stock.lastPriceUpdated?.toISOString() ?? null,
+        date: stock.date.toISOString(),
+        notes: stock.notes,
+      },
+      { status: 201 }
+    )
   } catch (error) {
     console.error("Create stock error:", error)
     return NextResponse.json(

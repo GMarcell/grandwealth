@@ -66,6 +66,7 @@ export default function GoldPage() {
 
   const { data: livePrice, isLoading: priceLoading } = useQuery<{
     pricePerGramIdr: number
+    pricePerOunceIdr: number
     pricePerOunceUsd: number
     usdIdrRate: number
     updatedAt: string
@@ -348,7 +349,7 @@ export default function GoldPage() {
               <>
                 <div className="text-2xl font-bold">{formatIDR(livePrice.pricePerGramIdr)}</div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  per gram &bull; USD {(livePrice.pricePerOunceUsd ?? 0).toFixed(2)}/oz
+                  {formatIDR(livePrice.pricePerOunceIdr ?? 0)}/oz
                 </p>
               </>
             ) : (

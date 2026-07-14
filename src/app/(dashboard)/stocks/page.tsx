@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   Plus,
@@ -11,6 +11,8 @@ import {
   Loader2,
   Search,
   RefreshCw,
+  Check,
+  ChevronsUpDown,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -25,7 +27,20 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { formatIDR, formatDate } from "@/lib/utils"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import { formatIDR, formatDate, cn } from "@/lib/utils"
 import { toast } from "sonner"
 
 interface Stock {
@@ -51,6 +66,52 @@ export default function StocksPage() {
   const [formBuyPrice, setFormBuyPrice] = useState("")
   const [formDate, setFormDate] = useState(new Date().toISOString().split("T")[0])
   const [formNotes, setFormNotes] = useState("")
+
+  // Stock search combobox state
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchResults, setSearchResults] = useState<Array<{ symbol: string; name: string; exchange: string }>>([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Debounced stock search via Yahoo Finance API
+  const doSearch = useCallback(async (q: string) => {
+    if (q.length < 2) {
+      setSearchResults([])
+      setSearchLoading(false)
+      return
+    }
+    setSearchLoading(true)
+    try {
+      const res = await fetch(`/api/stocks/search?q=${encodeURIComponent(q)}`)
+      if (res.ok) {
+        const data = await res.json()
+        setSearchResults(data.results ?? [])
+      }
+    } catch {
+      // Silently handle
+    } finally {
+      setSearchLoading(false)
+    }
+  }, [])
+
+  // Debounce effect
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    searchTimerRef.current = setTimeout(() => doSearch(searchQuery), 350)
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    }
+  }, [searchQuery, doSearch])
+
+  // Reset search when dialog closes
+  useEffect(() => {
+    if (!isDialogOpen) {
+      setSearchQuery("")
+      setSearchResults([])
+      setSearchOpen(false)
+    }
+  }, [isDialogOpen])
 
   const { data: stocks, isLoading } = useQuery<Stock[]>({
     queryKey: ["stocks"],
@@ -127,6 +188,8 @@ export default function StocksPage() {
     setFormBuyPrice("")
     setFormDate(new Date().toISOString().split("T")[0])
     setFormNotes("")
+    setSearchQuery("")
+    setSearchResults([])
     setIsDialogOpen(false)
   }
 
@@ -234,13 +297,92 @@ export default function StocksPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label htmlFor="symbol">Symbol</Label>
-                    <Input
-                      id="symbol"
-                      placeholder="e.g., BBCA"
-                      value={formSymbol}
-                      onChange={(e) => setFormSymbol(e.target.value.toUpperCase())}
-                      required
-                    />
+                    <Popover open={searchOpen} onOpenChange={setSearchOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={searchOpen}
+                          className={cn(
+                            "w-full justify-between",
+                            !formSymbol && "text-muted-foreground"
+                          )}
+                        >
+                          {formSymbol
+                            ? `${formSymbol}${formName ? ` — ${formName}` : ""}`
+                            : "Search stock symbol..."}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                        <Command shouldFilter={false}>
+                          <CommandInput
+                            placeholder="Type company name or symbol..."
+                            value={searchQuery}
+                            onValueChange={setSearchQuery}
+                          />
+                          <CommandList>
+                            {searchLoading ? (
+                              <div className="flex items-center justify-center py-6">
+                                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                              </div>
+                            ) : searchQuery.length < 2 ? (
+                              <CommandEmpty>Type at least 2 characters to search.</CommandEmpty>
+                            ) : searchResults.length === 0 ? (
+                              <CommandEmpty>No stocks found for "{searchQuery}".</CommandEmpty>
+                            ) : (
+                              <CommandGroup>
+                                {searchResults.map((stock) => (
+                                  <CommandItem
+                                    key={stock.symbol}
+                                    value={stock.symbol}
+                                    onSelect={(currentValue) => {
+                                      setFormSymbol(currentValue)
+                                      setFormName(stock.name)
+                                      setSearchOpen(false)
+                                      setSearchQuery("")
+                                      setSearchResults([])
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        formSymbol === stock.symbol ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <div className="flex flex-col">
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-medium">{stock.symbol}</span>
+                                        {stock.exchange && (
+                                          <span className="text-[10px] uppercase text-muted-foreground">
+                                            {stock.exchange}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <span className="text-xs text-muted-foreground truncate max-w-[280px]">
+                                        {stock.name}
+                                      </span>
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            )}
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    {formSymbol && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormSymbol("")
+                          setFormName("")
+                        }}
+                        className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        Clear selection
+                      </button>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="quantity">Quantity</Label>
@@ -269,17 +411,16 @@ export default function StocksPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="buyPrice">Buy Price (Rp)</Label>
-                  <Input
-                    id="buyPrice"
-                    type="number"
-                    min="0"
-                    step="25"
-                    placeholder="10250"
-                    value={formBuyPrice}
-                    onChange={(e) => setFormBuyPrice(e.target.value)}
-                    required
-                  />
+                  <Label htmlFor="buyPrice">Buy Price (Rp)</Label>                    <Input
+                      id="buyPrice"
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="10250"
+                      value={formBuyPrice}
+                      onChange={(e) => setFormBuyPrice(e.target.value)}
+                      required
+                    />
                 </div>
 
                 {formQuantity && formBuyPrice && (

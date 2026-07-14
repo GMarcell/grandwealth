@@ -33,6 +33,8 @@ export async function GET() {
       stocks,
       budgets,
       prevBudgets,
+      latestAnalysis,
+      categories,
     ] = await Promise.all([
       prisma.transaction.findMany({
         where: { userId },
@@ -52,6 +54,25 @@ export async function GET() {
       }),
       prisma.budget.findMany({
         where: { userId, month: prevMonthKey },
+      }),
+      prisma.monthlyAnalysis.findFirst({
+        where: { userId },
+        orderBy: { month: "desc" },
+        select: {
+          id: true,
+          month: true,
+          summary: true,
+          totalIncome: true,
+          totalExpenses: true,
+          netSavings: true,
+          savingsRate: true,
+          overBudgetCount: true,
+          createdAt: true,
+        },
+      }),
+      prisma.category.findMany({
+        where: { userId, ruleType: { not: null } },
+        select: { name: true, ruleType: true },
       }),
     ])
 
@@ -197,6 +218,59 @@ export async function GET() {
       nearLimitEntries,
     }
 
+    // ── 50/30/20 Budget Rule Breakdown ──
+    // Map category names to their rule types
+    const ruleTypeMap = new Map(categories.map((c) => [c.name, c.ruleType]))
+
+    // Get current month transactions for 50/30/20
+    const currentMonthTransactions = transactions.filter((tx) => {
+      const d = new Date(tx.date)
+      return d >= monthStart && d <= monthEnd
+    })
+
+    const currentMonthIncome = currentMonthTransactions
+      .filter((tx) => tx.type === "INCOME")
+      .reduce((sum, tx) => sum + tx.amount, 0)
+
+    const currentMonthExpenses = currentMonthTransactions.filter((tx) => tx.type === "EXPENSE")
+
+    const totalIncomeForRule = currentMonthIncome || totalIncome
+
+    let needsTotal = 0
+    let wantsTotal = 0
+    let savingsTotal = 0
+    let uncategorizedTotal = 0
+
+    for (const tx of currentMonthExpenses) {
+      const ruleType = ruleTypeMap.get(tx.category)
+      if (ruleType === "NEED") needsTotal += tx.amount
+      else if (ruleType === "WANT") wantsTotal += tx.amount
+      else if (ruleType === "SAVINGS") savingsTotal += tx.amount
+      else uncategorizedTotal += tx.amount
+    }
+
+    // Also count savings from income transactions with SAVINGS rule type
+    for (const tx of currentMonthTransactions.filter((tx) => tx.type === "INCOME")) {
+      const ruleType = ruleTypeMap.get(tx.category)
+      if (ruleType === "SAVINGS") savingsTotal += tx.amount
+    }
+
+    const targetNeeds = totalIncomeForRule * 0.5
+    const targetWants = totalIncomeForRule * 0.3
+    const targetSavings = totalIncomeForRule * 0.2
+
+    const budget5050Data = totalIncomeForRule > 0
+      ? {
+          totalIncome: totalIncomeForRule,
+          needs: { total: needsTotal, target: targetNeeds, percent: (needsTotal / totalIncomeForRule) * 100 },
+          wants: { total: wantsTotal, target: targetWants, percent: (wantsTotal / totalIncomeForRule) * 100 },
+          savings: { total: savingsTotal, target: targetSavings, percent: (savingsTotal / totalIncomeForRule) * 100 },
+          uncategorized: { total: uncategorizedTotal, percent: (uncategorizedTotal / totalIncomeForRule) * 100 },
+          categorizedCount: categories.length,
+          isHealthy: needsTotal <= targetNeeds && wantsTotal <= targetWants && savingsTotal >= targetSavings,
+        }
+      : null
+
     // Recent transactions
     const recentTransactions = transactions.slice(0, 5).map((tx) => ({
       id: tx.id,
@@ -219,6 +293,19 @@ export async function GET() {
       recentTransactions,
       monthlyData,
       budgetSummary,
+      latestAnalysis: latestAnalysis
+        ? {
+            id: latestAnalysis.id,
+            month: latestAnalysis.month,
+            summary: latestAnalysis.summary,
+            totalIncome: latestAnalysis.totalIncome,
+            totalExpenses: latestAnalysis.totalExpenses,
+            netSavings: latestAnalysis.netSavings,
+            savingsRate: latestAnalysis.savingsRate,
+            overBudgetCount: latestAnalysis.overBudgetCount,
+            createdAt: latestAnalysis.createdAt.toISOString(),
+          }
+        : null,
     })
   } catch (error) {
     console.error("Dashboard error:", error)

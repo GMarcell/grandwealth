@@ -15,6 +15,12 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
 
+  // Read callbackUrl from query params (set by proxy.ts when redirecting unauthenticated users)
+  const callbackUrl =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("callbackUrl") || "/dashboard"
+      : "/dashboard"
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setIsLoading(true)
@@ -34,7 +40,7 @@ export default function LoginPage() {
       if (result?.error) {
         setError("Invalid email or password")
       } else {
-        router.push("/dashboard")
+        router.push(callbackUrl)
       }
     } catch {
       setError("Something went wrong. Please try again.")

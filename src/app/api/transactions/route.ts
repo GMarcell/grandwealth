@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { createTransactionSchema, safeParseBody } from "@/lib/validation"
+import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 
 export async function GET() {
   const session = await auth()
@@ -31,15 +33,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  try {
-    const { type, category, amount, description, date } = await req.json()
+  // Rate limit: 30 transactions per minute per user
+  const limiter = rateLimit(`transactions:${session.user.id}`, {
+    limit: 30,
+    windowMs: 60_000,
+  })
+  if (!limiter.allowed) {
+    return NextResponse.json({ error: "Too many requests. Please slow down." }, { status: 429 })
+  }
 
-    if (!type || !category || !amount || !description) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      )
-    }
+  try {
+    const parsed = await safeParseBody(req, createTransactionSchema)
+    if ("error" in parsed) return parsed.error
+
+    const { type, category, amount, description, date } = parsed.data
 
     const transaction = await prisma.transaction.create({
       data: {
@@ -52,7 +59,17 @@ export async function POST(req: Request) {
       },
     })
 
-    return NextResponse.json(transaction, { status: 201 })
+    return NextResponse.json(
+      {
+        id: transaction.id,
+        type: transaction.type,
+        category: transaction.category,
+        amount: transaction.amount,
+        description: transaction.description,
+        date: transaction.date.toISOString(),
+      },
+      { status: 201 }
+    )
   } catch (error) {
     console.error("Create transaction error:", error)
     return NextResponse.json(
