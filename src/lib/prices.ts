@@ -85,9 +85,17 @@ export async function fetchStockPrices(symbols: string[]): Promise<Map<string, n
   const results = new Map<string, number>()
   const uniqueSymbols = [...new Set(symbols)]
 
+  // Build a mapping: Yahoo Finance symbol → original stored symbol
+  // This handles both stored formats: "ANTM" and "ANTM.JK"
+  const yahooToOriginal = new Map<string, string>()
+  for (const s of uniqueSymbols) {
+    const yahooSym = s.includes(".") ? s : `${s}.JK`
+    yahooToOriginal.set(yahooSym, s)
+  }
+
   // Yahoo Finance allows batch quotes
   try {
-    const yahooSymbols = uniqueSymbols.map((s) => (s.includes(".") ? s : `${s}.JK`))
+    const yahooSymbols = [...yahooToOriginal.keys()]
     const quotes = await yahooFinance.quote(yahooSymbols) as any
 
     const quoteArray = Array.isArray(quotes) ? quotes : [quotes]
@@ -95,9 +103,11 @@ export async function fetchStockPrices(symbols: string[]): Promise<Map<string, n
       const price = getPrice(q)
       const sym = getSymbol(q)
       if (price != null && sym) {
-        // Map back to the original symbol (strip .JK)
-        const originalSymbol = sym.replace(/\.JK$/, "")
-        results.set(originalSymbol, price)
+        // Map back to the original stored symbol
+        const originalSymbol = yahooToOriginal.get(sym)
+        if (originalSymbol) {
+          results.set(originalSymbol, price)
+        }
       }
     }
   } catch (error) {
