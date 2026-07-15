@@ -462,37 +462,37 @@ export default function GoldPage() {
             sorted.map((d) => (
               <div
                 key={d.id}
-                className="flex items-center justify-between rounded-lg border p-4 hover:bg-muted/50 transition-colors group"
+                className="flex items-start sm:items-center justify-between rounded-lg border p-3 sm:p-4 hover:bg-muted/50 transition-colors group gap-2"
               >
-                <div className="flex items-center gap-3">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className={`flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full ${
                     d.type === "BUY"
                       ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                       : "bg-red-500/10 text-red-600 dark:text-red-400"
                   }`}>
-                    <CircleDollarSign className="h-5 w-5" />
+                    <CircleDollarSign className="h-4 w-4 sm:h-5 sm:w-5" />
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="text-sm font-medium truncate">
                         {d.type === "BUY" ? "Bought" : "Sold"} {d.weightGram.toFixed(2)}g
                       </p>
-                      <Badge variant={d.type === "BUY" ? "profit" : "loss"}>
+                      <Badge variant={d.type === "BUY" ? "profit" : "loss"} className="text-[10px] leading-none shrink-0">
                         {d.type}
                       </Badge>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
                       @ {formatIDR(d.pricePerGram)}/g &bull; {formatDate(d.date)}
                       {d.notes && ` • ${d.notes}`}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 shrink-0">
                   <div className="text-right shrink-0">
-                    <p className="text-sm font-semibold">{formatIDR(d.totalAmount)}</p>
+                    <p className="text-xs sm:text-sm font-semibold">{formatIDR(d.totalAmount)}</p>
                   </div>
-                  <div className="flex gap-1 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                    <Button variant="ghost" size="icon-sm" onClick={() => openEdit(d)}>
+                  <div className="flex gap-0.5 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="icon-sm" onClick={() => openEdit(d)} className="min-w-9 min-h-9">
                       <Edit2 className="h-3.5 w-3.5" />
                     </Button>
                     <Button
@@ -503,6 +503,7 @@ export default function GoldPage() {
                           deleteMutation.mutate(d.id)
                         }
                       }}
+                      className="min-w-9 min-h-9"
                     >
                       <Trash2 className="h-3.5 w-3.5 text-red-500" />
                     </Button>

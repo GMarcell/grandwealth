@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { formatCompactIDR, formatIDR } from "@/lib/utils"
+import { CHART_COLORS_DASHBOARD as COLORS, SEMANTIC_COLOR_INCOME, SEMANTIC_COLOR_EXPENSE } from "@/lib/chart-colors"
 import {
   LineChart as RechartsLineChart,
   Line,
@@ -109,8 +110,6 @@ function StatCardSkeleton() {
   )
 }
 
-const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"]
-
 export default function DashboardPage() {
   const { data, isLoading, refetch } = useQuery<DashboardData>({
     queryKey: ["dashboard"],
@@ -164,7 +163,7 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Button variant="outline" size="sm" onClick={() => refetch()} className="w-full sm:w-auto">
+          <Button variant="outline" size="sm" onClick={() => refetch()} className="flex-1 sm:flex-initial">
             <RefreshCw className="h-4 w-4 mr-1" />
             Refresh
           </Button>
@@ -550,7 +549,7 @@ export default function DashboardPage() {
                   <Line
                     type="monotone"
                     dataKey="income"
-                    stroke="#10b981"
+                    stroke={SEMANTIC_COLOR_INCOME}
                     strokeWidth={2}
                     dot={false}
                     name="Income"
@@ -558,7 +557,7 @@ export default function DashboardPage() {
                   <Line
                     type="monotone"
                     dataKey="expenses"
-                    stroke="#ef4444"
+                    stroke={SEMANTIC_COLOR_EXPENSE}
                     strokeWidth={2}
                     dot={false}
                     name="Expenses"
@@ -750,35 +749,37 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <Link href="/transactions" className="block">
-              <Button variant="outline" className="w-full justify-start" size="lg">
-                <ArrowLeftRight className="h-4 w-4 mr-2" />
-                Add Transaction
-              </Button>
-            </Link>
-            <Link href="/budgets" className="block">
-              <Button variant="outline" className="w-full justify-start" size="lg">
-                <PiggyBank className="h-4 w-4 mr-2" />
-                Set Budgets
-              </Button>
-            </Link>
-            <Link href="/gold" className="block">
-              <Button variant="outline" className="w-full justify-start" size="lg">
-                <CircleDollarSign className="h-4 w-4 mr-2" />
-                Record Gold
-              </Button>
-            </Link>
-            <Link href="/stocks" className="block">
-              <Button variant="outline" className="w-full justify-start" size="lg">
-                <TrendingUp className="h-4 w-4 mr-2" />
-                Add Stock
-              </Button>
-            </Link>
+          <CardContent className="space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Link href="/transactions" className="block">
+                <Button variant="outline" className="w-full justify-start" size="sm">
+                  <ArrowLeftRight className="h-4 w-4 mr-2 shrink-0" />
+                  <span className="truncate">Add Transaction</span>
+                </Button>
+              </Link>
+              <Link href="/budgets" className="block">
+                <Button variant="outline" className="w-full justify-start" size="sm">
+                  <PiggyBank className="h-4 w-4 mr-2 shrink-0" />
+                  <span className="truncate">Set Budgets</span>
+                </Button>
+              </Link>
+              <Link href="/gold" className="block">
+                <Button variant="outline" className="w-full justify-start" size="sm">
+                  <CircleDollarSign className="h-4 w-4 mr-2 shrink-0" />
+                  <span className="truncate">Record Gold</span>
+                </Button>
+              </Link>
+              <Link href="/stocks" className="block">
+                <Button variant="outline" className="w-full justify-start" size="sm">
+                  <TrendingUp className="h-4 w-4 mr-2 shrink-0" />
+                  <span className="truncate">Add Stock</span>
+                </Button>
+              </Link>
+            </div>
             <Link href="/savings" className="block">
-              <Button variant="outline" className="w-full justify-start" size="lg">
-                <Landmark className="h-4 w-4 mr-2" />
-                Record Savings
+              <Button variant="outline" className="w-full justify-start" size="sm">
+                <Landmark className="h-4 w-4 mr-2 shrink-0" />
+                <span className="truncate">Record Savings</span>
               </Button>
             </Link>
           </CardContent>

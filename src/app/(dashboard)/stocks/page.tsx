@@ -637,75 +637,74 @@ export default function StocksPage() {
               return (
                 <div
                   key={s.id}
-                  className="flex items-center justify-between rounded-lg border p-4 hover:bg-muted/50 transition-colors group"
+                  className="rounded-lg border p-3 sm:p-4 hover:bg-muted/50 transition-colors group"
                 >
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                      <TrendingUp className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold">{s.symbol}</p>
-                        <Badge variant="secondary" className="text-xs shrink-0">
-                          {s.quantity} {s.quantity === 1 ? "lot" : "lots"}
-                        </Badge>
+                  <div className="flex items-start sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                        <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                        {shares.toLocaleString("id-ID")} shares &bull; {s.name} &bull; {formatDate(s.date)}
-                        {s.notes && ` • ${s.notes}`}
-                      </p>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-semibold">{s.symbol}</p>
+                          <Badge variant="secondary" className="text-[10px] leading-none shrink-0">
+                            {s.quantity} {s.quantity === 1 ? "lot" : "lots"}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                          {shares.toLocaleString("id-ID")} shares &bull; {s.name} &bull; {formatDate(s.date)}
+                          {s.notes && ` • ${s.notes}`}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-4 shrink-0">
-                    <div className="text-right hidden sm:block">
-                      {currentPricePerLot != null ? (
-                        <>
-                          <p className="text-sm font-medium">{formatIDR(s.currentPrice!)}</p>
-                          <p className="text-xs text-muted-foreground">/share</p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-sm text-muted-foreground">—</p>
-                          <p className="text-xs text-muted-foreground">No price</p>
-                        </>
-                      )}
-                    </div>
-                    <div className="text-right hidden md:block">
-                      <p className="text-sm font-muted-foreground">{formatIDR(s.buyPrice)}</p>
-                      <p className="text-xs text-muted-foreground">/lot</p>
-                    </div>
-                    <div className="text-right">
-                      {pnl != null ? (
-                        <>
-                          <p className={`text-sm font-semibold ${pnl >= 0 ? "text-emerald-500" : "text-red-500"}`}>
-                            {formatIDR(pnl)}
-                          </p>
-                          <p className={`text-xs ${pnl >= 0 ? "text-emerald-500" : "text-red-500"}`}>
-                            {pnlPercent != null ? `${pnlPercent >= 0 ? "+" : ""}${pnlPercent.toFixed(1)}%` : ""}
-                          </p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-sm font-semibold">{formatIDR(totalCost)}</p>
-                          <p className="text-xs text-muted-foreground">Cost</p>
-                        </>
-                      )}
-                    </div>
-                    <div className="flex gap-1 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="icon-sm" onClick={() => openEdit(s)}>
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => {
-                          if (confirm(`Delete ${s.symbol} from portfolio?`)) {
-                            deleteMutation.mutate(s.id)
-                          }
-                        }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                      </Button>
+                    <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                      <div className="text-right hidden sm:block">
+                        {currentPricePerLot != null ? (
+                          <>
+                            <p className="text-sm font-medium">{formatIDR(s.currentPrice!)}</p>
+                            <p className="text-xs text-muted-foreground">/share</p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-sm text-muted-foreground">—</p>
+                            <p className="text-xs text-muted-foreground">No price</p>
+                          </>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        {pnl != null ? (
+                          <>
+                            <p className={`text-xs sm:text-sm font-semibold ${pnl >= 0 ? "text-emerald-500" : "text-red-500"}`}>
+                              {formatIDR(pnl)}
+                            </p>
+                            <p className={`text-[10px] sm:text-xs ${pnl >= 0 ? "text-emerald-500" : "text-red-500"}`}>
+                              {pnlPercent != null ? `${pnlPercent >= 0 ? "+" : ""}${pnlPercent.toFixed(1)}%` : ""}
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-xs sm:text-sm font-semibold">{formatIDR(totalCost)}</p>
+                            <p className="text-[10px] sm:text-xs text-muted-foreground">Cost</p>
+                          </>
+                        )}
+                      </div>
+                      <div className="flex gap-0.5 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon-sm" onClick={() => openEdit(s)} className="min-w-9 min-h-9">
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => {
+                            if (confirm(`Delete ${s.symbol} from portfolio?`)) {
+                              deleteMutation.mutate(s.id)
+                            }
+                          }}
+                          className="min-w-9 min-h-9"
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -41,6 +41,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatIDR, formatCompactIDR } from "@/lib/utils";
+import { CHART_COLORS } from "@/lib/chart-colors";
 import {
   getBudgetMonthKey,
   getCurrentBudgetMonthKey,
@@ -97,21 +98,6 @@ interface TransactionSummary {
 
 type BudgetFormData = z.infer<typeof budgetFormSchema>;
 
-const BUDGET_COLORS = [
-  "#3b82f6",
-  "#10b981",
-  "#f59e0b",
-  "#ef4444",
-  "#8b5cf6",
-  "#ec4899",
-  "#14b8a6",
-  "#f97316",
-  "#06b6d4",
-  "#84cc16",
-  "#a855f7",
-  "#e11d48",
-  "#0ea5e9",
-];
 
 export default function BudgetsPage() {
   const queryClient = useQueryClient();
@@ -386,7 +372,7 @@ export default function BudgetsPage() {
     .map((b, i) => ({
       name: b.categoryName.replace("_", " "),
       value: b.amount,
-      color: BUDGET_COLORS[i % BUDGET_COLORS.length],
+      color: CHART_COLORS[i % CHART_COLORS.length],
     }));
 
   return (
@@ -813,37 +799,39 @@ export default function BudgetsPage() {
                   key={b.id}
                   className="rounded-lg border p-4 hover:bg-muted/50 transition-colors group"
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-start sm:items-center justify-between mb-2 gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <h4 className="text-sm font-medium">
                         {b.categoryName.replace("_", " ")}
                       </h4>
+                      <div className="flex flex-wrap items-center gap-1">
                       {b.rollover > 0 && (
-                        <Badge variant="profit" className="text-xs">
+                        <Badge variant="profit" className="text-[10px] leading-none">
                           +{formatCompactIDR(b.rollover)} rollover
                         </Badge>
                       )}
                       {!b.rolloverEnabled && (
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge variant="secondary" className="text-[10px] leading-none">
                           No rollover
                         </Badge>
                       )}
                       {b.rolloverEnabled && b.rolloverCap != null && (
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge variant="secondary" className="text-[10px] leading-none">
                           Cap: {formatCompactIDR(b.rolloverCap)}
                         </Badge>
                       )}
                       {isOverBudget && (
-                        <Badge variant="loss" className="text-xs">
-                          <AlertTriangle className="h-3 w-3 mr-0.5" />
+                        <Badge variant="loss" className="text-[10px] leading-none">
+                          <AlertTriangle className="h-2.5 w-2.5 mr-0.5" />
                           Over
                         </Badge>
                       )}
                       {isNearLimit && !isOverBudget && (
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge variant="secondary" className="text-[10px] leading-none">
                           Near Limit
                         </Badge>
                       )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button

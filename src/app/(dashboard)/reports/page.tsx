@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { formatIDR, formatCompactIDR } from "@/lib/utils"
+import { CHART_COLORS, SEMANTIC_COLOR_INCOME, SEMANTIC_COLOR_EXPENSE } from "@/lib/chart-colors"
 import {
   Select,
   SelectContent,
@@ -74,11 +75,7 @@ interface ReportData {
   }
 }
 
-const CHART_COLORS = [
-  "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
-  "#ec4899", "#14b8a6", "#f97316", "#06b6d4", "#84cc16",
-  "#a855f7", "#e11d48", "#0ea5e9", "#6366f1",
-]
+
 
 function ReportSkeleton() {
   return (
@@ -261,13 +258,13 @@ export default function ReportsPage() {
                 <Bar
                   dataKey="income"
                   name="Income"
-                  fill="#10b981"
+                  fill={SEMANTIC_COLOR_INCOME}
                   radius={[4, 4, 0, 0]}
                 />
                 <Bar
                   dataKey="expenses"
                   name="Expenses"
-                  fill="#ef4444"
+                  fill={SEMANTIC_COLOR_EXPENSE}
                   radius={[4, 4, 0, 0]}
                 />
               </BarChart>

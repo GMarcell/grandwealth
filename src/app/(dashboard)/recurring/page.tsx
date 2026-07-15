@@ -536,48 +536,48 @@ export default function RecurringPage() {
               return (
                 <div
                   key={r.id}
-                  className={`rounded-lg border p-4 transition-colors group ${
+                  className={`rounded-lg border p-3 sm:p-4 transition-colors group ${
                     !r.active ? "opacity-50" : "hover:bg-muted/50"
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                  <div className="flex items-start sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className={`flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full ${
                         r.type === "INCOME"
                           ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                           : "bg-red-500/10 text-red-600 dark:text-red-400"
                       }`}>
                         {r.type === "INCOME" ? (
-                          <TrendingUp className="h-5 w-5" />
+                          <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
                         ) : (
-                          <TrendingDown className="h-5 w-5" />
+                          <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5" />
                         )}
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium">{r.description}</p>
-                          <Badge variant="secondary" className="text-xs">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <p className="text-sm font-medium truncate">{r.description}</p>
+                          <Badge variant="secondary" className="text-[10px] leading-none shrink-0">
                             {frequencyLabel(r.frequency)}
                           </Badge>
                           {!r.active && (
-                            <Badge variant="secondary" className="text-xs">
+                            <Badge variant="secondary" className="text-[10px] leading-none shrink-0">
                               Paused
                             </Badge>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                          <span>{r.category.replace("_", " ")}</span>
-                          <span>&bull;</span>
-                          <span className={
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
+                          <span className="truncate">{r.category.replace("_", " ")}</span>
+                          <span className="hidden sm:inline shrink-0" aria-hidden="true">&bull;</span>
+                          <span className={`truncate ${
                             nextText === "Overdue" ? "text-red-500 font-medium" : ""
-                          }>
-                            <Calendar className="h-3 w-3 inline mr-0.5" />
+                          }`}>
+                            <Calendar className="h-3 w-3 inline mr-0.5 shrink-0" />
                             Next: {nextText}
                           </span>
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 shrink-0">
                       <div className="text-right">
                         <p className={`text-sm font-semibold ${
                           r.type === "INCOME"
@@ -587,12 +587,13 @@ export default function RecurringPage() {
                           {r.type === "INCOME" ? "+" : "-"}{formatIDR(r.amount)}
                         </p>
                       </div>
-                      <div className="flex gap-1 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                      <div className="flex gap-0.5 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                         <Button
                           variant="ghost"
                           size="icon-sm"
                           onClick={() => toggleMutation.mutate({ id: r.id, active: !r.active })}
                           title={r.active ? "Pause" : "Resume"}
+                          className="min-w-9 min-h-9"
                         >
                           {r.active ? (
                             <ToggleRight className="h-4 w-4 text-emerald-500" />
@@ -600,7 +601,7 @@ export default function RecurringPage() {
                             <ToggleLeft className="h-4 w-4 text-muted-foreground" />
                           )}
                         </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => openEdit(r)}>
+                        <Button variant="ghost" size="icon-sm" onClick={() => openEdit(r)} className="min-w-9 min-h-9">
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
                         <Button
@@ -611,6 +612,7 @@ export default function RecurringPage() {
                               deleteMutation.mutate(r.id)
                             }
                           }}
+                          className="min-w-9 min-h-9"
                         >
                           <Trash2 className="h-3.5 w-3.5 text-red-500" />
                         </Button>

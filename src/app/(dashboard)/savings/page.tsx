@@ -538,21 +538,21 @@ export default function SavingsPage() {
               {accountSummaries.map((acc) => (
                 <div
                   key={acc.name}
-                  className="flex items-center justify-between rounded-lg border p-3"
+                  className="flex items-center justify-between rounded-lg border p-3 gap-3"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                       <Landmark className="h-4 w-4" />
                     </div>
-                    <div>
-                      <p className="text-sm font-medium">{acc.name}</p>
-                      <p className="text-xs text-muted-foreground">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{acc.name}</p>
+                      <p className="text-xs text-muted-foreground truncate sm:text-clip">
                         Deposits: {formatIDR(acc.deposits)}
                         {acc.withdrawals > 0 && ` · Withdrawn: ${formatIDR(acc.withdrawals)}`}
                       </p>
                     </div>
                   </div>
-                  <div className={`text-sm font-semibold ${acc.balance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                  <div className={`text-xs sm:text-sm font-semibold shrink-0 ${acc.balance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
                     {formatIDR(acc.balance)}
                   </div>
                 </div>
@@ -582,38 +582,38 @@ export default function SavingsPage() {
             sorted.map((s) => (
               <div
                 key={s.id}
-                className="flex items-center justify-between rounded-lg border p-4 hover:bg-muted/50 transition-colors group"
+                className="flex items-start sm:items-center justify-between rounded-lg border p-3 sm:p-4 hover:bg-muted/50 transition-colors group gap-2"
               >
-                <div className="flex items-center gap-3">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className={`flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full ${
                     s.type === "DEPOSIT"
                       ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                       : "bg-red-500/10 text-red-600 dark:text-red-400"
                   }`}>
                     {s.type === "DEPOSIT" ? (
-                      <TrendingUp className="h-5 w-5" />
+                      <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
                     ) : (
-                      <TrendingDown className="h-5 w-5" />
+                      <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5" />
                     )}
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="text-sm font-medium truncate">
                         {s.type === "DEPOSIT" ? "Deposit" : "Withdrawal"}
                       </p>
-                      <Badge variant="secondary" className="text-xs">
+                      <Badge variant="secondary" className="text-[10px] leading-none shrink-0">
                         {s.accountName}
                       </Badge>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
                       {formatDate(s.date)}
                       {s.notes && ` • ${s.notes}`}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 shrink-0">
                   <div className="text-right shrink-0">
-                    <p className={`text-sm font-semibold ${
+                    <p className={`text-xs sm:text-sm font-semibold ${
                       s.type === "DEPOSIT"
                         ? "text-emerald-600 dark:text-emerald-400"
                         : "text-red-600 dark:text-red-400"
@@ -621,8 +621,8 @@ export default function SavingsPage() {
                       {s.type === "DEPOSIT" ? "+" : "-"}{formatIDR(s.amount)}
                     </p>
                   </div>
-                  <div className="flex gap-1 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                    <Button variant="ghost" size="icon-sm" onClick={() => openEdit(s)}>
+                  <div className="flex gap-0.5 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="icon-sm" onClick={() => openEdit(s)} className="min-w-9 min-h-9">
                       <Edit2 className="h-3.5 w-3.5" />
                     </Button>
                     <Button
@@ -633,6 +633,7 @@ export default function SavingsPage() {
                           deleteMutation.mutate(s.id)
                         }
                       }}
+                      className="min-w-9 min-h-9"
                     >
                       <Trash2 className="h-3.5 w-3.5 text-red-500" />
                     </Button>

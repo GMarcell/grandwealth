@@ -465,12 +465,12 @@ export default function TransactionsPage() {
                               </div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-1 shrink-0">
                             <div className={`text-sm font-semibold ${accentColor === "emerald" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
                               {amountSign}{formatIDR(tx.amount)}
                             </div>
-                            <div className="flex gap-1 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                              <Button variant="ghost" size="icon-sm" onClick={() => openEdit(tx)}>
+                            <div className="flex gap-0.5 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                              <Button variant="ghost" size="icon-sm" onClick={() => openEdit(tx)} className="min-w-9 min-h-9">
                                 <Edit2 className="h-3.5 w-3.5" />
                               </Button>
                               <Button
@@ -481,6 +481,7 @@ export default function TransactionsPage() {
                                     deleteMutation.mutate(tx.id)
                                   }
                                 }}
+                                className="min-w-9 min-h-9"
                               >
                                 <Trash2 className="h-3.5 w-3.5 text-red-500" />
                               </Button>

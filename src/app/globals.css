@@ -4,64 +4,64 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
+  --background: oklch(0.985 0.003 45);
+  --foreground: oklch(0.2 0.005 45);
+  --card: oklch(0.995 0.003 45);
+  --card-foreground: oklch(0.2 0.005 45);
+  --popover: oklch(0.995 0.003 45);
+  --popover-foreground: oklch(0.2 0.005 45);
   --primary: oklch(0.472 0.157 218.474);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.965 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.965 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.965 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.96 0.004 45);
+  --secondary-foreground: oklch(0.25 0.005 45);
+  --muted: oklch(0.96 0.004 45);
+  --muted-foreground: oklch(0.56 0.008 45);
+  --accent: oklch(0.96 0.004 45);
+  --accent-foreground: oklch(0.25 0.005 45);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  --border: oklch(0.89 0.006 45);
+  --input: oklch(0.89 0.006 45);
   --ring: oklch(0.708 0 0);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar: oklch(0.992 0.003 45);
+  --sidebar-foreground: oklch(0.2 0.005 45);
   --sidebar-primary: oklch(0.472 0.157 218.474);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.965 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-accent: oklch(0.96 0.004 45);
+  --sidebar-accent-foreground: oklch(0.25 0.005 45);
+  --sidebar-border: oklch(0.89 0.006 45);
   --sidebar-ring: oklch(0.708 0 0);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
+  --background: oklch(0.15 0.006 45);
+  --foreground: oklch(0.96 0.004 45);
+  --card: oklch(0.2 0.005 45);
+  --card-foreground: oklch(0.96 0.004 45);
+  --popover: oklch(0.2 0.005 45);
+  --popover-foreground: oklch(0.96 0.004 45);
   --primary: oklch(0.682 0.157 218.474);
   --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.22 0.005 45);
+  --secondary-foreground: oklch(0.96 0.004 45);
+  --muted: oklch(0.22 0.005 45);
+  --muted-foreground: oklch(0.65 0.008 45);
+  --accent: oklch(0.22 0.005 45);
+  --accent-foreground: oklch(0.96 0.004 45);
   --destructive: oklch(0.704 0.191 22.216);
   --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
+  --border: oklch(1 0.003 45 / 12%);
+  --input: oklch(1 0.003 45 / 18%);
+  --ring: oklch(0.55 0.008 45);
+  --sidebar: oklch(0.19 0.005 45);
+  --sidebar-foreground: oklch(0.96 0.004 45);
   --sidebar-primary: oklch(0.682 0.157 218.474);
   --sidebar-primary-foreground: oklch(0.205 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-accent: oklch(0.22 0.005 45);
+  --sidebar-accent-foreground: oklch(0.96 0.004 45);
+  --sidebar-border: oklch(1 0.003 45 / 10%);
+  --sidebar-ring: oklch(0.55 0.008 45);
 }
 
 @theme inline {
@@ -174,4 +174,16 @@ html {
 /* Prevent layout shift from scrollbar */
 body {
   scrollbar-gutter: stable;
+}
+
+/* Hide scrollbar for horizontal scroll containers */
+@layer utilities {
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }

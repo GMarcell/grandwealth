@@ -53,6 +53,7 @@ import {
 } from "lucide-react"
 import { getBudgetMonthLabel } from "@/lib/budget-months"
 import { RULE_TYPE_ORDER, RULE_TYPE_CONFIGS } from "@/lib/rule-type"
+import { CHART_COLORS } from "@/lib/chart-colors"
 import { FormError } from "@/components/ui/form-error"
 import { toast } from "sonner"
 
@@ -77,11 +78,8 @@ const PREDEFINED_INCOME_CATEGORIES = [
   "INTEREST", "RENTAL", "GIFT", "REFUND", "OTHER_INCOME",
 ]
 
-const COLOR_OPTIONS = [
-  "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
-  "#ec4899", "#14b8a6", "#f97316", "#06b6d4", "#84cc16",
-  "#a855f7", "#e11d48", "#0ea5e9", "#6366f1",
-]
+/** Category color picker options (same as shared chart palette). */
+const COLOR_OPTIONS = [...CHART_COLORS]
 
 export default function SettingsPage() {
   const { data: session } = useSession()
@@ -322,7 +320,7 @@ export default function SettingsPage() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="budgetStartDay">Budget Month Starts On</Label>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
               <Select
                 value={budgetStartDay.toString()}
                 onValueChange={(v) => {
@@ -330,7 +328,7 @@ export default function SettingsPage() {
                   setSettingsChanged(true)
                 }}
               >
-                <SelectTrigger className="w-28">
+                <SelectTrigger className="w-full sm:w-28">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
