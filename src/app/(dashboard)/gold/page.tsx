@@ -34,7 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { formatIDR, formatDate } from "@/lib/utils"
+import { formatIDR, formatDate, type PaginatedResponse } from "@/lib/utils"
 import { FormError } from "@/components/ui/form-error"
 import { toast } from "sonner"
 
@@ -54,6 +54,7 @@ const GOLD_TYPES = ["BUY", "SELL"] as const
 
 export default function GoldPage() {
   const queryClient = useQueryClient()
+  const [page, setPage] = useState(1)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editing, setEditing] = useState<GoldDeposit | null>(null)
 
@@ -79,14 +80,18 @@ export default function GoldPage() {
   const formWeight = watch("weight")
   const formPrice = watch("price")
 
-  const { data: deposits, isLoading } = useQuery<GoldDeposit[]>({
-    queryKey: ["gold"],
+  const { data: depositsData, isLoading } = useQuery({
+    queryKey: ["gold", page],
     queryFn: async () => {
-      const res = await fetch("/api/gold");
+      const res = await fetch(`/api/gold?page=${page}&pageSize=25`);
       if (!res.ok) throw new Error("Failed to fetch gold deposits");
-      return res.json();
+      const json: PaginatedResponse<GoldDeposit> = await res.json();
+      return json;
     },
   })
+
+  const deposits = depositsData?.data ?? []
+  const pagination = depositsData?.pagination
 
   const { data: livePrice, isLoading: priceLoading } = useQuery<{
     pricePerGramIdr: number
@@ -208,7 +213,7 @@ export default function GoldPage() {
   }
 
   const sorted = useMemo(() =>
-    (deposits ?? []).sort(
+    deposits.sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     ),
     [deposits]
@@ -217,7 +222,7 @@ export default function GoldPage() {
   const { totalGoldWeight, totalGoldInvested } = useMemo(() => {
     let weight = 0
     let invested = 0
-    for (const d of deposits ?? []) {
+    for (const d of deposits) {
       if (d.type === "BUY") {
         weight += d.weightGram
         invested += d.totalAmount
@@ -514,6 +519,33 @@ export default function GoldPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Pagination */}
+      {pagination && pagination.totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            Showing page {pagination.page} of {pagination.totalPages} ({pagination.total} total)
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!pagination.hasMore}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

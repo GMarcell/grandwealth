@@ -40,7 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { formatIDR } from "@/lib/utils"
+import { formatIDR, type PaginatedResponse } from "@/lib/utils"
 import { FormError } from "@/components/ui/form-error"
 import { getBudgetMonthKey, getBudgetMonthRange } from "@/lib/budget-months"
 import { RULE_TYPES, RULE_TYPE_ORDER, RULE_TYPE_CONFIGS, OTHER_CONFIG } from "@/lib/rule-type"
@@ -127,6 +127,7 @@ export default function TransactionsPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState("")
   const [typeFilter, setTypeFilter] = useState<string>("ALL")
+  const [page, setPage] = useState(1)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
 
@@ -151,14 +152,18 @@ export default function TransactionsPage() {
 
   const formType = watch("type")
 
-  const { data: transactions, isLoading } = useQuery<Transaction[]>({
-    queryKey: ["transactions"],
+  const { data: transactions, isLoading } = useQuery({
+    queryKey: ["transactions", page],
     queryFn: async () => {
-      const res = await fetch("/api/transactions");
+      const res = await fetch(`/api/transactions?page=${page}&pageSize=50`);
       if (!res.ok) throw new Error("Failed to fetch transactions");
-      return res.json();
+      const json: PaginatedResponse<Transaction> = await res.json();
+      return json;
     },
   })
+
+  const transactionList = transactions?.data ?? []
+  const pagination = transactions?.pagination
 
   const { data: customCategories } = useQuery<Array<{ id: string; name: string; type: string; color: string; ruleType: string | null }>>({
     queryKey: ["categories"],
@@ -209,7 +214,7 @@ export default function TransactionsPage() {
       
       // Check budget alert for expense transactions
       if (variables.type === "EXPENSE") {
-        const alert = getBudgetAlert(variables.category, parseFloat(variables.amount.toString()), budgets ?? [], transactions ?? [], startDay)
+        const alert = getBudgetAlert(variables.category, parseFloat(variables.amount.toString()), budgets ?? [], transactionList, startDay)
         if (alert.level === "over") {
           toast.error(alert.message, { duration: 6000 })
         } else if (alert.level === "near") {
@@ -246,7 +251,7 @@ export default function TransactionsPage() {
         // When editing, subtract the old amount from the total since it's still in cached data
         const oldAmount = editingTransaction?.amount ? parseFloat(editingTransaction.amount.toString()) : 0
         const netAdditional = parseFloat(variables.amount.toString()) - oldAmount
-        const alert = getBudgetAlert(variables.category, netAdditional, budgets ?? [], transactions ?? [], startDay)
+        const alert = getBudgetAlert(variables.category, netAdditional, budgets ?? [], transactionList, startDay)
         if (alert.level === "over") {
           toast.error(alert.message, { duration: 6000 })
         } else if (alert.level === "near") {
@@ -316,14 +321,14 @@ export default function TransactionsPage() {
   }
 
   const filtered = useMemo(() =>
-    (transactions ?? [])
+    transactionList
       .filter((tx) => {
         if (typeFilter !== "ALL" && tx.type !== typeFilter) return false
         if (search && !tx.description.toLowerCase().includes(search.toLowerCase())) return false
         return true
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-    [transactions, typeFilter, search]
+    [transactionList, typeFilter, search]
   )
 
   // Build ruleType map: category name → ruleType
@@ -381,17 +386,17 @@ export default function TransactionsPage() {
   }, [filtered, ruleTypeMap])
 
   const totalIncome = useMemo(() =>
-    (transactions ?? [])
+    transactionList
       .filter((tx) => tx.type === "INCOME")
       .reduce((sum, tx) => sum + tx.amount, 0),
-    [transactions]
+    [transactionList]
   )
 
   const totalExpenses = useMemo(() =>
-    (transactions ?? [])
+    transactionList
       .filter((tx) => tx.type === "EXPENSE")
       .reduce((sum, tx) => sum + tx.amount, 0),
-    [transactions]
+    [transactionList]
   )
 
   const categories = useMemo(() => {
@@ -811,6 +816,33 @@ export default function TransactionsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Pagination */}
+      {pagination && pagination.totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            Showing page {pagination.page} of {pagination.totalPages} ({pagination.total} total)
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!pagination.hasMore}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

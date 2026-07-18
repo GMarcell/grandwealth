@@ -1,11 +1,21 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { createRecurringSchema, safeParseBody } from "@/lib/validation"
+import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const limiter = rateLimit(`recurring-get:${getRateLimitKey(req)}`, {
+    limit: 60,
+    windowMs: 60_000,
+  })
+  if (!limiter.allowed) {
+    return NextResponse.json({ error: "Too many requests. Please slow down." }, { status: 429 })
   }
 
   const recurring = await prisma.recurringTransaction.findMany({
@@ -35,23 +45,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
+  const limiter = rateLimit(`recurring:${getRateLimitKey(req)}`, {
+    limit: 20,
+    windowMs: 60_000,
+  })
+  if (!limiter.allowed) {
+    return NextResponse.json({ error: "Too many requests. Please slow down." }, { status: 429 })
+  }
+
   try {
-    const { type, category, amount, description, frequency, startDate, endDate, nextDate } = await req.json()
+    const parsed = await safeParseBody(req, createRecurringSchema)
+    if ("error" in parsed) return parsed.error
 
-    if (!type || !category || !amount || !description || !frequency || !startDate || !nextDate) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      )
-    }
-
-    if (!["INCOME", "EXPENSE"].includes(type)) {
-      return NextResponse.json({ error: "Type must be INCOME or EXPENSE" }, { status: 400 })
-    }
-
-    if (!["WEEKLY", "MONTHLY", "YEARLY"].includes(frequency)) {
-      return NextResponse.json({ error: "Frequency must be WEEKLY, MONTHLY, or YEARLY" }, { status: 400 })
-    }
+    const { type, category, amount, description, frequency, startDate, endDate, nextDate } = parsed.data
 
     const recurring = await prisma.recurringTransaction.create({
       data: {

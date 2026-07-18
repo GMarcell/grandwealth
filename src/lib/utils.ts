@@ -60,3 +60,63 @@ export function getErrorMessage(error: unknown, fallback = "Something went wrong
   if (error instanceof Error) return error.message
   return fallback
 }
+
+// ─── Pagination ────────────────────────────────
+
+export interface PaginationParams {
+  page: number
+  pageSize: number
+}
+
+export interface PaginationMeta {
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+  hasMore: boolean
+}
+
+export interface PaginatedResponse<T> {
+  data: T[]
+  pagination: PaginationMeta
+}
+
+const DEFAULT_PAGE_SIZE = 50
+const MAX_PAGE_SIZE = 200
+
+/**
+ * Parse pagination query parameters from a URL.
+ * Returns undefined if no page param is present (caller should use legacy array format).
+ * Returns default values if params are invalid.
+ */
+export function parsePagination(url: string | URL, defaultSize = DEFAULT_PAGE_SIZE): PaginationParams | undefined {
+  const searchParams = typeof url === "string" ? new URL(url, "http://localhost").searchParams : url.searchParams
+  if (!searchParams.has("page")) return undefined
+  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1)
+  const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, parseInt(searchParams.get("pageSize") ?? String(defaultSize), 10) || defaultSize))
+  return { page, pageSize }
+}
+
+/**
+ * Build pagination metadata from a total count and current pagination params.
+ */
+export function buildPagination(total: number, params: PaginationParams): PaginationMeta {
+  const totalPages = Math.max(1, Math.ceil(total / params.pageSize))
+  return {
+    page: params.page,
+    pageSize: params.pageSize,
+    total,
+    totalPages,
+    hasMore: params.page < totalPages,
+  }
+}
+
+/**
+ * Create a paginated response object with data and metadata.
+ */
+export function paginatedResponse<T>(data: T[], total: number, params: PaginationParams): PaginatedResponse<T> {
+  return {
+    data,
+    pagination: buildPagination(total, params),
+  }
+}

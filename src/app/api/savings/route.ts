@@ -3,28 +3,65 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { createBankSavingSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
+import { parsePagination, paginatedResponse } from "@/lib/utils"
 
-export async function GET() {
+export const dynamic = "force-dynamic"
+
+export async function GET(req: Request) {
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const savings = await prisma.bankSaving.findMany({
-    where: { userId: session.user.id },
-    orderBy: { date: "desc" },
+  const limiter = rateLimit(`savings-get:${getRateLimitKey(req)}`, {
+    limit: 60,
+    windowMs: 60_000,
   })
+  if (!limiter.allowed) {
+    return NextResponse.json({ error: "Too many requests. Please slow down." }, { status: 429 })
+  }
 
-  return NextResponse.json(
-    savings.map((s) => ({
-      id: s.id,
-      type: s.type,
-      accountName: s.accountName,
-      amount: s.amount,
-      date: s.date.toISOString(),
-      notes: s.notes,
-    }))
-  )
+  const where = { userId: session.user.id }
+  const pagination = parsePagination(req.url, 25)
+
+  if (!pagination) {
+    // Legacy: return plain array when no pagination params
+    const savings = await prisma.bankSaving.findMany({
+      where,
+      orderBy: { date: "desc" },
+    })
+    return NextResponse.json(
+      savings.map((s) => ({
+        id: s.id,
+        type: s.type,
+        accountName: s.accountName,
+        amount: s.amount,
+        date: s.date.toISOString(),
+        notes: s.notes,
+      }))
+    )
+  }
+
+  const [savings, total] = await Promise.all([
+    prisma.bankSaving.findMany({
+      where,
+      orderBy: { date: "desc" },
+      skip: (pagination.page - 1) * pagination.pageSize,
+      take: pagination.pageSize,
+    }),
+    prisma.bankSaving.count({ where }),
+  ])
+
+  const mapped = savings.map((s) => ({
+    id: s.id,
+    type: s.type,
+    accountName: s.accountName,
+    amount: s.amount,
+    date: s.date.toISOString(),
+    notes: s.notes,
+  }))
+
+  return NextResponse.json(paginatedResponse(mapped, total, pagination))
 }
 
 export async function POST(req: Request) {

@@ -16,17 +16,24 @@ export interface StockPriceResult {
   currency: string
 }
 
+interface QuoteData {
+  regularMarketPrice?: number
+  regularMarketPreviousClose?: number
+  symbol?: string
+  currency?: string
+}
+
 /**
  * Safely extract regularMarketPrice from a Quote-like object.
  */
-function getPrice(quote: any): number | undefined {
+function getPrice(quote: QuoteData): number | undefined {
   return quote?.regularMarketPrice ?? undefined
 }
 
 /**
  * Safely extract regularMarketPreviousClose from a Quote-like object.
  */
-function getPreviousClose(quote: any): number | undefined {
+function getPreviousClose(quote: QuoteData): number | undefined {
   return quote?.regularMarketPreviousClose ?? undefined
 }
 
@@ -34,15 +41,15 @@ function getPreviousClose(quote: any): number | undefined {
  * Get the best available price: prefer live regularMarketPrice, fall back to
  * regularMarketPreviousClose (e.g., when the market is closed).
  */
-function getPriceWithFallback(quote: any): number | undefined {
+function getPriceWithFallback(quote: QuoteData): number | undefined {
   return getPrice(quote) ?? getPreviousClose(quote) ?? undefined
 }
 
-function getSymbol(quote: any): string | undefined {
+function getSymbol(quote: QuoteData): string | undefined {
   return quote?.symbol ?? undefined
 }
 
-function getCurrency(quote: any): string | undefined {
+function getCurrency(quote: QuoteData): string | undefined {
   return quote?.currency ?? undefined
 }
 
@@ -52,8 +59,8 @@ function getCurrency(quote: any): string | undefined {
  */
 export async function fetchGoldPriceIdr(): Promise<GoldPriceResult> {
   const [goldQuote, usdIdrQuote] = await Promise.all([
-    yahooFinance.quote("GC=F") as any,
-    yahooFinance.quote("IDR=X") as any,
+    yahooFinance.quote("GC=F") as unknown as QuoteData,
+    yahooFinance.quote("IDR=X") as unknown as QuoteData,
   ])
 
   const pricePerOunceUsd = getPrice(goldQuote) ?? 0
@@ -79,7 +86,7 @@ export async function fetchStockPrice(symbol: string): Promise<StockPriceResult 
   try {
     // Append .JK if not already present (IDX stocks on Yahoo Finance)
     const yahooSymbol = symbol.includes(".") ? symbol : `${symbol}.JK`
-    const quote = await yahooFinance.quote(yahooSymbol) as any
+    const quote = await yahooFinance.quote(yahooSymbol) as unknown as QuoteData
     const price = getPriceWithFallback(quote)
     if (price == null) return null
     return {
@@ -111,7 +118,7 @@ export async function fetchStockPrices(symbols: string[]): Promise<Map<string, n
   // Yahoo Finance allows batch quotes
   try {
     const yahooSymbols = [...yahooToOriginal.keys()]
-    const quotes = await yahooFinance.quote(yahooSymbols) as any
+    const quotes = await yahooFinance.quote(yahooSymbols) as unknown as QuoteData | QuoteData[]
 
     const quoteArray = Array.isArray(quotes) ? quotes : [quotes]
     for (const q of quoteArray) {

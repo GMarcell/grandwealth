@@ -685,12 +685,13 @@ describe("createRecurringSchema", () => {
     expect(result.success).toBe(false)
   })
 
-  it("rejects invalid startDate format", () => {
+  it("accepts simple date string as startDate", () => {
+    // Relaxed validation: accepts any non-empty date string, route handler converts via new Date()
     const result = createRecurringSchema.safeParse({
       ...validRecurring,
-      startDate: "2026-01-01", // missing time component
+      startDate: "2026-01-01",
     })
-    expect(result.success).toBe(false)
+    expect(result.success).toBe(true)
   })
 
   it("rejects missing required fields", () => {

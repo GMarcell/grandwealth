@@ -54,7 +54,7 @@ export async function POST() {
       )
     }
 
-    const response: any = {
+    const response: Record<string, unknown> = {
       message: updatedCount === stocks.length
         ? "Stock prices updated"
         : `Partially updated: ${updatedCount}/${stocks.length} stocks`,

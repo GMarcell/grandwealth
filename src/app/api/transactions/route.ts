@@ -3,28 +3,63 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { createTransactionSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
+import { parsePagination, paginatedResponse } from "@/lib/utils"
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const transactions = await prisma.transaction.findMany({
-    where: { userId: session.user.id },
-    orderBy: { date: "desc" },
+  const limiter = rateLimit(`transactions-get:${getRateLimitKey(req)}`, {
+    limit: 60,
+    windowMs: 60_000,
   })
+  if (!limiter.allowed) {
+    return NextResponse.json({ error: "Too many requests. Please slow down." }, { status: 429 })
+  }
 
-  return NextResponse.json(
-    transactions.map((tx) => ({
-      id: tx.id,
-      type: tx.type,
-      category: tx.category,
-      amount: tx.amount,
-      description: tx.description,
-      date: tx.date.toISOString(),
-    }))
-  )
+  const where = { userId: session.user.id }
+  const pagination = parsePagination(req.url)
+
+  if (!pagination) {
+    // Legacy: return plain array when no pagination params
+    const transactions = await prisma.transaction.findMany({
+      where,
+      orderBy: { date: "desc" },
+    })
+    return NextResponse.json(
+      transactions.map((tx) => ({
+        id: tx.id,
+        type: tx.type,
+        category: tx.category,
+        amount: tx.amount,
+        description: tx.description,
+        date: tx.date.toISOString(),
+      }))
+    )
+  }
+
+  const [transactions, total] = await Promise.all([
+    prisma.transaction.findMany({
+      where,
+      orderBy: { date: "desc" },
+      skip: (pagination.page - 1) * pagination.pageSize,
+      take: pagination.pageSize,
+    }),
+    prisma.transaction.count({ where }),
+  ])
+
+  const mapped = transactions.map((tx) => ({
+    id: tx.id,
+    type: tx.type,
+    category: tx.category,
+    amount: tx.amount,
+    description: tx.description,
+    date: tx.date.toISOString(),
+  }))
+
+  return NextResponse.json(paginatedResponse(mapped, total, pagination))
 }
 
 export async function POST(req: Request) {

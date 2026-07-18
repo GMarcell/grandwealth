@@ -23,6 +23,7 @@ export const createCategorySchema = z.object({
   name: z.string().min(1, "Name is required").max(50),
   type: z.enum(["INCOME", "EXPENSE"], { message: "Type must be INCOME or EXPENSE" }),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color must be a hex color (e.g. #6366f1)").optional(),
+  ruleType: z.enum(["NEED", "WANT", "SAVINGS"]).nullable().optional(),
 })
 
 // ─── Budgets ─────────────────────────────────
@@ -75,9 +76,9 @@ export const createRecurringSchema = z.object({
   amount: z.number().positive("Amount must be positive").finite(),
   description: z.string().min(1, "Description is required").max(500),
   frequency: z.enum(["WEEKLY", "MONTHLY", "YEARLY"]),
-  startDate: z.string().datetime(),
-  endDate: z.string().datetime().optional().nullable(),
-  nextDate: z.string().datetime(),
+  startDate: z.string().min(1, "Start date is required"),
+  endDate: z.string().optional().nullable(),
+  nextDate: z.string().min(1, "Next date is required"),
 })
 
 // ─── Form Schemas (for react-hook-form validation) ───

@@ -1,6 +1,0 @@
-# Allow all bots to crawl the entire site
-User-agent: *
-Allow: /
-
-# Sitemap location
-Sitemap: https://yourdomain.com/sitemap.xml

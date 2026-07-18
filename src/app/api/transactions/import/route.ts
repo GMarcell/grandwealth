@@ -37,9 +37,10 @@ export async function POST(req: Request) {
       }, { status: 400 })
     }
 
-    const validTypes: string[] = ["INCOME", "EXPENSE"]
+    type CsvTransactionType = "INCOME" | "EXPENSE"
+    const validTypes: CsvTransactionType[] = ["INCOME", "EXPENSE"]
     const transactions: Array<{
-      type: string
+      type: CsvTransactionType
       category: string
       amount: number
       description: string
@@ -52,7 +53,7 @@ export async function POST(req: Request) {
     for (let i = 1; i < lines.length; i++) {
       const cols = lines[i].split(",").map((c) => c.trim())
 
-      const type = cols[typeIdx]?.toUpperCase()
+      const type = cols[typeIdx]?.toUpperCase() as CsvTransactionType | undefined
       const category = cols[categoryIdx]?.toUpperCase()
       const amount = parseFloat(cols[amountIdx])
       const description = cols[descriptionIdx]
@@ -106,8 +107,7 @@ export async function POST(req: Request) {
     let imported = 0
     for (let i = 0; i < transactions.length; i += batchSize) {
       await prisma.transaction.createMany({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        data: transactions.slice(i, i + batchSize) as any,
+        data: transactions.slice(i, i + batchSize),
       })
       imported += Math.min(batchSize, transactions.length - i)
     }

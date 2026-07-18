@@ -36,6 +36,21 @@ const nextConfig: NextConfig = {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
           },
+          {
+            key: "Content-Security-Policy",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob:",
+              "font-src 'self' data:",
+              "connect-src 'self' https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://api.groq.com",
+              "frame-src 'none'",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+            ].join("; "),
+          },
         ],
       },
     ]
@@ -46,6 +61,9 @@ const nextConfig: NextConfig = {
 
   // Enables React strict mode for development
   reactStrictMode: true,
+
+  // Increase server body size limit
+  serverExternalPackages: ["pg"],
 };
 
 export default nextConfig;

@@ -4,31 +4,69 @@ import { prisma } from "@/lib/prisma"
 import { createStockSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 import { fetchStockPrice } from "@/lib/prices"
+import { parsePagination, paginatedResponse } from "@/lib/utils"
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const stocks = await prisma.stock.findMany({
-    where: { userId: session.user.id },
-    orderBy: { date: "desc" },
+  const limiter = rateLimit(`stocks-get:${getRateLimitKey(req)}`, {
+    limit: 60,
+    windowMs: 60_000,
   })
+  if (!limiter.allowed) {
+    return NextResponse.json({ error: "Too many requests. Please slow down." }, { status: 429 })
+  }
 
-  return NextResponse.json(
-    stocks.map((s) => ({
-      id: s.id,
-      symbol: s.symbol,
-      name: s.name,
-      quantity: s.quantity,
-      buyPrice: s.buyPrice,
-      currentPrice: s.currentPrice,
-      lastPriceUpdated: s.lastPriceUpdated?.toISOString() ?? null,
-      date: s.date.toISOString(),
-      notes: s.notes,
-    }))
-  )
+  const where = { userId: session.user.id }
+  const pagination = parsePagination(req.url, 25)
+
+  if (!pagination) {
+    // Legacy: return plain array when no pagination params
+    const stocks = await prisma.stock.findMany({
+      where,
+      orderBy: { date: "desc" },
+    })
+    return NextResponse.json(
+      stocks.map((s) => ({
+        id: s.id,
+        symbol: s.symbol,
+        name: s.name,
+        quantity: s.quantity,
+        buyPrice: s.buyPrice,
+        currentPrice: s.currentPrice,
+        lastPriceUpdated: s.lastPriceUpdated?.toISOString() ?? null,
+        date: s.date.toISOString(),
+        notes: s.notes,
+      }))
+    )
+  }
+
+  const [stocks, total] = await Promise.all([
+    prisma.stock.findMany({
+      where,
+      orderBy: { date: "desc" },
+      skip: (pagination.page - 1) * pagination.pageSize,
+      take: pagination.pageSize,
+    }),
+    prisma.stock.count({ where }),
+  ])
+
+  const mapped = stocks.map((s) => ({
+    id: s.id,
+    symbol: s.symbol,
+    name: s.name,
+    quantity: s.quantity,
+    buyPrice: s.buyPrice,
+    currentPrice: s.currentPrice,
+    lastPriceUpdated: s.lastPriceUpdated?.toISOString() ?? null,
+    date: s.date.toISOString(),
+    notes: s.notes,
+  }))
+
+  return NextResponse.json(paginatedResponse(mapped, total, pagination))
 }
 
 export async function POST(req: Request) {

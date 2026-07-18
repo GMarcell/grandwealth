@@ -45,7 +45,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command"
-import { formatIDR, formatDate, cn } from "@/lib/utils"
+import { formatIDR, formatDate, cn, type PaginatedResponse } from "@/lib/utils"
 import { FormError } from "@/components/ui/form-error"
 import { toast } from "sonner"
 
@@ -66,6 +66,7 @@ type StockFormData = z.infer<typeof stockFormSchema>
 export default function StocksPage() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState("")
+  const [page, setPage] = useState(1)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Stock | null>(null)
 
@@ -138,14 +139,18 @@ export default function StocksPage() {
     }
   }, [isDialogOpen])
 
-  const { data: stocks, isLoading } = useQuery<Stock[]>({
-    queryKey: ["stocks"],
+  const { data: stocksData, isLoading } = useQuery({
+    queryKey: ["stocks", page],
     queryFn: async () => {
-      const res = await fetch("/api/stocks");
+      const res = await fetch(`/api/stocks?page=${page}&pageSize=25`);
       if (!res.ok) throw new Error("Failed to fetch stocks");
-      return res.json();
+      const json: PaginatedResponse<Stock> = await res.json();
+      return json;
     },
   })
+
+  const stocks = stocksData?.data ?? []
+  const pagination = stocksData?.pagination
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -272,7 +277,7 @@ export default function StocksPage() {
   }
 
   const filtered = useMemo(() =>
-    (stocks ?? []).filter((s) => {
+    stocks.filter((s) => {
       if (!search) return true
       const q = search.toLowerCase()
       return (
@@ -288,7 +293,7 @@ export default function StocksPage() {
   const SHARES_PER_LOT = 100
 
   const totalInvested = useMemo(() =>
-    (stocks ?? []).reduce(
+    stocks.reduce(
       (sum, s) => sum + s.quantity * s.buyPrice,
       0
     ),
@@ -296,7 +301,7 @@ export default function StocksPage() {
   )
 
   const totalMarketValue = useMemo(() =>
-    (stocks ?? []).reduce(
+    stocks.reduce(
       (sum, s) => sum + s.quantity * (s.currentPrice != null ? s.currentPrice * SHARES_PER_LOT : s.buyPrice),
       0
     ),
@@ -307,7 +312,7 @@ export default function StocksPage() {
   const totalPnlPercent = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0
 
   const stocksWithPrice = useMemo(() =>
-    (stocks ?? []).filter((s) => s.currentPrice != null).length,
+    stocks.filter((s) => s.currentPrice != null).length,
     [stocks]
   )
 
@@ -550,7 +555,7 @@ export default function StocksPage() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stocks?.length ?? 0}</div>
+            <div className="text-2xl font-bold">{pagination?.total ?? stocks.length}</div>
             <p className="text-xs text-muted-foreground mt-1">Different companies</p>
           </CardContent>
         </Card>
@@ -561,10 +566,10 @@ export default function StocksPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {(stocks ?? []).reduce((sum, s) => sum + s.quantity, 0).toLocaleString("id-ID")}
+              {stocks.reduce((sum, s) => sum + s.quantity, 0).toLocaleString("id-ID")}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {(stocks ?? []).reduce((sum, s) => sum + s.quantity, 0) * 100} shares
+              {stocks.reduce((sum, s) => sum + s.quantity, 0) * 100} shares
             </p>
           </CardContent>
         </Card>
@@ -604,7 +609,7 @@ export default function StocksPage() {
         </div>
         <p className="text-xs text-muted-foreground">
           {stocksWithPrice > 0
-            ? `${stocksWithPrice}/${stocks?.length ?? 0} stocks have live prices`
+            ? `${stocksWithPrice}/${stocks.length} stocks have live prices`
             : "Click \"Refresh Prices\" to get live data"}
         </p>
       </div>
@@ -713,6 +718,33 @@ export default function StocksPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Pagination */}
+      {pagination && pagination.totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            Showing page {pagination.page} of {pagination.totalPages} ({pagination.total} total)
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!pagination.hasMore}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

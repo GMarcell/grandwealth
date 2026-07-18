@@ -31,13 +31,25 @@ export async function GET(req: NextRequest) {
       enableEnhancedTrivialQuery: false,
     })
 
-    const quotes = (result as any).quotes ?? []
+    interface SearchQuote {
+      quoteType?: string
+      symbol?: string
+      shortname?: string
+      longname?: string
+      exchange?: string
+    }
+
+    interface SearchResult {
+      quotes?: SearchQuote[]
+    }
+
+    const quotes = (result as SearchResult).quotes ?? []
     const stocks = quotes
-      .filter((q: any) => q.quoteType === "EQUITY" && q.symbol)
-      .map((q: any) => ({
+      .filter((q) => q.quoteType === "EQUITY" && q.symbol)
+      .map((q) => ({
         // Strip .JK suffix from IDX stocks so symbols are stored clean (e.g., "ANTM.JK" → "ANTM")
-        symbol: q.symbol.replace(/\.JK$/, ""),
-        name: q.shortname || q.longname || q.symbol,
+        symbol: q.symbol!.replace(/\.JK$/, ""),
+        name: q.shortname || q.longname || q.symbol!,
         exchange: q.exchange || "",
       }))
 

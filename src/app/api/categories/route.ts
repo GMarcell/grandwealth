@@ -1,12 +1,21 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { RULE_TYPES } from "@/lib/rule-type"
+import { createCategorySchema, safeParseBody } from "@/lib/validation"
+import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 
-export async function GET() {
+export async function GET(req: Request) {
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const limiter = rateLimit(`categories-get:${getRateLimitKey(req)}`, {
+    limit: 60,
+    windowMs: 60_000,
+  })
+  if (!limiter.allowed) {
+    return NextResponse.json({ error: "Too many requests. Please slow down." }, { status: 429 })
   }
 
   const categories = await prisma.category.findMany({
@@ -23,29 +32,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
+  const limiter = rateLimit(`categories:${getRateLimitKey(req)}`, {
+    limit: 20,
+    windowMs: 60_000,
+  })
+  if (!limiter.allowed) {
+    return NextResponse.json({ error: "Too many requests. Please slow down." }, { status: 429 })
+  }
+
   try {
-    const { name, type, color, ruleType } = await req.json()
+    const parsed = await safeParseBody(req, createCategorySchema)
+    if ("error" in parsed) return parsed.error
 
-    if (!name || !type) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      )
-    }
-
-    if (!["INCOME", "EXPENSE"].includes(type)) {
-      return NextResponse.json(
-        { error: "Type must be INCOME or EXPENSE" },
-        { status: 400 }
-      )
-    }
-
-    if (ruleType !== undefined && ruleType !== null && !RULE_TYPES.includes(ruleType)) {
-      return NextResponse.json(
-        { error: "ruleType must be NEED, WANT, SAVINGS, or null" },
-        { status: 400 }
-      )
-    }
+    const { name, type, color, ruleType } = parsed.data
 
     const existing = await prisma.category.findUnique({
       where: { name_userId: { name, userId: session.user.id } },
@@ -62,7 +61,7 @@ export async function POST(req: Request) {
       data: {
         name,
         type,
-        color: color || "#6366f1",
+        color: color ?? "#6366f1",
         ruleType: ruleType ?? null,
         userId: session.user.id,
       },

@@ -44,7 +44,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command"
-import { formatIDR, formatDate, cn } from "@/lib/utils"
+import { formatIDR, formatDate, cn, type PaginatedResponse } from "@/lib/utils"
 import { FormError } from "@/components/ui/form-error"
 import { toast } from "sonner"
 
@@ -86,6 +86,7 @@ const POPULAR_BANKS = [
 
 export default function SavingsPage() {
   const queryClient = useQueryClient()
+  const [page, setPage] = useState(1)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editing, setEditing] = useState<BankSaving | null>(null)
   const [comboboxOpen, setComboboxOpen] = useState(false)
@@ -111,14 +112,18 @@ export default function SavingsPage() {
 
   const formAccountName = watch("accountName")
 
-  const { data: savings, isLoading } = useQuery<BankSaving[]>({
-    queryKey: ["savings"],
+  const { data: savingsData, isLoading } = useQuery({
+    queryKey: ["savings", page],
     queryFn: async () => {
-      const res = await fetch("/api/savings");
+      const res = await fetch(`/api/savings?page=${page}&pageSize=25`);
       if (!res.ok) throw new Error("Failed to fetch savings");
-      return res.json();
+      const json: PaginatedResponse<BankSaving> = await res.json();
+      return json;
     },
   })
+
+  const savings = savingsData?.data ?? []
+  const pagination = savingsData?.pagination
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -220,7 +225,7 @@ export default function SavingsPage() {
   }
 
   const sorted = useMemo(() =>
-    (savings ?? []).sort(
+    savings.sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     ),
     [savings]
@@ -232,7 +237,7 @@ export default function SavingsPage() {
     const accounts = new Set<string>()
     const accountMap = new Map<string, { deposits: number; withdrawals: number }>()
 
-    for (const s of savings ?? []) {
+    for (const s of savings) {
       accounts.add(s.accountName)
       if (!accountMap.has(s.accountName)) {
         accountMap.set(s.accountName, { deposits: 0, withdrawals: 0 })
@@ -644,6 +649,33 @@ export default function SavingsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Pagination */}
+      {pagination && pagination.totalPages > 1 && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">
+            Showing page {pagination.page} of {pagination.totalPages} ({pagination.total} total)
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!pagination.hasMore}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
