@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useRef, useEffect } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -17,6 +17,7 @@ import {
   Check,
   ChevronsUpDown,
   X,
+  Search,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -45,6 +46,7 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import { formatIDR, formatDate, cn, type PaginatedResponse } from "@/lib/utils"
+import { Pagination } from "@/components/ui/pagination"
 import { FormError } from "@/components/ui/form-error"
 import { toast } from "sonner"
 
@@ -86,11 +88,26 @@ const POPULAR_BANKS = [
 
 export default function SavingsPage() {
   const queryClient = useQueryClient()
+  const [searchInput, setSearchInput] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [page, setPage] = useState(1)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editing, setEditing] = useState<BankSaving | null>(null)
   const [comboboxOpen, setComboboxOpen] = useState(false)
   const [comboboxQuery, setComboboxQuery] = useState("")
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Debounce search input (300ms) before sending to server
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(searchInput)
+      setPage(1)
+    }, 300)
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    }
+  }, [searchInput])
 
   const {
     register,
@@ -113,9 +130,11 @@ export default function SavingsPage() {
   const formAccountName = watch("accountName")
 
   const { data: savingsData, isLoading } = useQuery({
-    queryKey: ["savings", page],
+    queryKey: ["savings", page, debouncedSearch],
     queryFn: async () => {
-      const res = await fetch(`/api/savings?page=${page}&pageSize=25`);
+      const params = new URLSearchParams({ page: String(page), pageSize: "25" })
+      if (debouncedSearch) params.set("search", debouncedSearch)
+      const res = await fetch(`/api/savings?${params}`);
       if (!res.ok) throw new Error("Failed to fetch savings");
       const json: PaginatedResponse<BankSaving> = await res.json();
       return json;
@@ -124,6 +143,13 @@ export default function SavingsPage() {
 
   const savings = savingsData?.data ?? []
   const pagination = savingsData?.pagination
+  const summary = savingsData?.summary as {
+    totalDeposits: number
+    totalWithdrawals: number
+    netSavings: number
+    uniqueAccounts: number
+    accountSummaries: Array<{ name: string; deposits: number; withdrawals: number; balance: number }>
+  } | undefined
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -231,39 +257,11 @@ export default function SavingsPage() {
     [savings]
   )
 
-  const { totalDeposits, totalWithdrawals, netSavings, uniqueAccounts, accountSummaries } = useMemo(() => {
-    let deposits = 0
-    let withdrawals = 0
-    const accounts = new Set<string>()
-    const accountMap = new Map<string, { deposits: number; withdrawals: number }>()
-
-    for (const s of savings) {
-      accounts.add(s.accountName)
-      if (!accountMap.has(s.accountName)) {
-        accountMap.set(s.accountName, { deposits: 0, withdrawals: 0 })
-      }
-      const acc = accountMap.get(s.accountName)!
-      if (s.type === "DEPOSIT") {
-        deposits += s.amount
-        acc.deposits += s.amount
-      } else {
-        withdrawals += s.amount
-        acc.withdrawals += s.amount
-      }
-    }
-
-    return {
-      totalDeposits: deposits,
-      totalWithdrawals: withdrawals,
-      netSavings: deposits - withdrawals,
-      uniqueAccounts: accounts.size,
-      accountSummaries: Array.from(accountMap.entries()).map(([name, data]) => ({
-        name,
-        balance: data.deposits - data.withdrawals,
-        ...data,
-      })),
-    }
-  }, [savings])
+  const totalDeposits = summary?.totalDeposits ?? 0
+  const totalWithdrawals = summary?.totalWithdrawals ?? 0
+  const netSavings = summary?.netSavings ?? 0
+  const uniqueAccounts = summary?.uniqueAccounts ?? 0
+  const accountSummaries = summary?.accountSummaries ?? []
 
   return (
     <div className="space-y-6">
@@ -567,6 +565,19 @@ export default function SavingsPage() {
         </Card>
       )}
 
+      {/* Search */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div className="relative w-full sm:flex-1 sm:max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search by account name or notes..."
+            className="pl-9"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+          />
+        </div>
+      </div>
+
       {/* Savings Records */}
       <Card>
         <CardHeader>
@@ -580,7 +591,9 @@ export default function SavingsPage() {
           ) : sorted.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-sm text-muted-foreground">
-                No savings records yet. Start tracking your savings!
+                {debouncedSearch
+                  ? "No records match your search."
+                  : "No savings records yet. Start tracking your savings!"}
               </p>
             </div>
           ) : (
@@ -651,30 +664,8 @@ export default function SavingsPage() {
       </Card>
 
       {/* Pagination */}
-      {pagination && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-muted-foreground">
-            Showing page {pagination.page} of {pagination.totalPages} ({pagination.total} total)
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!pagination.hasMore}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
+      {pagination && (
+        <Pagination pagination={pagination} page={page} onPageChange={setPage} />
       )}
     </div>
   )

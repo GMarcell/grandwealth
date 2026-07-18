@@ -46,6 +46,7 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import { formatIDR, formatDate, cn, type PaginatedResponse } from "@/lib/utils"
+import { Pagination } from "@/components/ui/pagination"
 import { FormError } from "@/components/ui/form-error"
 import { toast } from "sonner"
 
@@ -65,8 +66,10 @@ type StockFormData = z.infer<typeof stockFormSchema>
 
 export default function StocksPage() {
   const queryClient = useQueryClient()
-  const [search, setSearch] = useState("")
+  const [searchInput, setSearchInput] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [page, setPage] = useState(1)
+  const listSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Stock | null>(null)
 
@@ -139,10 +142,24 @@ export default function StocksPage() {
     }
   }, [isDialogOpen])
 
+  // Debounce list search input (300ms) before sending to server
+  useEffect(() => {
+    if (listSearchTimerRef.current) clearTimeout(listSearchTimerRef.current)
+    listSearchTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(searchInput)
+      setPage(1)
+    }, 300)
+    return () => {
+      if (listSearchTimerRef.current) clearTimeout(listSearchTimerRef.current)
+    }
+  }, [searchInput])
+
   const { data: stocksData, isLoading } = useQuery({
-    queryKey: ["stocks", page],
+    queryKey: ["stocks", page, debouncedSearch],
     queryFn: async () => {
-      const res = await fetch(`/api/stocks?page=${page}&pageSize=25`);
+      const params = new URLSearchParams({ page: String(page), pageSize: "25" })
+      if (debouncedSearch) params.set("search", debouncedSearch)
+      const res = await fetch(`/api/stocks?${params}`);
       if (!res.ok) throw new Error("Failed to fetch stocks");
       const json: PaginatedResponse<Stock> = await res.json();
       return json;
@@ -276,17 +293,8 @@ export default function StocksPage() {
     }
   }
 
-  const filtered = useMemo(() =>
-    stocks.filter((s) => {
-      if (!search) return true
-      const q = search.toLowerCase()
-      return (
-        s.symbol.toLowerCase().includes(q) ||
-        s.name.toLowerCase().includes(q)
-      )
-    }),
-    [stocks, search]
-  )
+  // Server-side search handles filtering, so use stocks directly
+  const filtered = stocks
 
   // Calculate totals
   // 1 lot = 100 shares
@@ -603,8 +611,8 @@ export default function StocksPage() {
           <Input
             placeholder="Search by symbol or name..."
             className="pl-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
           />
         </div>
         <p className="text-xs text-muted-foreground">
@@ -624,7 +632,7 @@ export default function StocksPage() {
           ) : filtered.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-sm text-muted-foreground">
-                {search
+                {debouncedSearch
                   ? "No stocks match your search."
                   : "No stocks yet. Add your first stock!"}
               </p>
@@ -720,30 +728,8 @@ export default function StocksPage() {
       </Card>
 
       {/* Pagination */}
-      {pagination && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-muted-foreground">
-            Showing page {pagination.page} of {pagination.totalPages} ({pagination.total} total)
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!pagination.hasMore}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
+      {pagination && (
+        <Pagination pagination={pagination} page={page} onPageChange={setPage} />
       )}
     </div>
   )

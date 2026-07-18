@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { createBankSavingSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 import { parsePagination, paginatedResponse } from "@/lib/utils"
+import type { Prisma } from "@prisma/client"
 
 export const dynamic = "force-dynamic"
 
@@ -21,7 +22,21 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Too many requests. Please slow down." }, { status: 429 })
   }
 
-  const where = { userId: session.user.id }
+  const url = new URL(req.url)
+  const searchQuery = url.searchParams.get("search")?.trim()
+
+  const where: Prisma.BankSavingWhereInput = {
+    userId: session.user.id,
+    ...(searchQuery
+      ? {
+          OR: [
+            { accountName: { contains: searchQuery, mode: "insensitive" } },
+            { notes: { contains: searchQuery, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  }
+
   const pagination = parsePagination(req.url, 25)
 
   if (!pagination) {
@@ -42,7 +57,7 @@ export async function GET(req: Request) {
     )
   }
 
-  const [savings, total] = await Promise.all([
+  const [savings, total, allSavings] = await Promise.all([
     prisma.bankSaving.findMany({
       where,
       orderBy: { date: "desc" },
@@ -50,7 +65,39 @@ export async function GET(req: Request) {
       take: pagination.pageSize,
     }),
     prisma.bankSaving.count({ where }),
+    prisma.bankSaving.findMany({
+      where,
+      select: { type: true, accountName: true, amount: true },
+    }),
   ])
+
+  // Compute aggregate summaries from ALL records (not just current page)
+  let totalDeposits = 0
+  let totalWithdrawals = 0
+  const accountMap = new Map<string, { deposits: number; withdrawals: number }>()
+  for (const s of allSavings) {
+    if (s.type === "DEPOSIT") {
+      totalDeposits += s.amount
+    } else {
+      totalWithdrawals += s.amount
+    }
+    if (!accountMap.has(s.accountName)) {
+      accountMap.set(s.accountName, { deposits: 0, withdrawals: 0 })
+    }
+    const acc = accountMap.get(s.accountName)!
+    if (s.type === "DEPOSIT") {
+      acc.deposits += s.amount
+    } else {
+      acc.withdrawals += s.amount
+    }
+  }
+
+  const accountSummaries = Array.from(accountMap.entries()).map(([name, data]) => ({
+    name,
+    deposits: data.deposits,
+    withdrawals: data.withdrawals,
+    balance: data.deposits - data.withdrawals,
+  }))
 
   const mapped = savings.map((s) => ({
     id: s.id,
@@ -61,7 +108,16 @@ export async function GET(req: Request) {
     notes: s.notes,
   }))
 
-  return NextResponse.json(paginatedResponse(mapped, total, pagination))
+  return NextResponse.json({
+    ...paginatedResponse(mapped, total, pagination),
+    summary: {
+      totalDeposits: Math.round(totalDeposits * 100) / 100,
+      totalWithdrawals: Math.round(totalWithdrawals * 100) / 100,
+      netSavings: Math.round((totalDeposits - totalWithdrawals) * 100) / 100,
+      uniqueAccounts: accountSummaries.length,
+      accountSummaries,
+    },
+  })
 }
 
 export async function POST(req: Request) {

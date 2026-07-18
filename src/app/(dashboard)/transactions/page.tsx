@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, type ReactNode } from "react"
+import { useState, useMemo, useRef, useEffect, useCallback, type ReactNode } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -41,6 +41,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { formatIDR, type PaginatedResponse } from "@/lib/utils"
+import { Pagination } from "@/components/ui/pagination"
 import { FormError } from "@/components/ui/form-error"
 import { getBudgetMonthKey, getBudgetMonthRange } from "@/lib/budget-months"
 import { RULE_TYPES, RULE_TYPE_ORDER, RULE_TYPE_CONFIGS, OTHER_CONFIG } from "@/lib/rule-type"
@@ -125,11 +126,35 @@ function TransactionSkeleton() {
 
 export default function TransactionsPage() {
   const queryClient = useQueryClient()
-  const [search, setSearch] = useState("")
+  const [searchInput, setSearchInput] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [typeFilter, setTypeFilter] = useState<string>("ALL")
   const [page, setPage] = useState(1)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Debounce search input (300ms) before sending to server
+  const debouncedSetSearch = useCallback((value: string) => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(value)
+      setPage(1) // Reset page when search changes
+    }, 300)
+  }, [])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    }
+  }, [])
+
+  // Reset page when type filter changes
+  const handleTypeFilterChange = useCallback((value: string) => {
+    setTypeFilter(value)
+    setPage(1)
+  }, [])
 
   const {
     register,
@@ -153,9 +178,15 @@ export default function TransactionsPage() {
   const formType = watch("type")
 
   const { data: transactions, isLoading } = useQuery({
-    queryKey: ["transactions", page],
+    queryKey: ["transactions", page, debouncedSearch, typeFilter],
     queryFn: async () => {
-      const res = await fetch(`/api/transactions?page=${page}&pageSize=50`);
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: "50",
+      })
+      if (debouncedSearch) params.set("search", debouncedSearch)
+      if (typeFilter !== "ALL") params.set("type", typeFilter)
+      const res = await fetch(`/api/transactions?${params}`);
       if (!res.ok) throw new Error("Failed to fetch transactions");
       const json: PaginatedResponse<Transaction> = await res.json();
       return json;
@@ -320,17 +351,6 @@ export default function TransactionsPage() {
     }
   }
 
-  const filtered = useMemo(() =>
-    transactionList
-      .filter((tx) => {
-        if (typeFilter !== "ALL" && tx.type !== typeFilter) return false
-        if (search && !tx.description.toLowerCase().includes(search.toLowerCase())) return false
-        return true
-      })
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-    [transactionList, typeFilter, search]
-  )
-
   // Build ruleType map: category name → ruleType
   const ruleTypeMap = useMemo(() => {
     const map = new Map<string, string | null>()
@@ -341,6 +361,7 @@ export default function TransactionsPage() {
   }, [customCategories])
 
   // Group by type, then by ruleType, then by date
+  // Note: filtering is now handled server-side via ?search= and ?type= params
   const groupedByType = useMemo(() => {
     function groupTransactions(txs: Transaction[]) {
       const groups: Record<string, { dateMap: Map<string, Transaction[]>; total: number }> = {
@@ -372,7 +393,7 @@ export default function TransactionsPage() {
 
     const income: Transaction[] = []
     const expenses: Transaction[] = []
-    for (const tx of filtered) {
+    for (const tx of transactionList) {
       if (tx.type === "INCOME") income.push(tx)
       else expenses.push(tx)
     }
@@ -383,7 +404,7 @@ export default function TransactionsPage() {
       incomeTotal: income.reduce((s, t) => s + t.amount, 0),
       expenseTotal: expenses.reduce((s, t) => s + t.amount, 0),
     }
-  }, [filtered, ruleTypeMap])
+  }, [transactionList, ruleTypeMap])
 
   const totalIncome = useMemo(() =>
     transactionList
@@ -749,11 +770,14 @@ export default function TransactionsPage() {
           <Input
             placeholder="Search transactions..."
             className="pl-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => {
+              setSearchInput(e.target.value)
+              debouncedSetSearch(e.target.value)
+            }}
           />
         </div>
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
+        <Select value={typeFilter} onValueChange={handleTypeFilterChange}>
           <SelectTrigger className="w-full sm:w-36">
             <Filter className="h-4 w-4 mr-1" />
             <SelectValue />
@@ -771,10 +795,10 @@ export default function TransactionsPage() {
         <CardContent className="p-4 space-y-2">
           {isLoading ? (
             Array.from({ length: 5 }).map((_, i) => <TransactionSkeleton key={i} />)
-          ) : filtered.length === 0 ? (
+          ) : transactionList.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-sm text-muted-foreground">
-                {search || typeFilter !== "ALL"
+                {debouncedSearch || typeFilter !== "ALL"
                   ? "No transactions match your filters."
                   : "No transactions yet. Add your first one!"}
               </p>
@@ -818,30 +842,8 @@ export default function TransactionsPage() {
       </Card>
 
       {/* Pagination */}
-      {pagination && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-muted-foreground">
-            Showing page {pagination.page} of {pagination.totalPages} ({pagination.total} total)
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!pagination.hasMore}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
+      {pagination && (
+        <Pagination pagination={pagination} page={page} onPageChange={setPage} />
       )}
     </div>
   )

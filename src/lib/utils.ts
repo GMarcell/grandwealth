@@ -76,9 +76,10 @@ export interface PaginationMeta {
   hasMore: boolean
 }
 
-export interface PaginatedResponse<T> {
+export interface PaginatedResponse<T, S = Record<string, unknown>> {
   data: T[]
   pagination: PaginationMeta
+  summary?: S
 }
 
 const DEFAULT_PAGE_SIZE = 50

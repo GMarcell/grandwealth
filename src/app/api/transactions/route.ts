@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { createTransactionSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 import { parsePagination, paginatedResponse } from "@/lib/utils"
+import type { Prisma } from "@prisma/client"
 
 export async function GET(req: Request) {
   const session = await auth()
@@ -19,7 +20,20 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Too many requests. Please slow down." }, { status: 429 })
   }
 
-  const where = { userId: session.user.id }
+  const url = new URL(req.url)
+  const searchQuery = url.searchParams.get("search")?.trim()
+  const typeFilter = url.searchParams.get("type")?.trim()
+
+  const where: Prisma.TransactionWhereInput = {
+    userId: session.user.id,
+    ...(searchQuery
+      ? { description: { contains: searchQuery, mode: "insensitive" } }
+      : {}),
+    ...(typeFilter && (typeFilter === "INCOME" || typeFilter === "EXPENSE")
+      ? { type: typeFilter }
+      : {}),
+  }
+
   const pagination = parsePagination(req.url)
 
   if (!pagination) {

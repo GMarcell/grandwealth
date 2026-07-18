@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useRef, useEffect } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -13,6 +13,8 @@ import {
   Edit2,
   Loader2,
   RefreshCw,
+  Search,
+  Filter,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -35,6 +37,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { formatIDR, formatDate, type PaginatedResponse } from "@/lib/utils"
+import { Pagination } from "@/components/ui/pagination"
 import { FormError } from "@/components/ui/form-error"
 import { toast } from "sonner"
 
@@ -54,9 +57,25 @@ const GOLD_TYPES = ["BUY", "SELL"] as const
 
 export default function GoldPage() {
   const queryClient = useQueryClient()
+  const [searchInput, setSearchInput] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
+  const [typeFilter, setTypeFilter] = useState<string>("ALL")
   const [page, setPage] = useState(1)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editing, setEditing] = useState<GoldDeposit | null>(null)
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Debounce search input (300ms) before sending to server
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    searchTimerRef.current = setTimeout(() => {
+      setDebouncedSearch(searchInput)
+      setPage(1)
+    }, 300)
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    }
+  }, [searchInput])
 
   const {
     register,
@@ -81,9 +100,12 @@ export default function GoldPage() {
   const formPrice = watch("price")
 
   const { data: depositsData, isLoading } = useQuery({
-    queryKey: ["gold", page],
+    queryKey: ["gold", page, debouncedSearch, typeFilter],
     queryFn: async () => {
-      const res = await fetch(`/api/gold?page=${page}&pageSize=25`);
+      const params = new URLSearchParams({ page: String(page), pageSize: "25" })
+      if (debouncedSearch) params.set("search", debouncedSearch)
+      if (typeFilter !== "ALL") params.set("type", typeFilter)
+      const res = await fetch(`/api/gold?${params}`);
       if (!res.ok) throw new Error("Failed to fetch gold deposits");
       const json: PaginatedResponse<GoldDeposit> = await res.json();
       return json;
@@ -92,6 +114,7 @@ export default function GoldPage() {
 
   const deposits = depositsData?.data ?? []
   const pagination = depositsData?.pagination
+  const summary = depositsData?.summary as { totalWeight: number; totalInvested: number } | undefined
 
   const { data: livePrice, isLoading: priceLoading } = useQuery<{
     pricePerGramIdr: number
@@ -219,19 +242,8 @@ export default function GoldPage() {
     [deposits]
   )
 
-  const { totalGoldWeight, totalGoldInvested } = useMemo(() => {
-    let weight = 0
-    let invested = 0
-    for (const d of deposits) {
-      if (d.type === "BUY") {
-        weight += d.weightGram
-        invested += d.totalAmount
-      } else {
-        weight -= d.weightGram
-      }
-    }
-    return { totalGoldWeight: weight, totalGoldInvested: invested }
-  }, [deposits])
+  const totalGoldWeight = summary?.totalWeight ?? 0
+  const totalGoldInvested = summary?.totalInvested ?? 0
 
   const currentValue = useMemo(() => {
     if (!livePrice) return null
@@ -447,6 +459,30 @@ export default function GoldPage() {
         )}
       </div>
 
+      {/* Search & Type Filter */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div className="relative w-full sm:flex-1 sm:max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search notes..."
+            className="pl-9"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+          />
+        </div>
+        <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); setPage(1) }}>
+          <SelectTrigger className="w-full sm:w-36">
+            <Filter className="h-4 w-4 mr-1" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All</SelectItem>
+            <SelectItem value="BUY">Buy</SelectItem>
+            <SelectItem value="SELL">Sell</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       {/* Gold Records */}
       <Card>
         <CardHeader>
@@ -460,7 +496,9 @@ export default function GoldPage() {
           ) : sorted.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-sm text-muted-foreground">
-                No gold records yet. Start tracking your gold!
+                {debouncedSearch || typeFilter !== "ALL"
+                  ? "No records match your filters."
+                  : "No gold records yet. Start tracking your gold!"}
               </p>
             </div>
           ) : (
@@ -521,30 +559,8 @@ export default function GoldPage() {
       </Card>
 
       {/* Pagination */}
-      {pagination && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-muted-foreground">
-            Showing page {pagination.page} of {pagination.totalPages} ({pagination.total} total)
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={!pagination.hasMore}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
+      {pagination && (
+        <Pagination pagination={pagination} page={page} onPageChange={setPage} />
       )}
     </div>
   )

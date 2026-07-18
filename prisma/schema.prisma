@@ -80,6 +80,10 @@ model Transaction {
   user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+
+  @@index([userId, date])
+  @@index([userId, description])
+  @@index([userId, type, date])
 }
 
 enum RuleType {
@@ -134,6 +138,10 @@ model GoldDeposit {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  @@index([userId, date])
+  @@index([userId, notes])
+  @@index([userId, type, date])
 }
 
 model Stock {
@@ -150,6 +158,10 @@ model Stock {
   user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+
+  @@index([userId, date])
+  @@index([userId, symbol])
+  @@index([userId, name])
 }
 
 enum RecurringFrequency {
@@ -191,6 +203,10 @@ model BankSaving {
   user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
+
+  @@index([userId, date])
+  @@index([userId, accountName])
+  @@index([userId, notes])
 }
 
 model MonthlyAnalysis {

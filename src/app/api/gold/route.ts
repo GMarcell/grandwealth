@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { createGoldSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 import { parsePagination, paginatedResponse } from "@/lib/utils"
+import type { Prisma } from "@prisma/client"
 
 export async function GET(req: Request) {
   const session = await auth()
@@ -19,7 +20,20 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Too many requests. Please slow down." }, { status: 429 })
   }
 
-  const where = { userId: session.user.id }
+  const url = new URL(req.url)
+  const searchQuery = url.searchParams.get("search")?.trim()
+  const typeFilter = url.searchParams.get("type")?.trim()
+
+  const where: Prisma.GoldDepositWhereInput = {
+    userId: session.user.id,
+    ...(searchQuery
+      ? { notes: { contains: searchQuery, mode: "insensitive" } }
+      : {}),
+    ...(typeFilter && (typeFilter === "BUY" || typeFilter === "SELL")
+      ? { type: typeFilter }
+      : {}),
+  }
+
   const pagination = parsePagination(req.url, 25)
 
   if (!pagination) {
@@ -41,7 +55,7 @@ export async function GET(req: Request) {
     )
   }
 
-  const [deposits, total] = await Promise.all([
+  const [deposits, total, allDeposits] = await Promise.all([
     prisma.goldDeposit.findMany({
       where,
       orderBy: { date: "desc" },
@@ -49,7 +63,23 @@ export async function GET(req: Request) {
       take: pagination.pageSize,
     }),
     prisma.goldDeposit.count({ where }),
+    prisma.goldDeposit.findMany({
+      where,
+      select: { type: true, weightGram: true, totalAmount: true },
+    }),
   ])
+
+  // Compute aggregate summaries from ALL records (not just current page)
+  let totalWeight = 0
+  let totalInvested = 0
+  for (const d of allDeposits) {
+    if (d.type === "BUY") {
+      totalWeight += d.weightGram
+      totalInvested += d.totalAmount
+    } else {
+      totalWeight -= d.weightGram
+    }
+  }
 
   const mapped = deposits.map((d) => ({
     id: d.id,
@@ -61,7 +91,13 @@ export async function GET(req: Request) {
     notes: d.notes,
   }))
 
-  return NextResponse.json(paginatedResponse(mapped, total, pagination))
+  return NextResponse.json({
+    ...paginatedResponse(mapped, total, pagination),
+    summary: {
+      totalWeight: Math.round(totalWeight * 100) / 100,
+      totalInvested: Math.round(totalInvested * 100) / 100,
+    },
+  })
 }
 
 export async function POST(req: Request) {

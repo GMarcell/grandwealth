@@ -5,6 +5,7 @@ import { createStockSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 import { fetchStockPrice } from "@/lib/prices"
 import { parsePagination, paginatedResponse } from "@/lib/utils"
+import type { Prisma } from "@prisma/client"
 
 export async function GET(req: Request) {
   const session = await auth()
@@ -20,7 +21,21 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Too many requests. Please slow down." }, { status: 429 })
   }
 
-  const where = { userId: session.user.id }
+  const url = new URL(req.url)
+  const searchQuery = url.searchParams.get("search")?.trim()
+
+  const where: Prisma.StockWhereInput = {
+    userId: session.user.id,
+    ...(searchQuery
+      ? {
+          OR: [
+            { symbol: { contains: searchQuery, mode: "insensitive" } },
+            { name: { contains: searchQuery, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  }
+
   const pagination = parsePagination(req.url, 25)
 
   if (!pagination) {
