@@ -4,7 +4,7 @@ import { DashboardLayout } from "@/components/layout/dashboard-layout";
 export const metadata: Metadata = {
   title: "GrandWealth",
   description:
-    "Track your expenses, income, gold deposits, stock portfolio, and monthly budgets",
+    "Track your expenses, income, gold deposits, stock portfolio, and monthly budgets with GrandWealth.",
   icons: {
     icon: [
       { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },

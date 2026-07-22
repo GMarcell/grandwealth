@@ -590,6 +590,7 @@ export default function SettingsPage() {
                         }
                       }}
                       className="hover:opacity-70"
+                      aria-label={`Delete ${cat.name} category`}
                     >
                       <Trash2 className="h-3 w-3" />
                     </button>

@@ -6,11 +6,7 @@ import {
   TrendingUp,
   TrendingDown,
   ArrowLeftRight,
-  Download,
-  FileUp,
   Loader2,
-  PieChart,
-  BarChart3,
   Calendar,
   Wallet,
   AlertTriangle,
@@ -21,7 +17,6 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { formatIDR, formatCompactIDR } from "@/lib/utils"
-import { CHART_COLORS, SEMANTIC_COLOR_INCOME, SEMANTIC_COLOR_EXPENSE } from "@/lib/chart-colors"
 import {
   Select,
   SelectContent,
@@ -29,20 +24,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  PieChart as RechartsPieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Legend,
-} from "recharts"
+import dynamic from "next/dynamic"
 import { toast } from "sonner"
+
+// Dynamic import chart components (ships recharts only when rendered)
+const MonthlyBarChart = dynamic(
+  () => import("@/components/charts/reports-charts").then((m) => m.MonthlyBarChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-80 bg-muted/30 rounded-lg animate-pulse" />
+    ),
+  },
+)
+
+const CategoryPieChart = dynamic(
+  () => import("@/components/charts/reports-charts").then((m) => m.CategoryPieChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-64 bg-muted/30 rounded-lg animate-pulse" />
+    ),
+  },
+)
 
 interface ReportData {
   summary: {
@@ -218,213 +222,21 @@ export default function ReportsPage() {
         </Card>
       </div>
 
-      {/* Monthly Income vs Expenses Bar Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5" />
-            Monthly Income vs Expenses
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data?.monthlyBreakdown ?? []}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                <XAxis
-                  dataKey="label"
-                  fontSize={11}
-                  tickLine={false}
-                  axisLine={false}
-                  stroke="var(--color-muted-foreground)"
-                />
-                <YAxis
-                  fontSize={11}
-                  tickLine={false}
-                  axisLine={false}
-                  stroke="var(--color-muted-foreground)"
-                  tickFormatter={(v) => formatCompactIDR(v)}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "var(--color-card)",
-                    border: "1px solid var(--color-border)",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                  }}
-                  formatter={(value: any) => [formatIDR(Number(value))]}
-                />
-                <Legend />
-                <Bar
-                  dataKey="income"
-                  name="Income"
-                  fill={SEMANTIC_COLOR_INCOME}
-                  radius={[4, 4, 0, 0]}
-                />
-                <Bar
-                  dataKey="expenses"
-                  name="Expenses"
-                  fill={SEMANTIC_COLOR_EXPENSE}
-                  radius={[4, 4, 0, 0]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Monthly Income vs Expenses Bar Chart — dynamically loaded */}
+      <MonthlyBarChart data={data?.monthlyBreakdown ?? []} />
 
-      {/* Category Breakdown Charts */}
+      {/* Category Breakdown Charts — dynamically loaded */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Expense by Category */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <PieChart className="h-5 w-5" />
-              Expenses by Category
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {data?.categoryBreakdown.expense &&
-            data.categoryBreakdown.expense.length > 0 ? (
-              <>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RechartsPieChart>
-                      <Pie
-                        data={data.categoryBreakdown.expense.map((e) => ({
-                          name: e.category.replace("_", " "),
-                          value: e.total,
-                        }))}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={90}
-                        paddingAngle={3}
-                        dataKey="value"
-                      >
-                        {data.categoryBreakdown.expense.map((_, i) => (
-                          <Cell
-                            key={`cell-${i}`}
-                            fill={CHART_COLORS[i % CHART_COLORS.length]}
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "var(--color-card)",
-                          border: "1px solid var(--color-border)",
-                          borderRadius: "8px",
-                          fontSize: "12px",
-                        }}
-                        formatter={(value: any) => [formatIDR(Number(value))]}
-                      />
-                    </RechartsPieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-2">
-                  {data.categoryBreakdown.expense.slice(0, 8).map((e, i) => (
-                    <div key={e.category} className="flex items-center gap-1.5">
-                      <div
-                        className="h-2.5 w-2.5 rounded-full shrink-0"
-                        style={{
-                          backgroundColor:
-                            CHART_COLORS[i % CHART_COLORS.length],
-                        }}
-                      />
-                      <span className="text-xs text-muted-foreground truncate max-w-24">
-                        {e.category.replace("_", " ")}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                {data.categoryBreakdown.expense.length > 8 && (
-                  <p className="text-xs text-center text-muted-foreground mt-1">
-                    +{data.categoryBreakdown.expense.length - 8} more categories
-                  </p>
-                )}
-              </>
-            ) : (
-              <div className="h-64 flex items-center justify-center">
-                <p className="text-sm text-muted-foreground">
-                  No expense data in this period.
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Income by Category */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <PieChart className="h-5 w-5" />
-              Income by Category
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {data?.categoryBreakdown.income &&
-            data.categoryBreakdown.income.length > 0 ? (
-              <>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <RechartsPieChart>
-                      <Pie
-                        data={data.categoryBreakdown.income.map((e) => ({
-                          name: e.category.replace("_", " "),
-                          value: e.total,
-                        }))}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={90}
-                        paddingAngle={3}
-                        dataKey="value"
-                      >
-                        {data.categoryBreakdown.income.map((_, i) => (
-                          <Cell
-                            key={`cell-${i}`}
-                            fill={CHART_COLORS[i % CHART_COLORS.length]}
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "var(--color-card)",
-                          border: "1px solid var(--color-border)",
-                          borderRadius: "8px",
-                          fontSize: "12px",
-                        }}
-                        formatter={(value: any) => [formatIDR(Number(value))]}
-                      />
-                    </RechartsPieChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-2">
-                  {data.categoryBreakdown.income.map((e, i) => (
-                    <div key={e.category} className="flex items-center gap-1.5">
-                      <div
-                        className="h-2.5 w-2.5 rounded-full shrink-0"
-                        style={{
-                          backgroundColor:
-                            CHART_COLORS[i % CHART_COLORS.length],
-                        }}
-                      />
-                      <span className="text-xs text-muted-foreground truncate max-w-24">
-                        {e.category.replace("_", " ")}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div className="h-64 flex items-center justify-center">
-                <p className="text-sm text-muted-foreground">
-                  No income data in this period.
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <CategoryPieChart
+          data={data?.categoryBreakdown.expense ?? []}
+          title="Expenses by Category"
+          type="expense"
+        />
+        <CategoryPieChart
+          data={data?.categoryBreakdown.income ?? []}
+          title="Income by Category"
+          type="income"
+        />
       </div>
 
       {/* Monthly Breakdown Table */}

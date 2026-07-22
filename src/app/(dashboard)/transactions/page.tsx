@@ -40,7 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { formatIDR, type PaginatedResponse } from "@/lib/utils"
+import { formatIDR, formatDateTime, type PaginatedResponse } from "@/lib/utils"
 import { Pagination } from "@/components/ui/pagination"
 import { FormError } from "@/components/ui/form-error"
 import { getBudgetMonthKey, getBudgetMonthRange } from "@/lib/budget-months"
@@ -487,7 +487,7 @@ export default function TransactionsPage() {
                               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <span>{tx.category.replace("_", " ")}</span>
                                 <span>&bull;</span>
-                                <span>{new Date(tx.date).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
+                                <span>{formatDateTime(tx.date)}</span>
                               </div>
                             </div>
                           </div>
@@ -496,7 +496,7 @@ export default function TransactionsPage() {
                               {amountSign}{formatIDR(tx.amount)}
                             </div>
                             <div className="flex gap-0.5 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                              <Button variant="ghost" size="icon-sm" onClick={() => openEdit(tx)} className="min-w-9 min-h-9">
+                              <Button variant="ghost" size="icon-sm" onClick={() => openEdit(tx)} className="min-w-9 min-h-9" aria-label="Edit transaction">
                                 <Edit2 className="h-3.5 w-3.5" />
                               </Button>
                               <Button
@@ -508,6 +508,7 @@ export default function TransactionsPage() {
                                   }
                                 }}
                                 className="min-w-9 min-h-9"
+                                aria-label="Delete transaction"
                               >
                                 <Trash2 className="h-3.5 w-3.5 text-red-500" />
                               </Button>

@@ -1,4 +1,4 @@
-import { MetadataRoute } from "next"
+import type { MetadataRoute } from "next"
 import { headers } from "next/headers"
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -8,6 +8,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || `${protocol}://${host}`
 
   return [
+    {
+      url: baseUrl,
+      changeFrequency: "weekly",
+      priority: 1.0,
+    },
     {
       url: `${baseUrl}/login`,
       changeFrequency: "monthly",
@@ -26,42 +31,42 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     {
       url: `${baseUrl}/transactions`,
       changeFrequency: "daily",
-      priority: 0.7,
+      priority: 0.8,
     },
     {
       url: `${baseUrl}/budgets`,
       changeFrequency: "weekly",
-      priority: 0.7,
+      priority: 0.8,
     },
     {
       url: `${baseUrl}/stocks`,
       changeFrequency: "daily",
-      priority: 0.6,
+      priority: 0.7,
     },
     {
       url: `${baseUrl}/gold`,
       changeFrequency: "daily",
-      priority: 0.6,
+      priority: 0.7,
     },
     {
       url: `${baseUrl}/savings`,
       changeFrequency: "weekly",
-      priority: 0.6,
+      priority: 0.7,
     },
     {
       url: `${baseUrl}/analysis`,
       changeFrequency: "monthly",
-      priority: 0.5,
+      priority: 0.6,
     },
     {
       url: `${baseUrl}/reports`,
       changeFrequency: "weekly",
-      priority: 0.5,
+      priority: 0.6,
     },
     {
       url: `${baseUrl}/recurring`,
       changeFrequency: "weekly",
-      priority: 0.5,
+      priority: 0.6,
     },
     {
       url: `${baseUrl}/settings`,

@@ -640,7 +640,7 @@ export default function SavingsPage() {
                     </p>
                   </div>
                   <div className="flex gap-0.5 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                    <Button variant="ghost" size="icon-sm" onClick={() => openEdit(s)} className="min-w-9 min-h-9">
+                    <Button variant="ghost" size="icon-sm" onClick={() => openEdit(s)} className="min-w-9 min-h-9" aria-label="Edit savings record">
                       <Edit2 className="h-3.5 w-3.5" />
                     </Button>
                     <Button
@@ -652,6 +652,7 @@ export default function SavingsPage() {
                         }
                       }}
                       className="min-w-9 min-h-9"
+                      aria-label="Delete savings record"
                     >
                       <Trash2 className="h-3.5 w-3.5 text-red-500" />
                     </Button>

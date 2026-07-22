@@ -27,6 +27,12 @@ export async function GET() {
     const { start: monthStart, end: monthEnd } = getBudgetMonthRange(currentMonthKey, startDay)
     const { start: prevMonthStart, end: prevMonthEnd } = getBudgetMonthRange(prevMonthKey, startDay)
 
+    // Calculate date range for fetching data (last 13 months is sufficient)
+    const thirteenMonthsAgo = new Date()
+    thirteenMonthsAgo.setMonth(thirteenMonthsAgo.getMonth() - 13)
+    thirteenMonthsAgo.setDate(1)
+    thirteenMonthsAgo.setHours(0, 0, 0, 0)
+
     const [
       transactions,
       goldDeposits,
@@ -38,7 +44,10 @@ export async function GET() {
       bankSavings,
     ] = await Promise.all([
       prisma.transaction.findMany({
-        where: { userId },
+        where: {
+          userId,
+          date: { gte: thirteenMonthsAgo },
+        },
         orderBy: { date: "desc" },
         take: 50,
       }),

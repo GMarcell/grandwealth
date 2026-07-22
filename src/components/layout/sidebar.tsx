@@ -57,18 +57,19 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
   const { theme, setTheme } = useTheme()
   const { data: session } = useSession()
 
-  // Fetch budget alert count for sidebar badge
-  const { data: dashboardData } = useQuery<any>({
-    queryKey: ["dashboard"],
+  // Fetch budget alert count for sidebar badge (lightweight endpoint)
+  const { data: budgetSummary } = useQuery<{ overBudget: number }>({
+    queryKey: ["budget-summary"],
     queryFn: async () => {
-      const res = await fetch("/api/dashboard");
-      if (!res.ok) throw new Error("Failed to fetch dashboard");
+      const res = await fetch("/api/budgets/summary");
+      if (!res.ok) throw new Error("Failed to fetch budget summary");
       return res.json();
     },
-    refetchInterval: 120_000,
+    refetchInterval: 300_000,
+    staleTime: 120_000,
   })
 
-  const overBudgetCount = dashboardData?.budgetSummary?.overBudget ?? 0
+  const overBudgetCount = budgetSummary?.overBudget ?? 0
 
   const renderNavItems = (onClick?: () => void) =>
     navItems.map((item) => {
@@ -125,6 +126,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
             size="icon-sm"
             onClick={onMobileClose}
             className="lg:hidden text-sidebar-foreground/70 hover:text-sidebar-foreground min-w-[44px] min-h-[44px]"
+            aria-label="Close sidebar menu"
           >
             <X className="h-5 w-5" />
           </Button>
@@ -186,6 +188,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
               size="icon-sm"
               onClick={() => signOut()}
               className="text-sidebar-foreground/70 hover:text-sidebar-foreground ml-auto"
+              aria-label="Sign out"
             >
               <LogOut className="h-4 w-4" />
             </Button>

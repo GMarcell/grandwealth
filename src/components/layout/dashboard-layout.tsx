@@ -34,6 +34,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             size="icon-sm"
             onClick={() => setIsMobileOpen(true)}
             className="min-w-11 min-h-11"
+            aria-label="Open sidebar menu"
           >
             <Menu className="h-5 w-5" />
           </Button>

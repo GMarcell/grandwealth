@@ -4,6 +4,18 @@ const nextConfig: NextConfig = {
   // Enable gzip/brotli compression
   compress: true,
 
+  // Bundle optimization: tree-shake imports from large icon/component libraries
+  experimental: {
+    optimizePackageImports: [
+      "lucide-react",
+      "recharts",
+      "@radix-ui/react-dialog",
+      "@radix-ui/react-select",
+      "@radix-ui/react-popover",
+      "@radix-ui/react-switch",
+    ],
+  },
+
   // Image optimization configuration
   images: {
     formats: ["image/avif", "image/webp"],

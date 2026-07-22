@@ -37,7 +37,7 @@ export function formatPercent(value: number): string {
 
 export function formatDate(date: Date | string, options?: Intl.DateTimeFormatOptions): string {
   const d = typeof date === "string" ? new Date(date) : date
-  return d.toLocaleDateString("id-ID", {
+  return d.toLocaleDateString("en-US", {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -47,7 +47,7 @@ export function formatDate(date: Date | string, options?: Intl.DateTimeFormatOpt
 
 export function formatDateTime(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date
-  return d.toLocaleDateString("id-ID", {
+  return d.toLocaleDateString("en-US", {
     day: "numeric",
     month: "short",
     year: "numeric",

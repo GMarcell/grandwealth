@@ -594,6 +594,7 @@ export default function RecurringPage() {
                           onClick={() => toggleMutation.mutate({ id: r.id, active: !r.active })}
                           title={r.active ? "Pause" : "Resume"}
                           className="min-w-9 min-h-9"
+                          aria-label={r.active ? "Pause recurring transaction" : "Resume recurring transaction"}
                         >
                           {r.active ? (
                             <ToggleRight className="h-4 w-4 text-emerald-500" />
@@ -601,7 +602,7 @@ export default function RecurringPage() {
                             <ToggleLeft className="h-4 w-4 text-muted-foreground" />
                           )}
                         </Button>
-                        <Button variant="ghost" size="icon-sm" onClick={() => openEdit(r)} className="min-w-9 min-h-9">
+                        <Button variant="ghost" size="icon-sm" onClick={() => openEdit(r)} className="min-w-9 min-h-9" aria-label="Edit recurring transaction">
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
                         <Button
@@ -613,6 +614,7 @@ export default function RecurringPage() {
                             }
                           }}
                           className="min-w-9 min-h-9"
+                          aria-label="Delete recurring transaction"
                         >
                           <Trash2 className="h-3.5 w-3.5 text-red-500" />
                         </Button>

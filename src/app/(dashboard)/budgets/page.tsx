@@ -16,7 +16,6 @@ import {
   TrendingDown,
   AlertTriangle,
   CheckCircle2,
-  PieChart,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,13 +50,25 @@ import {
   generateBudgetMonths,
 } from "@/lib/budget-months";
 import { toast } from "sonner";
-import {
-  Cell,
-  PieChart as RechartsPieChart,
-  Pie,
-  ResponsiveContainer,
-  Tooltip,
-} from "recharts";
+import dynamic from "next/dynamic";
+
+// Dynamic import the budget allocation chart (ships recharts only when rendered)
+const BudgetAllocationChart = dynamic(
+  () => import("@/components/charts/budgets-chart").then((m) => m.BudgetAllocationChart),
+  {
+    ssr: false,
+    loading: () => (
+      <Card>
+        <CardHeader>
+          <div className="h-5 w-40 bg-muted rounded animate-pulse" />
+        </CardHeader>
+        <CardContent>
+          <div className="h-64 bg-muted/30 rounded-lg animate-pulse" />
+        </CardContent>
+      </Card>
+    ),
+  },
+);
 
 const EXPENSE_CATEGORIES = [
   "FOOD",
@@ -600,63 +611,8 @@ export default function BudgetsPage() {
         </Card>
       </div>
 
-      {/* Budget Breakdown Chart */}
-      {pieData.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <PieChart className="h-5 w-5" />
-              Budget Allocation
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <RechartsPieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={3}
-                    dataKey="value"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "var(--color-card)",
-                      border: "1px solid var(--color-border)",
-                      borderRadius: "8px",
-                      fontSize: "12px",
-                    }}
-                    formatter={(value: any, name: any) => [
-                      formatIDR(Number(value)),
-                      name,
-                    ]}
-                  />
-                </RechartsPieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="flex flex-wrap justify-center gap-3 mt-2">
-              {pieData.map((entry) => (
-                <div key={entry.name} className="flex items-center gap-1.5">
-                  <div
-                    className="h-3 w-3 rounded-full"
-                    style={{ backgroundColor: entry.color }}
-                  />
-                  <span className="text-xs text-muted-foreground">
-                    {entry.name}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Budget Breakdown Chart — dynamically loaded */}
+      {pieData.length > 0 && <BudgetAllocationChart data={pieData} />}
 
       {/* Rollover History */}
       {(historyLoading || rolloverHistory?.categories?.length > 0) && (
@@ -838,6 +794,7 @@ export default function BudgetsPage() {
                         variant="ghost"
                         size="icon-sm"
                         onClick={() => openEdit(b)}
+                        aria-label="Edit budget"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
@@ -849,6 +806,7 @@ export default function BudgetsPage() {
                             deleteMutation.mutate(b.id);
                           }
                         }}
+                        aria-label="Delete budget"
                       >
                         <Trash2 className="h-3.5 w-3.5 text-red-500" />
                       </Button>

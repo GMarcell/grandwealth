@@ -360,7 +360,7 @@ export default function AnalysisPage() {
           {/* Monthly Milestone */}
           <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground py-2">
             <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-            Analysis generated on {new Date(analysis.createdAt).toLocaleDateString("id-ID", {
+            Analysis generated on {new Date(analysis.createdAt).toLocaleDateString("en-US", {
               year: "numeric",
               month: "long",
               day: "numeric",
