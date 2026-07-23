@@ -5,10 +5,11 @@ import { authConfig } from "@/lib/auth.config"
 const { auth } = NextAuth(authConfig)
 
 /**
- * Auth proxy — protects dashboard routes from unauthenticated access.
- * Unauthenticated users are redirected to /login.
+ * Auth middleware — protects dashboard routes from unauthenticated access.
+ * Unauthenticated users are redirected to /login with a callbackUrl so they
+ * are sent back to the page they were trying to reach after logging in.
  */
-export const proxy = auth((req) => {
+export const middleware = auth((req) => {
   const { nextUrl } = req
   const isLoggedIn = !!req.auth?.user
 
@@ -40,7 +41,7 @@ export const config = {
    * - _next/image (image optimization files)
    * - favicon.svg, robots.txt, sitemap.xml (public files)
    * - login, register (public pages)
-   * - / (root — handled by redirect)
+   * - / (root — handled by page redirect)
    */
   matcher: [
     "/((?!api/auth|api/cron|_next/static|_next/image|favicon\\.svg|robots\\.txt|sitemap\\.xml|login|register|$).*)",

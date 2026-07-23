@@ -6,6 +6,8 @@ import { DashboardContent } from "@/components/dashboard/dashboard-content"
  * The static header is rendered on the server for instant HTML delivery.
  * All data-fetching and interactive content lives in the client DashboardContent component,
  * which keeps the client JS bundle lean and allows the header to be streamed immediately.
+ *
+ * Auth is handled by the parent layout ((dashboard)/layout.tsx) and middleware.
  */
 export default function DashboardPage() {
   return (
