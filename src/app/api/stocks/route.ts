@@ -13,7 +13,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const limiter = rateLimit(`stocks-get:${getRateLimitKey(req)}`, {
+  const limiter = await rateLimit(`stocks-get:${getRateLimitKey(req)}`, {
     limit: 60,
     windowMs: 60_000,
   })
@@ -90,7 +90,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const limiter = rateLimit(`stocks:${getRateLimitKey(req)}`, {
+  const limiter = await rateLimit(`stocks:${session.user.id}`, {
     limit: 20,
     windowMs: 60_000,
   })

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { updateStockSchema, safeParseBody } from "@/lib/validation"
 
 export async function PATCH(
   req: Request,
@@ -19,17 +20,30 @@ export async function PATCH(
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
-    const { symbol, name, quantity, buyPrice, date, notes } = await req.json()
-    const data: any = {}
-    if (symbol) data.symbol = symbol.toUpperCase().replace(/\.JK$/, "")
-    if (name) data.name = name
-    if (quantity) data.quantity = quantity
-    if (buyPrice) data.buyPrice = buyPrice
-    if (date) data.date = new Date(date)
+    const parsed = await safeParseBody(req, updateStockSchema)
+    if ("error" in parsed) return parsed.error
+
+    const { symbol, name, quantity, buyPrice, date, notes } = parsed.data
+    const data: Record<string, unknown> = {}
+    if (symbol !== undefined) data.symbol = symbol.toUpperCase().replace(/\.JK$/, "")
+    if (name !== undefined) data.name = name
+    if (quantity !== undefined) data.quantity = quantity
+    if (buyPrice !== undefined) data.buyPrice = buyPrice
+    if (date !== undefined) data.date = new Date(date)
     if (notes !== undefined) data.notes = notes
 
     const updated = await prisma.stock.update({ where: { id }, data })
-    return NextResponse.json(updated)
+    return NextResponse.json({
+      id: updated.id,
+      symbol: updated.symbol,
+      name: updated.name,
+      quantity: updated.quantity,
+      buyPrice: updated.buyPrice,
+      currentPrice: updated.currentPrice,
+      lastPriceUpdated: updated.lastPriceUpdated?.toISOString() ?? null,
+      date: updated.date.toISOString(),
+      notes: updated.notes,
+    })
   } catch (error) {
     console.error("Update stock error:", error)
     return NextResponse.json(

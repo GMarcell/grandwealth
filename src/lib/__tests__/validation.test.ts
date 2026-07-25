@@ -4,6 +4,7 @@ import {
   createTransactionSchema,
   updateTransactionSchema,
   createCategorySchema,
+  updateCategorySchema,
   createBudgetSchema,
   updateBudgetSchema,
   createGoldSchema,
@@ -703,6 +704,53 @@ describe("createRecurringSchema", () => {
 })
 
 // ─── safeParseBody ───────────────────────────
+
+describe("updateCategorySchema", () => {
+  it("accepts a partial update with just name", () => {
+    const result = updateCategorySchema.safeParse({ name: "NewCategory" })
+    expect(result.success).toBe(true)
+  })
+
+  it("accepts a partial update with just type", () => {
+    const result = updateCategorySchema.safeParse({ type: "INCOME" })
+    expect(result.success).toBe(true)
+  })
+
+  it("accepts a partial update with just color", () => {
+    const result = updateCategorySchema.safeParse({ color: "#ff5733" })
+    expect(result.success).toBe(true)
+  })
+
+  it("accepts a partial update with just ruleType", () => {
+    const result = updateCategorySchema.safeParse({ ruleType: "NEED" })
+    expect(result.success).toBe(true)
+  })
+
+  it("accepts setting ruleType to null", () => {
+    const result = updateCategorySchema.safeParse({ ruleType: null })
+    expect(result.success).toBe(true)
+  })
+
+  it("accepts empty object (no fields to update)", () => {
+    const result = updateCategorySchema.safeParse({})
+    expect(result.success).toBe(true)
+  })
+
+  it("rejects invalid hex color", () => {
+    const result = updateCategorySchema.safeParse({ color: "invalid" })
+    expect(result.success).toBe(false)
+  })
+
+  it("rejects invalid type", () => {
+    const result = updateCategorySchema.safeParse({ type: "INVALID" })
+    expect(result.success).toBe(false)
+  })
+
+  it("rejects invalid ruleType", () => {
+    const result = updateCategorySchema.safeParse({ ruleType: "INVALID" })
+    expect(result.success).toBe(false)
+  })
+})
 
 describe("safeParseBody", () => {
   const testSchema = z.object({

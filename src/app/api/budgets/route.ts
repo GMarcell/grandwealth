@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { createBudgetSchema, safeParseBody } from "@/lib/validation"
-import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
+import { rateLimit } from "@/lib/rate-limit"
 
 export async function GET() {
   const session = await auth()
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const limiter = rateLimit(`budgets:${getRateLimitKey(req)}`, {
+  const limiter = await rateLimit(`budgets:${session.user.id}`, {
     limit: 20,
     windowMs: 60_000,
   })

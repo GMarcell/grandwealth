@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { updateTransactionSchema, safeParseBody } from "@/lib/validation"
 
 export async function PATCH(
   req: Request,
@@ -19,20 +20,30 @@ export async function PATCH(
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
-    const { type, category, amount, description, date } = await req.json()
-    const data: any = {}
-    if (type) data.type = type
-    if (category) data.category = category
-    if (amount) data.amount = amount
-    if (description) data.description = description
-    if (date) data.date = new Date(date)
+    const parsed = await safeParseBody(req, updateTransactionSchema)
+    if ("error" in parsed) return parsed.error
+
+    const { type, category, amount, description, date } = parsed.data
+    const data: Record<string, unknown> = {}
+    if (type !== undefined) data.type = type
+    if (category !== undefined) data.category = category
+    if (amount !== undefined) data.amount = amount
+    if (description !== undefined) data.description = description
+    if (date !== undefined) data.date = new Date(date)
 
     const updated = await prisma.transaction.update({
       where: { id },
       data,
     })
 
-    return NextResponse.json(updated)
+    return NextResponse.json({
+      id: updated.id,
+      type: updated.type,
+      category: updated.category,
+      amount: updated.amount,
+      description: updated.description,
+      date: updated.date.toISOString(),
+    })
   } catch (error) {
     console.error("Update transaction error:", error)
     return NextResponse.json(

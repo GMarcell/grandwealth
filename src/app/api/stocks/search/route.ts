@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const limiter = rateLimit(`stocks-search:${getRateLimitKey(req)}`, {
+  const limiter = await rateLimit(`stocks-search:${getRateLimitKey(req)}`, {
     limit: 30,
     windowMs: 60_000,
   })

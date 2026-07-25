@@ -13,7 +13,7 @@ export const createTransactionSchema = z.object({
   category: z.string().min(1, "Category is required").max(100),
   amount: z.number().positive("Amount must be positive").finite(),
   description: z.string().min(1, "Description is required").max(500),
-  date: z.string().optional(),
+  date: z.string().min(1).optional(),
 })
 
 export const updateTransactionSchema = createTransactionSchema.partial()
@@ -25,6 +25,8 @@ export const createCategorySchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color must be a hex color (e.g. #6366f1)").optional(),
   ruleType: z.enum(["NEED", "WANT", "SAVINGS"]).nullable().optional(),
 })
+
+export const updateCategorySchema = createCategorySchema.partial()
 
 // ─── Budgets ─────────────────────────────────
 export const createBudgetSchema = z.object({
@@ -43,9 +45,11 @@ export const createGoldSchema = z.object({
   weightGram: z.number().positive("Weight must be positive").finite(),
   pricePerGram: z.number().positive("Price must be positive").finite(),
   totalAmount: z.number().nonnegative().optional(),
-  date: z.string().optional(),
+  date: z.string().min(1).optional(),
   notes: z.string().max(500).optional(),
 })
+
+export const updateGoldSchema = createGoldSchema.partial()
 
 // ─── Stocks ──────────────────────────────────
 export const createStockSchema = z.object({
@@ -54,16 +58,18 @@ export const createStockSchema = z.object({
   name: z.string().min(1, "Name is required").max(200),
   quantity: z.number().int("Quantity must be an integer").positive("Quantity must be positive"),
   buyPrice: z.number().positive("Buy price must be positive").finite(),
-  date: z.string().optional(),
+  date: z.string().min(1).optional(),
   notes: z.string().max(500).optional(),
 })
+
+export const updateStockSchema = createStockSchema.partial()
 
 // ─── Bank Savings ────────────────────────────
 export const createBankSavingSchema = z.object({
   type: z.enum(["DEPOSIT", "WITHDRAWAL"], { message: "Type must be DEPOSIT or WITHDRAWAL" }),
   accountName: z.string().min(1, "Account name is required").max(100),
   amount: z.number().positive("Amount must be positive").finite(),
-  date: z.string().optional(),
+  date: z.string().min(1).optional(),
   notes: z.string().max(500).optional(),
 })
 
@@ -77,9 +83,12 @@ export const createRecurringSchema = z.object({
   description: z.string().min(1, "Description is required").max(500),
   frequency: z.enum(["WEEKLY", "MONTHLY", "YEARLY"]),
   startDate: z.string().min(1, "Start date is required"),
-  endDate: z.string().optional().nullable(),
+  endDate: z.string().min(1).optional().nullable(),
   nextDate: z.string().min(1, "Next date is required"),
+  active: z.boolean().optional(),
 })
+
+export const updateRecurringSchema = createRecurringSchema.partial()
 
 // ─── Form Schemas (for react-hook-form validation) ───
 // These use z.string() with .refine() for numeric fields

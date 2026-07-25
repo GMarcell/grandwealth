@@ -12,7 +12,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const limiter = rateLimit(`transactions-get:${getRateLimitKey(req)}`, {
+  const limiter = await rateLimit(`transactions-get:${getRateLimitKey(req)}`, {
     limit: 60,
     windowMs: 60_000,
   })
@@ -83,7 +83,7 @@ export async function POST(req: Request) {
   }
 
   // Rate limit: 30 transactions per minute per user
-  const limiter = rateLimit(`transactions:${session.user.id}`, {
+  const limiter = await rateLimit(`transactions:${session.user.id}`, {
     limit: 30,
     windowMs: 60_000,
   })

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { updateRecurringSchema, safeParseBody } from "@/lib/validation"
 
 export async function PATCH(
   req: Request,
@@ -21,18 +22,21 @@ export async function PATCH(
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
-    const body = await req.json()
-    const updateData: any = {}
+    const parsed = await safeParseBody(req, updateRecurringSchema)
+    if ("error" in parsed) return parsed.error
 
-    if (body.type !== undefined) updateData.type = body.type
-    if (body.category !== undefined) updateData.category = body.category
-    if (body.amount !== undefined) updateData.amount = body.amount
-    if (body.description !== undefined) updateData.description = body.description
-    if (body.frequency !== undefined) updateData.frequency = body.frequency
-    if (body.startDate !== undefined) updateData.startDate = new Date(body.startDate)
-    if (body.endDate !== undefined) updateData.endDate = body.endDate ? new Date(body.endDate) : null
-    if (body.nextDate !== undefined) updateData.nextDate = new Date(body.nextDate)
-    if (body.active !== undefined) updateData.active = body.active
+    const { type, category, amount, description, frequency, startDate, endDate, nextDate, active } = parsed.data
+    const updateData: Record<string, unknown> = {}
+
+    if (type !== undefined) updateData.type = type
+    if (category !== undefined) updateData.category = category
+    if (amount !== undefined) updateData.amount = amount
+    if (description !== undefined) updateData.description = description
+    if (frequency !== undefined) updateData.frequency = frequency
+    if (startDate !== undefined) updateData.startDate = new Date(startDate)
+    if (endDate !== undefined) updateData.endDate = endDate ? new Date(endDate) : null
+    if (nextDate !== undefined) updateData.nextDate = new Date(nextDate)
+    if (active !== undefined) updateData.active = active
 
     const updated = await prisma.recurringTransaction.update({
       where: { id },

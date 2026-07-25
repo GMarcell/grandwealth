@@ -1,20 +1,78 @@
 /**
- * Simple in-memory rate limiter.
+ * Distributed rate limiter using Upstash Ratelimit.
  *
- * IMPORTANT: This is a per-process, in-memory rate limiter.
- * - On Vercel (serverless): Each invocation is a separate process, so limits reset per request.
- *   For true distributed rate limiting, replace with Upstash Ratelimit or similar.
- * - On a long-running server (Node.js): Works correctly within a single process.
+ * When UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN are configured, rate
+ * limiting is persisted in Upstash Redis and works across all serverless
+ * invocations on Vercel.
+ *
+ * Falls back to an in-memory implementation when the env vars are absent,
+ * which is safe for local development.
  */
 
-interface RateLimitEntry {
+import { Ratelimit } from "@upstash/ratelimit"
+import { Redis } from "@upstash/redis"
+
+// ─── Types (shared by both implementations) ────
+
+export interface RateLimitOptions {
+  /** Maximum number of requests allowed within the window. Default: 10 */
+  limit?: number
+  /** Time window in milliseconds. Default: 10000 (10 seconds) */
+  windowMs?: number
+}
+
+export interface RateLimitResult {
+  /** Whether the request is allowed */
+  allowed: boolean
+  /** Number of requests remaining in the current window */
+  remaining: number
+  /** Unix timestamp (ms) when the window resets */
+  resetTime: number
+  /** Total limit for the window */
+  limit: number
+}
+
+// ─── Upstash backend (distributed) ────────────
+
+const useUpstash = !!(
+  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
+)
+
+let redisClient: Redis | null = null
+const upstashRatelimiters = new Map<string, Ratelimit>()
+
+function getRedis(): Redis {
+  if (!redisClient) {
+    redisClient = Redis.fromEnv()
+  }
+  return redisClient
+}
+
+function getUpstashRatelimit(limit: number, windowMs: number): Ratelimit {
+  const key = `${limit}:${windowMs}`
+  if (!upstashRatelimiters.has(key)) {
+    upstashRatelimiters.set(
+      key,
+      new Ratelimit({
+        redis: getRedis(),
+        limiter: Ratelimit.slidingWindow(limit, `${Math.floor(windowMs / 1000)} s`),
+        prefix: "grandwealth",
+        analytics: true,
+      }),
+    )
+  }
+  return upstashRatelimiters.get(key)!
+}
+
+// ─── In-memory fallback (local development) ───
+
+interface InMemoryEntry {
   count: number
   resetTime: number
 }
 
-const store = new Map<string, RateLimitEntry>()
+const store = new Map<string, InMemoryEntry>()
 
-// Clean up expired entries every 60 seconds
 const CLEANUP_INTERVAL = 60_000
 let lastCleanup = Date.now()
 
@@ -29,28 +87,7 @@ function cleanup() {
   }
 }
 
-interface RateLimitOptions {
-  /** Maximum number of requests allowed within the window. Default: 10 */
-  limit?: number
-  /** Time window in milliseconds. Default: 10000 (10 seconds) */
-  windowMs?: number
-}
-
-interface RateLimitResult {
-  /** Whether the request is allowed */
-  allowed: boolean
-  /** Number of requests remaining in the current window */
-  remaining: number
-  /** Unix timestamp (ms) when the window resets */
-  resetTime: number
-  /** Total limit for the window */
-  limit: number
-}
-
-export function rateLimit(
-  key: string,
-  options: RateLimitOptions = {}
-): RateLimitResult {
+function inMemoryRateLimit(key: string, options: RateLimitOptions): RateLimitResult {
   cleanup()
 
   const { limit = 10, windowMs = 10_000 } = options
@@ -72,12 +109,40 @@ export function rateLimit(
   return { allowed: true, remaining: limit - entry.count, resetTime: entry.resetTime, limit }
 }
 
+// ─── Public API ───────────────────────────────
+
 /**
- * Get a rate limit key from a request object.
- * Uses the user's IP (from headers or connecting IP) as the identifier.
+ * Check whether a given key (e.g. "register:1.2.3.4") is allowed within its
+ * rate-limit window.
+ *
+ * When Upstash Redis is configured, the check is persisted and works across
+ * all serverless invocations.  Otherwise, an in-memory fallback is used.
+ */
+export async function rateLimit(
+  key: string,
+  options: RateLimitOptions = {},
+): Promise<RateLimitResult> {
+  if (useUpstash) {
+    const { limit = 10, windowMs = 10_000 } = options
+    const ratelimit = getUpstashRatelimit(limit, windowMs)
+    const { success, limit: l, remaining, reset } = await ratelimit.limit(key)
+    return {
+      allowed: success,
+      remaining,
+      resetTime: reset,
+      limit: l,
+    }
+  }
+
+  return inMemoryRateLimit(key, options)
+}
+
+/**
+ * Derive a rate-limit key from the incoming request.
+ * Uses the client IP (from x-forwarded-for) as the identifier.
  */
 export function getRateLimitKey(request: Request): string {
   const forwarded = request.headers.get("x-forwarded-for")
   const ip = forwarded?.split(",")[0]?.trim() ?? "unknown"
-  return `ratelimit:${ip}`
+  return ip
 }

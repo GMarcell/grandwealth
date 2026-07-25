@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { RULE_TYPES } from "@/lib/rule-type"
+import { updateCategorySchema, safeParseBody } from "@/lib/validation"
 
 export async function PATCH(
   req: Request,
@@ -20,19 +20,15 @@ export async function PATCH(
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
-    const { name, type, color, ruleType } = await req.json()
+    const parsed = await safeParseBody(req, updateCategorySchema)
+    if ("error" in parsed) return parsed.error
 
-    if (ruleType !== undefined && ruleType !== null && !RULE_TYPES.includes(ruleType)) {
-      return NextResponse.json(
-        { error: "ruleType must be NEED, WANT, SAVINGS, or null" },
-        { status: 400 }
-      )
-    }
+    const { name, type, color, ruleType } = parsed.data
 
-    const data: any = {}
-    if (name) data.name = name
-    if (type) data.type = type
-    if (color) data.color = color
+    const data: Record<string, unknown> = {}
+    if (name !== undefined) data.name = name
+    if (type !== undefined) data.type = type
+    if (color !== undefined) data.color = color
     if (ruleType !== undefined) data.ruleType = ruleType
 
     const updated = await prisma.category.update({
@@ -40,7 +36,13 @@ export async function PATCH(
       data,
     })
 
-    return NextResponse.json(updated)
+    return NextResponse.json({
+      id: updated.id,
+      name: updated.name,
+      type: updated.type,
+      color: updated.color,
+      ruleType: updated.ruleType,
+    })
   } catch (error) {
     console.error("Update category error:", error)
     return NextResponse.json(

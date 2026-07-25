@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { categoryFormSchema } from "@/lib/validation"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { useSession } from "next-auth/react"
+import { useSession, signOut } from "next-auth/react"
 import { useTheme } from "next-themes"
 import {
   Card,
@@ -40,6 +40,7 @@ import {
   Mail,
   Palette,
   Plus,
+  AlertTriangle,
   Trash2,
   Loader2,
   Tag,
@@ -88,6 +89,7 @@ export default function SettingsPage() {
 
   const [mounted, setMounted] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
   const {
     register,
@@ -225,6 +227,25 @@ export default function SettingsPage() {
       toast.success("Category deleted")
     },
     onError: () => toast.error("Failed to delete category"),
+  })
+
+  const deleteAccountMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/user/account", { method: "DELETE" })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed to delete account" }))
+        throw new Error(err.error || "Failed to delete account")
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      setIsDeleteDialogOpen(false)
+      toast.success("Account deleted. Redirecting...")
+      // Clear React Query cache and sign out
+      queryClient.clear()
+      setTimeout(() => signOut({ callbackUrl: "/" }), 1500)
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to delete account"),
   })
 
   function resetForm() {
@@ -695,6 +716,98 @@ export default function SettingsPage() {
                 )
               })}
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Danger Zone */}
+      <Card className="border-red-200 dark:border-red-900">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
+            <AlertTriangle className="h-5 w-5" />
+            Danger Zone
+          </CardTitle>
+          <CardDescription>
+            Irreversible actions that affect your account
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/50 p-4 space-y-3">
+            <div>
+              <p className="text-sm font-semibold text-red-800 dark:text-red-300">
+                Delete Account
+              </p>
+              <p className="text-xs text-red-700 dark:text-red-400 mt-1">
+                Permanently delete your account and all associated data —
+                transactions, categories, budgets, gold holdings, stocks,
+                recurring transactions, and bank savings. This action cannot
+                be undone.
+              </p>
+            </div>
+            <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50"
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Delete My Account
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                    <AlertTriangle className="h-5 w-5" />
+                    Delete Account
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="rounded-lg bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 p-3 text-sm">
+                    <p className="font-medium text-red-800 dark:text-red-300">
+                      This will permanently remove:
+                    </p>
+                    <ul className="list-disc list-inside text-xs text-red-700 dark:text-red-400 mt-2 space-y-1">
+                      <li>All transactions and recurring transactions</li>
+                      <li>All budgets and categories</li>
+                      <li>Gold holdings and stock portfolio records</li>
+                      <li>Bank savings records</li>
+                      <li>Monthly analysis reports</li>
+                      <li>Your account and session</li>
+                    </ul>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Are you sure you want to continue? This cannot be undone.
+                  </p>
+                  <div className="flex flex-col-reverse sm:flex-row gap-2 justify-end">
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsDeleteDialogOpen(false)}
+                      disabled={deleteAccountMutation.isPending}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => deleteAccountMutation.mutate()}
+                      disabled={deleteAccountMutation.isPending}
+                    >
+                      {deleteAccountMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                          Deleting...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Delete My Account
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </CardContent>
       </Card>

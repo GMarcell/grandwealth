@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { updateBudgetSchema, safeParseBody } from "@/lib/validation"
 
 export async function PATCH(
   req: Request,
@@ -19,10 +20,12 @@ export async function PATCH(
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
-    const { amount, month, rolloverEnabled, rolloverCap } = await req.json()
-    const data: any = {}
-    if (amount != null) data.amount = amount
-    if (month) data.month = month
+    const parsed = await safeParseBody(req, updateBudgetSchema)
+    if ("error" in parsed) return parsed.error
+
+    const { amount, rolloverEnabled, rolloverCap } = parsed.data
+    const data: Record<string, unknown> = {}
+    if (amount !== undefined) data.amount = amount
     if (rolloverEnabled !== undefined) data.rolloverEnabled = rolloverEnabled
     if (rolloverCap !== undefined) data.rolloverCap = rolloverCap
 
@@ -31,7 +34,14 @@ export async function PATCH(
       data,
     })
 
-    return NextResponse.json(updated)
+    return NextResponse.json({
+      id: updated.id,
+      categoryName: updated.categoryName,
+      amount: updated.amount,
+      month: updated.month,
+      rolloverEnabled: updated.rolloverEnabled,
+      rolloverCap: updated.rolloverCap,
+    })
   } catch (error) {
     console.error("Update budget error:", error)
     return NextResponse.json(

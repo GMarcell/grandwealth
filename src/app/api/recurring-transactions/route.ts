@@ -10,7 +10,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const limiter = rateLimit(`recurring-get:${getRateLimitKey(req)}`, {
+  const limiter = await rateLimit(`recurring-get:${getRateLimitKey(req)}`, {
     limit: 60,
     windowMs: 60_000,
   })
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const limiter = rateLimit(`recurring:${getRateLimitKey(req)}`, {
+  const limiter = await rateLimit(`recurring:${session.user.id}`, {
     limit: 20,
     windowMs: 60_000,
   })

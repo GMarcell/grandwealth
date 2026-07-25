@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { updateGoldSchema, safeParseBody } from "@/lib/validation"
 
 export async function PATCH(
   req: Request,
@@ -19,14 +20,16 @@ export async function PATCH(
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
-    const { type, weightGram, pricePerGram, totalAmount, date, notes } =
-      await req.json()
-    const data: any = {}
-    if (type) data.type = type
-    if (weightGram) data.weightGram = weightGram
-    if (pricePerGram) data.pricePerGram = pricePerGram
-    if (totalAmount) data.totalAmount = totalAmount
-    if (date) data.date = new Date(date)
+    const parsed = await safeParseBody(req, updateGoldSchema)
+    if ("error" in parsed) return parsed.error
+
+    const { type, weightGram, pricePerGram, totalAmount, date, notes } = parsed.data
+    const data: Record<string, unknown> = {}
+    if (type !== undefined) data.type = type
+    if (weightGram !== undefined) data.weightGram = weightGram
+    if (pricePerGram !== undefined) data.pricePerGram = pricePerGram
+    if (totalAmount !== undefined) data.totalAmount = totalAmount
+    if (date !== undefined) data.date = new Date(date)
     if (notes !== undefined) data.notes = notes
 
     const updated = await prisma.goldDeposit.update({
@@ -34,7 +37,15 @@ export async function PATCH(
       data,
     })
 
-    return NextResponse.json(updated)
+    return NextResponse.json({
+      id: updated.id,
+      type: updated.type,
+      weightGram: updated.weightGram,
+      pricePerGram: updated.pricePerGram,
+      totalAmount: updated.totalAmount,
+      date: updated.date.toISOString(),
+      notes: updated.notes,
+    })
   } catch (error) {
     console.error("Update gold deposit error:", error)
     return NextResponse.json(

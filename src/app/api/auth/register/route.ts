@@ -6,7 +6,7 @@ import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 
 export async function POST(req: Request) {
   // Rate limit: 5 registration attempts per 10 minutes per IP
-  const limiter = rateLimit(`register:${getRateLimitKey(req)}`, {
+  const limiter = await rateLimit(`register:${getRateLimitKey(req)}`, {
     limit: 5,
     windowMs: 10 * 60 * 1000,
   })
