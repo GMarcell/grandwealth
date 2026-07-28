@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useState, useEffect, useRef } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   Brain,
   TrendingUp,
@@ -17,6 +17,8 @@ import {
   BarChart3,
   Percent,
   Coins,
+  RefreshCw,
+  X,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -30,6 +32,16 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 
 interface AnalysisSummary {
   id: string
@@ -50,6 +62,88 @@ interface AnalysisSummary {
 interface FullAnalysis extends AnalysisSummary {
   summary: string
   rawData: any
+}
+
+const REGENERATION_STEPS = [
+  { icon: "📊", text: "Analyzing your financial data..." },
+  { icon: "🔍", text: "Reviewing transactions & budgets..." },
+  { icon: "🧠", text: "Crunching the numbers..." },
+  { icon: "💡", text: "Generating AI insights..." },
+  { icon: "✨", text: "Finalizing your report..." },
+]
+
+function RegenerationOverlay({ onCancel }: { onCancel: () => void }) {
+  const [stepIndex, setStepIndex] = useState(0)
+  const startTimeRef = useRef(Date.now())
+
+  useEffect(() => {
+    startTimeRef.current = Date.now()
+    const interval = setInterval(() => {
+      setStepIndex((prev) => {
+        // Slow down progression over time (stay on later steps longer)
+        const elapsed = (Date.now() - startTimeRef.current) / 1000
+        const maxStep = Math.min(
+          Math.floor(elapsed / 3),
+          REGENERATION_STEPS.length - 1
+        )
+        return Math.min(prev + 1, maxStep)
+      })
+    }, 2800)
+    return () => clearInterval(interval)
+  }, [])
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-background/80 backdrop-blur-sm" />
+      {/* Content */}
+      <div className="relative z-50 flex flex-col items-center gap-6 px-4">
+        {/* Spinner ring */}
+        <div className="relative">
+          <div className="h-20 w-20 rounded-full border-4 border-purple-200 dark:border-purple-900" />
+          <div className="absolute inset-0 h-20 w-20 rounded-full border-4 border-transparent border-t-purple-500 animate-spin" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Brain className="h-8 w-8 text-purple-500 animate-pulse" />
+          </div>
+        </div>
+        {/* Status text */}
+        <div className="text-center space-y-2">
+          <p className="text-lg font-semibold text-foreground">
+            Regenerating AI Analysis
+          </p>
+          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground min-h-[20px]">
+            <span className="animate-in fade-in-0 duration-300" key={stepIndex}>
+              {REGENERATION_STEPS[stepIndex].icon}{" "}
+              {REGENERATION_STEPS[stepIndex].text}
+            </span>
+          </div>
+        </div>
+        {/* Progress dots */}
+        <div className="flex gap-1.5">
+          {REGENERATION_STEPS.map((_, i) => (
+            <div
+              key={i}
+              className={`h-1.5 w-1.5 rounded-full transition-all duration-500 ${
+                i <= stepIndex
+                  ? "bg-purple-500 scale-125"
+                  : "bg-muted-foreground/20"
+              }`}
+            />
+          ))}
+        </div>
+        {/* Cancel button */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onCancel}
+          className="gap-2 mt-2"
+        >
+          <X className="h-4 w-4" />
+          Cancel
+        </Button>
+      </div>
+    </div>
+  )
 }
 
 function AnalysisSkeleton() {
@@ -97,6 +191,9 @@ function formatMonthLabel(monthKey: string): string {
 
 export default function AnalysisPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>("latest")
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const queryClient = useQueryClient()
 
   // Fetch list of all analysis months
   const { data: listData, isLoading: listLoading } = useQuery<{
@@ -128,12 +225,57 @@ export default function AnalysisPage() {
     enabled: !!effectiveMonth,
   })
 
+  // Regenerate mutation
+  const regenerateMutation = useMutation({
+    mutationFn: async (month: string) => {
+      const controller = new AbortController()
+      abortControllerRef.current = controller
+
+      try {
+        const res = await fetch("/api/analysis", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ month }),
+          signal: controller.signal,
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.error || "Failed to regenerate analysis")
+        }
+        return res.json()
+      } finally {
+        abortControllerRef.current = null
+      }
+    },
+    onSuccess: () => {
+      toast.success("Analysis regenerated successfully!")
+      queryClient.invalidateQueries({ queryKey: ["analysis"] })
+      queryClient.invalidateQueries({ queryKey: ["analysis-list"] })
+    },
+    onError: (err) => {
+      if (err instanceof Error && err.name === "AbortError") {
+        toast.info("Analysis regeneration cancelled")
+      } else {
+        toast.error(err instanceof Error ? err.message : "Failed to regenerate analysis")
+      }
+    },
+  })
+
+  const handleCancelRegeneration = () => {
+    abortControllerRef.current?.abort()
+  }
+
   const isLoading = listLoading || analysisLoading
 
   if (isLoading) return <AnalysisSkeleton />
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {/* Regeneration overlay */}
+      {regenerateMutation.isPending && (
+        <RegenerationOverlay onCancel={handleCancelRegeneration} />
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
@@ -357,16 +499,62 @@ export default function AnalysisPage() {
             </CardContent>
           </Card>
 
-          {/* Monthly Milestone */}
-          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground py-2">
-            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-            Analysis generated on {new Date(analysis.createdAt).toLocaleDateString("en-US", {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+          {/* Regenerate & Monthly Milestone */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 py-2">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              Generated {new Date(analysis.createdAt).toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </div>
+            <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={regenerateMutation.isPending}
+                  className="gap-2"
+                >
+                  {regenerateMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                  {regenerateMutation.isPending ? "Regenerating..." : "Regenerate Analysis"}
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Regenerate Analysis?</DialogTitle>
+                  <DialogDescription>
+                    This will generate a new AI analysis for {formatMonthLabel(analysis.month)} based on your current financial data. The existing analysis will be replaced.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setConfirmDialogOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="default"
+                    onClick={() => {
+                      setConfirmDialogOpen(false)
+                      regenerateMutation.mutate(analysis.month)
+                    }}
+                    autoFocus
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Regenerate
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </>
       )}
