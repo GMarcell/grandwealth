@@ -11,6 +11,9 @@ import {
   Wallet,
   AlertTriangle,
   CheckCircle2,
+  FileDown,
+  FileSpreadsheet,
+  FileText,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -26,6 +29,15 @@ import {
 } from "@/components/ui/select"
 import dynamic from "next/dynamic"
 import { toast } from "sonner"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { exportReportExcel, exportReportPdf } from "@/lib/export"
 
 // Dynamic import chart components (ships recharts only when rendered)
 const MonthlyBarChart = dynamic(
@@ -106,6 +118,22 @@ function ReportSkeleton() {
 
 export default function ReportsPage() {
   const [monthRange, setMonthRange] = useState("12")
+  const [exporting, setExporting] = useState<"excel" | "pdf" | null>(null)
+
+  async function handleExport(kind: "excel" | "pdf") {
+    if (!data) return
+    setExporting(kind)
+    try {
+      if (kind === "excel") await exportReportExcel(data)
+      else await exportReportPdf(data)
+      toast.success("Report exported")
+    } catch (err) {
+      console.error("Export failed:", err)
+      toast.error(err instanceof Error ? err.message : "Export failed")
+    } finally {
+      setExporting(null)
+    }
+  }
 
   const { data, isLoading, refetch } = useQuery<ReportData>({
     queryKey: ["reports", monthRange],
@@ -145,6 +173,30 @@ export default function ReportsPage() {
             <Loader2 className="h-4 w-4 mr-1" />
             Refresh
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" className="w-full sm:w-auto" disabled={exporting != null}>
+                {exporting != null ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : (
+                  <FileDown className="h-4 w-4 mr-1" />
+                )}
+                {exporting ? "Exporting…" : "Export"}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Export report</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => handleExport("excel")} className="gap-2">
+                <FileSpreadsheet className="h-4 w-4 text-emerald-500" />
+                Excel (.xlsx)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport("pdf")} className="gap-2">
+                <FileText className="h-4 w-4 text-red-500" />
+                PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

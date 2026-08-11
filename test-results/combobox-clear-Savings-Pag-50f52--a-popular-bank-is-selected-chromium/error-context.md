@@ -58,6 +58,14 @@ Call log:
           - img
           - generic: Savings
         - link:
+          - /url: /goals
+          - img
+          - generic: Goals
+        - link:
+          - /url: /debts
+          - img
+          - generic: Debts
+        - link:
           - /url: /gold
           - img
           - generic: Gold
@@ -78,7 +86,7 @@ Call log:
           - generic: E
           - generic:
             - paragraph: E2E Test User
-            - paragraph: e2e-budget-1784994200969@test.grandwealth.app
+            - paragraph: e2e-budget-1785822541395@test.grandwealth.app
         - generic:
           - button:
             - img
@@ -133,39 +141,41 @@ Call log:
               - generic:
                 - paragraph: No savings records yet. Start tracking your savings!
   - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e6] [cursor=pointer]:
+    - img [ref=e7]
   - alert
-  - dialog "Record Savings Transaction" [ref=e2]:
-    - heading "Record Savings Transaction" [level=2] [ref=e4]
-    - generic [ref=e5]:
-      - generic [ref=e6]:
+  - dialog "Record Savings Transaction" [ref=e11]:
+    - heading "Record Savings Transaction" [level=2] [ref=e13]
+    - generic [ref=e14]:
+      - generic [ref=e15]:
         - text: Type
-        - generic [ref=e7]:
-          - button "Deposit" [active] [ref=e8]:
+        - generic [ref=e16]:
+          - button "Deposit" [active] [ref=e17]:
             - img
             - text: Deposit
-          - button "Withdraw" [ref=e9]:
+          - button "Withdraw" [ref=e18]:
             - img
             - text: Withdraw
-      - generic [ref=e10]:
+      - generic [ref=e19]:
         - text: Account Name
-        - combobox "Account Name" [ref=e11]:
-          - generic [ref=e12]: Select or type bank name...
-          - generic [ref=e13]:
+        - combobox "Account Name" [ref=e20]:
+          - generic [ref=e21]: Select or type bank name...
+          - generic [ref=e22]:
             - img
-      - generic [ref=e14]:
+      - generic [ref=e23]:
         - text: Amount (Rp)
-        - spinbutton "Amount (Rp)" [ref=e15]
-      - generic [ref=e16]:
+        - spinbutton "Amount (Rp)" [ref=e24]
+      - generic [ref=e25]:
         - text: Date
-        - textbox "Date" [ref=e17]: 2026-07-25
-      - generic [ref=e18]:
-        - generic [ref=e19]: Notes (optional)
-        - textbox "Notes (optional)" [ref=e20]:
+        - textbox "Date" [ref=e26]: 2026-08-04
+      - generic [ref=e27]:
+        - generic [ref=e28]: Notes (optional)
+        - textbox "Notes (optional)" [ref=e29]:
           - /placeholder: e.g., Monthly salary deposit
-      - button "Add Record" [ref=e21]
-    - button "Close" [ref=e22]:
-      - img [ref=e23]
-      - generic [ref=e26]: Close
+      - button "Add Record" [ref=e30]
+    - button "Close" [ref=e31]:
+      - img [ref=e32]
+      - generic [ref=e35]: Close
 ```
 
 # Test source

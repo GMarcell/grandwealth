@@ -18,6 +18,7 @@ import {
   TrendingDown,
   ToggleLeft,
   ToggleRight,
+  Target,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -54,6 +55,8 @@ interface RecurringTransaction {
   endDate: string | null
   nextDate: string
   active: boolean
+  savingsGoalId: string | null
+  savingsGoalName: string | null
 }
 
 type RecurringFormData = z.infer<typeof recurringFormSchema>
@@ -120,6 +123,7 @@ export default function RecurringPage() {
       startDate: new Date().toISOString().split("T")[0],
       endDate: "",
       nextDate: new Date().toISOString().split("T")[0],
+      savingsGoalId: "",
     },
   })
 
@@ -131,6 +135,15 @@ export default function RecurringPage() {
     queryFn: async () => {
       const res = await fetch("/api/recurring-transactions");
       if (!res.ok) throw new Error("Failed to fetch recurring transactions");
+      return res.json();
+    },
+  })
+
+  const { data: goals } = useQuery<Array<{ id: string; name: string; targetAmount: number; savedAmount: number }>>({
+    queryKey: ["goals"],
+    queryFn: async () => {
+      const res = await fetch("/api/goals");
+      if (!res.ok) throw new Error("Failed to fetch goals");
       return res.json();
     },
   })
@@ -230,6 +243,7 @@ export default function RecurringPage() {
       startDate: new Date().toISOString().split("T")[0],
       endDate: "",
       nextDate: new Date().toISOString().split("T")[0],
+      savingsGoalId: "",
     })
     setIsDialogOpen(false)
   }
@@ -245,6 +259,7 @@ export default function RecurringPage() {
       startDate: new Date(item.startDate).toISOString().split("T")[0],
       endDate: item.endDate ? new Date(item.endDate).toISOString().split("T")[0] : "",
       nextDate: new Date(item.nextDate).toISOString().split("T")[0],
+      savingsGoalId: item.savingsGoalId ?? "",
     })
     setIsDialogOpen(true)
   }
@@ -259,6 +274,7 @@ export default function RecurringPage() {
       startDate: new Date(data.startDate).toISOString(),
       endDate: data.endDate ? new Date(data.endDate).toISOString() : null,
       nextDate: new Date(data.nextDate).toISOString(),
+      savingsGoalId: data.savingsGoalId || null,
     }
 
     if (editing) {
@@ -438,6 +454,34 @@ export default function RecurringPage() {
                 </p>
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="savingsGoalId">
+                  Savings goal <span className="text-xs text-muted-foreground">(optional)</span>
+                </Label>
+                <Controller
+                  name="savingsGoalId"
+                  control={control}
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger id="savingsGoalId">
+                        <SelectValue placeholder="No goal — just a transaction" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">No goal</SelectItem>
+                        {(goals ?? []).map((g) => (
+                          <SelectItem key={g.id} value={g.id}>
+                            {g.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Each time this fires, the amount is also added to the selected goal&apos;s progress.
+                </p>
+              </div>
+
               <Button
                 type="submit"
                 className="w-full"
@@ -559,6 +603,12 @@ export default function RecurringPage() {
                           <Badge variant="secondary" className="text-[10px] leading-none shrink-0">
                             {frequencyLabel(r.frequency)}
                           </Badge>
+                          {r.savingsGoalId && r.savingsGoalName && (
+                            <Badge variant="profit" className="text-[10px] leading-none shrink-0">
+                              <Target className="h-2.5 w-2.5 mr-0.5" />
+                              {r.savingsGoalName}
+                            </Badge>
+                          )}
                           {!r.active && (
                             <Badge variant="secondary" className="text-[10px] leading-none shrink-0">
                               Paused

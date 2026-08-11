@@ -16,6 +16,7 @@ import {
   TrendingDown,
   AlertTriangle,
   CheckCircle2,
+  Wand2,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -202,6 +203,33 @@ export default function BudgetsPage() {
       resetForm();
     },
     onError: (err) => toast.error(err.message || "Failed to save budget"),
+  });
+
+  const templateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/budgets/template", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month: selectedMonth }),
+      })
+      const json = await res.json().catch(() => ({ error: "Failed to generate template" }))
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to generate template")
+      }
+      return json
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["budgets"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      toast.success(data.message || "Budgets generated from the 50/30/20 rule");
+      if (data.skippedGroups?.length > 0) {
+        toast.info(
+          `No ${data.skippedGroups.map((g: string) => g.toLowerCase()).join(", ")} categories classified yet — assign rule types in Settings`,
+          { duration: 8000 }
+        );
+      }
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to generate template"),
   });
 
   const deleteMutation = useMutation({
@@ -409,6 +437,21 @@ export default function BudgetsPage() {
               ))}
             </SelectContent>
           </Select>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => templateMutation.mutate()}
+            disabled={templateMutation.isPending}
+            className="w-full sm:w-auto"
+            title="Auto-generate budgets for this month using the 50/30/20 rule based on your income and category classifications"
+          >
+            {templateMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-1" />
+            ) : (
+              <Wand2 className="h-4 w-4 mr-1" />
+            )}
+            50/30/20
+          </Button>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button

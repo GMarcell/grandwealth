@@ -42,6 +42,7 @@ export async function GET() {
       latestAnalysis,
       categories,
       bankSavings,
+      loans,
     ] = await Promise.all([
       prisma.transaction.findMany({
         where: {
@@ -87,6 +88,11 @@ export async function GET() {
       prisma.bankSaving.findMany({
         where: { userId },
       }),
+      prisma.loan.findMany({
+        where: { userId },
+        select: { id: true, name: true, principal: true, remainingBalance: true, monthlyPayment: true, startDate: true },
+        orderBy: { startDate: "desc" },
+      }),
     ])
 
     // Calculate totals
@@ -129,6 +135,10 @@ export async function GET() {
       else totalSavingsWithdrawals += s.amount
     }
     const totalSavingsValue = totalSavingsDeposits - totalSavingsWithdrawals
+
+    // Loan / debt calculations
+    const totalDebt = loans.reduce((sum, l) => sum + l.remainingBalance, 0)
+    const totalPrincipal = loans.reduce((sum, l) => sum + l.principal, 0)
 
     // Monthly aggregation for chart
     const monthlyMap = new Map<string, { income: number; expenses: number }>()
@@ -314,7 +324,9 @@ export async function GET() {
       totalGoldWeight,
       totalStockValue,
       stockCount: stocks.length,
-      totalWealth: netCashflow + totalGoldInvested + totalStockValue + totalSavingsValue,
+      totalWealth: netCashflow + totalGoldInvested + totalStockValue + totalSavingsValue - totalDebt,
+      totalDebt,
+      loanCount: loans.length,
       totalSavings: totalSavingsValue,
       savingsAccountCount: bankSavings.length > 0 ? new Set(bankSavings.map((s) => s.accountName)).size : 0,
       recentTransactions,

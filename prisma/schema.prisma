@@ -24,6 +24,9 @@ model User {
   recurringTransactions RecurringTransaction[]
   monthlyAnalyses       MonthlyAnalysis[]
   bankSavings           BankSaving[]
+  savingsGoals          SavingsGoal[]
+  loans                 Loan[]
+  dividends             Dividend[]
   accounts              Account[]
   sessions              Session[]
   createdAt     DateTime      @default(now())
@@ -156,6 +159,7 @@ model Stock {
   notes            String?
   userId           String
   user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dividends        Dividend[]
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -171,20 +175,24 @@ enum RecurringFrequency {
 }
 
 model RecurringTransaction {
-  id          String              @id @default(cuid())
-  type        TransactionType
-  category    String
-  amount      Float
-  description String
-  frequency   RecurringFrequency
-  startDate   DateTime
-  endDate     DateTime?
-  nextDate    DateTime
-  active      Boolean             @default(true)
-  userId      String
-  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  id           String              @id @default(cuid())
+  type         TransactionType
+  category     String
+  amount       Float
+  description  String
+  frequency    RecurringFrequency
+  startDate    DateTime
+  endDate      DateTime?
+  nextDate     DateTime
+  active       Boolean             @default(true)
+  savingsGoalId String?
+  savingsGoal  SavingsGoal?        @relation(fields: [savingsGoalId], references: [id], onDelete: SetNull)
+  userId       String
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  @@index([savingsGoalId])
 }
 
 enum SavingType {
@@ -207,6 +215,55 @@ model BankSaving {
   @@index([userId, date])
   @@index([userId, accountName])
   @@index([userId, notes])
+}
+
+model SavingsGoal {
+  id                   String                 @id @default(cuid())
+  name                 String
+  targetAmount         Float
+  savedAmount          Float                  @default(0)
+  targetDate           DateTime?
+  color                String                 @default("#6366f1")
+  userId               String
+  user                 User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recurringTransactions RecurringTransaction[]
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  @@index([userId])
+}
+
+model Loan {
+  id               String   @id @default(cuid())
+  name             String
+  principal        Float
+  remainingBalance Float
+  interestRate     Float?
+  monthlyPayment   Float?
+  startDate        DateTime
+  notes            String?
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Dividend {
+  id        String    @id @default(cuid())
+  stockId   String
+  stock     Stock     @relation(fields: [stockId], references: [id], onDelete: Cascade)
+  amount    Float
+  date      DateTime  @default(now())
+  notes     String?
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId, date])
+  @@index([stockId])
 }
 
 model MonthlyAnalysis {

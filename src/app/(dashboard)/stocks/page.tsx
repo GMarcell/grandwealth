@@ -48,6 +48,7 @@ import {
 import { formatIDR, formatDate, cn, type PaginatedResponse } from "@/lib/utils"
 import { Pagination } from "@/components/ui/pagination"
 import { FormError } from "@/components/ui/form-error"
+import { DividendsPanel } from "@/components/stocks/dividends-panel"
 import { toast } from "sonner"
 
 interface Stock {
@@ -603,6 +604,9 @@ export default function StocksPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Dividend Income */}
+      <DividendsPanel />
 
       {/* Search & Refresh */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">

@@ -21,7 +21,11 @@ export const middleware = auth((req) => {
     nextUrl.pathname.startsWith("/gold") ||
     nextUrl.pathname.startsWith("/stocks") ||
     nextUrl.pathname.startsWith("/budgets") ||
-    nextUrl.pathname.startsWith("/settings")
+    nextUrl.pathname.startsWith("/settings") ||
+    nextUrl.pathname.startsWith("/savings") ||
+    nextUrl.pathname.startsWith("/goals") ||
+    nextUrl.pathname.startsWith("/debts") ||
+    nextUrl.pathname.startsWith("/analysis")
 
   if (isOnDashboard && !isLoggedIn) {
     const loginUrl = new URL("/login", nextUrl)
@@ -40,10 +44,10 @@ export const config = {
    * - _next/static (static files)
    * - _next/image (image optimization files)
    * - favicon.svg, robots.txt, sitemap.xml (public files)
-   * - login, register (public pages)
+   * - login, register, forgot-password, reset-password (public pages)
    * - / (root — handled by page redirect)
    */
   matcher: [
-    "/((?!api/auth|api/cron|_next/static|_next/image|favicon\\.svg|robots\\.txt|sitemap\\.xml|login|register|$).*)",
+    "/((?!api/auth|api/cron|_next/static|_next/image|favicon\\.svg|robots\\.txt|sitemap\\.xml|login|register|forgot-password|reset-password|$).*)",
   ],
 }

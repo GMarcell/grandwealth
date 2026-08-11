@@ -20,6 +20,7 @@ export async function GET(req: Request) {
 
   const recurring = await prisma.recurringTransaction.findMany({
     where: { userId: session.user.id },
+    include: { savingsGoal: { select: { name: true } } },
     orderBy: { nextDate: "asc" },
   })
 
@@ -35,6 +36,8 @@ export async function GET(req: Request) {
       endDate: r.endDate?.toISOString() ?? null,
       nextDate: r.nextDate.toISOString(),
       active: r.active,
+      savingsGoalId: r.savingsGoalId,
+      savingsGoalName: r.savingsGoal?.name ?? null,
     }))
   )
 }
@@ -57,7 +60,15 @@ export async function POST(req: Request) {
     const parsed = await safeParseBody(req, createRecurringSchema)
     if ("error" in parsed) return parsed.error
 
-    const { type, category, amount, description, frequency, startDate, endDate, nextDate } = parsed.data
+    const { type, category, amount, description, frequency, startDate, endDate, nextDate, savingsGoalId } = parsed.data
+
+    // Verify the linked goal belongs to the user when one is provided.
+    if (savingsGoalId) {
+      const goal = await prisma.savingsGoal.findUnique({ where: { id: savingsGoalId } })
+      if (!goal || goal.userId !== session.user.id) {
+        return NextResponse.json({ error: "Savings goal not found" }, { status: 404 })
+      }
+    }
 
     const recurring = await prisma.recurringTransaction.create({
       data: {
@@ -69,8 +80,10 @@ export async function POST(req: Request) {
         startDate: new Date(startDate),
         endDate: endDate ? new Date(endDate) : null,
         nextDate: new Date(nextDate),
+        savingsGoalId: savingsGoalId ?? null,
         userId: session.user.id,
       },
+      include: { savingsGoal: { select: { name: true } } },
     })
 
     return NextResponse.json(
@@ -85,6 +98,8 @@ export async function POST(req: Request) {
         endDate: recurring.endDate?.toISOString() ?? null,
         nextDate: recurring.nextDate.toISOString(),
         active: recurring.active,
+        savingsGoalId: recurring.savingsGoalId,
+        savingsGoalName: recurring.savingsGoal?.name ?? null,
       },
       { status: 201 }
     )

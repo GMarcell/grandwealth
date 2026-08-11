@@ -86,9 +86,71 @@ export const createRecurringSchema = z.object({
   endDate: z.string().min(1).optional().nullable(),
   nextDate: z.string().min(1, "Next date is required"),
   active: z.boolean().optional(),
+  // Optional savings goal: each time the recurring fires, the amount is also
+  // added to the goal's saved amount (e.g. a monthly "savings transfer").
+  savingsGoalId: z.string().optional().nullable(),
 })
 
 export const updateRecurringSchema = createRecurringSchema.partial()
+
+// ─── Savings Goals ───────────────────────────────
+export const createGoalSchema = z.object({
+  name: z.string().min(1, "Goal name is required").max(100),
+  targetAmount: z.number().positive("Target amount must be positive").finite(),
+  savedAmount: z.number().nonnegative("Saved amount must be >= 0").finite().optional(),
+  targetDate: z.string().min(1).optional().nullable(),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color must be a hex color (e.g. #6366f1)").optional(),
+})
+
+export const updateGoalSchema = createGoalSchema.partial()
+
+export const contributeGoalSchema = z.object({
+  // Positive adds to the goal; negative withdraws from it. The handler clamps
+  // the resulting balance at zero.
+  amount: z.number().finite(),
+})
+
+// ─── Loans / Debts ────────────────────────────────
+export const createLoanSchema = z.object({
+  name: z.string().min(1, "Loan name is required").max(100),
+  principal: z.number().positive("Principal must be positive").finite(),
+  remainingBalance: z.number().nonnegative("Remaining balance must be >= 0").finite(),
+  interestRate: z.number().nonnegative("Interest rate must be >= 0").finite().optional().nullable(),
+  monthlyPayment: z.number().positive("Monthly payment must be positive").finite().optional().nullable(),
+  startDate: z.string().min(1, "Start date is required"),
+  notes: z.string().max(500).optional(),
+})
+
+export const updateLoanSchema = createLoanSchema.partial()
+
+export const payLoanSchema = z.object({
+  amount: z.number().positive("Payment amount must be positive").finite(),
+})
+
+// ─── Dividends ────────────────────────────────────
+export const createDividendSchema = z.object({
+  stockId: z.string().min(1, "Stock is required"),
+  amount: z.number().positive("Dividend amount must be positive").finite(),
+  date: z.string().min(1).optional(),
+  notes: z.string().max(500).optional(),
+})
+
+export const updateDividendSchema = createDividendSchema.partial()
+
+// ─── Password Reset ───────────────────────────────
+export const forgotPasswordSchema = z.object({
+  email: z.string().email("Invalid email address"),
+})
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, "Reset token is required"),
+  password: z.string().min(6, "Password must be at least 6 characters").max(128),
+})
+
+// ─── Budget Template ──────────────────────────────
+export const budgetTemplateSchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/, "Month must be in YYYY-MM format"),
+})
 
 // ─── Form Schemas (for react-hook-form validation) ───
 // These use z.string() with .refine() for numeric fields
@@ -126,6 +188,7 @@ export const recurringFormSchema = z.object({
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().optional(),
   nextDate: z.string().min(1, "Next date is required"),
+  savingsGoalId: z.string().optional(),
 })
 
 export const savingsFormSchema = z.object({
@@ -156,6 +219,39 @@ export const stockFormSchema = z.object({
     (v) => !isNaN(Number(v)) && Number(v) > 0,
     "Buy price must be a positive number"
   ),
+  date: z.string().min(1, "Date is required"),
+  notes: z.string().max(500).optional(),
+})
+
+export const goalFormSchema = z.object({
+  name: z.string().min(1, "Goal name is required").max(100),
+  targetAmount: z.string()
+    .min(1, "Target amount is required")
+    .refine((v) => !isNaN(Number(v)) && Number(v) > 0, "Target amount must be a positive number"),
+  savedAmount: z.string().optional(),
+  targetDate: z.string().optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Invalid hex color").optional(),
+})
+
+export const loanFormSchema = z.object({
+  name: z.string().min(1, "Loan name is required").max(100),
+  principal: z.string()
+    .min(1, "Principal is required")
+    .refine((v) => !isNaN(Number(v)) && Number(v) > 0, "Principal must be a positive number"),
+  remainingBalance: z.string()
+    .min(1, "Remaining balance is required")
+    .refine((v) => !isNaN(Number(v)) && Number(v) >= 0, "Balance must be zero or positive"),
+  interestRate: z.string().optional(),
+  monthlyPayment: z.string().optional(),
+  startDate: z.string().min(1, "Start date is required"),
+  notes: z.string().max(500).optional(),
+})
+
+export const dividendFormSchema = z.object({
+  stockId: z.string().min(1, "Stock is required"),
+  amount: z.string()
+    .min(1, "Amount is required")
+    .refine((v) => !isNaN(Number(v)) && Number(v) > 0, "Amount must be a positive number"),
   date: z.string().min(1, "Date is required"),
   notes: z.string().max(500).optional(),
 })

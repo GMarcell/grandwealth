@@ -12,6 +12,10 @@
     {
       "path": "/api/cron/monthly-analysis",
       "schedule": "30 23 28-31 * *"
+    },
+    {
+      "path": "/api/cron/apply-recurring",
+      "schedule": "30 0 * * *"
     }
   ]
 }

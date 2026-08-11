@@ -25,7 +25,7 @@ export async function PATCH(
     const parsed = await safeParseBody(req, updateRecurringSchema)
     if ("error" in parsed) return parsed.error
 
-    const { type, category, amount, description, frequency, startDate, endDate, nextDate, active } = parsed.data
+    const { type, category, amount, description, frequency, startDate, endDate, nextDate, active, savingsGoalId } = parsed.data
     const updateData: Record<string, unknown> = {}
 
     if (type !== undefined) updateData.type = type
@@ -37,10 +37,21 @@ export async function PATCH(
     if (endDate !== undefined) updateData.endDate = endDate ? new Date(endDate) : null
     if (nextDate !== undefined) updateData.nextDate = new Date(nextDate)
     if (active !== undefined) updateData.active = active
+    if (savingsGoalId !== undefined) {
+      // When (re)linking, verify the goal belongs to the user.
+      if (savingsGoalId) {
+        const goal = await prisma.savingsGoal.findUnique({ where: { id: savingsGoalId } })
+        if (!goal || goal.userId !== session.user.id) {
+          return NextResponse.json({ error: "Savings goal not found" }, { status: 404 })
+        }
+      }
+      updateData.savingsGoalId = savingsGoalId ?? null
+    }
 
     const updated = await prisma.recurringTransaction.update({
       where: { id },
       data: updateData,
+      include: { savingsGoal: { select: { name: true } } },
     })
 
     return NextResponse.json({
@@ -54,6 +65,8 @@ export async function PATCH(
       endDate: updated.endDate?.toISOString() ?? null,
       nextDate: updated.nextDate.toISOString(),
       active: updated.active,
+      savingsGoalId: updated.savingsGoalId,
+      savingsGoalName: updated.savingsGoal?.name ?? null,
     })
   } catch (error) {
     console.error("Update recurring error:", error)

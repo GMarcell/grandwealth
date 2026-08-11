@@ -12,10 +12,170 @@
 # Error details
 
 ```
-Error: locator.click: Target page, context or browser has been closed
+Test timeout of 30000ms exceeded.
+```
+
+```
+Error: locator.click: Test timeout of 30000ms exceeded.
 Call log:
   - waiting for getByRole('combobox', { name: 'Select or type bank name...' })
 
+```
+
+# Page snapshot
+
+```yaml
+- generic:
+  - generic:
+    - complementary:
+      - generic:
+        - generic:
+          - img
+          - generic: GrandWealth
+      - navigation:
+        - link:
+          - /url: /dashboard
+          - img
+          - generic: Dashboard
+        - link:
+          - /url: /transactions
+          - img
+          - generic: Transactions
+        - link:
+          - /url: /recurring
+          - img
+          - generic: Recurring
+        - link:
+          - /url: /reports
+          - img
+          - generic: Reports
+        - link:
+          - /url: /analysis
+          - img
+          - generic: AI Analysis
+        - link:
+          - /url: /savings
+          - img
+          - generic: Savings
+        - link:
+          - /url: /goals
+          - img
+          - generic: Goals
+        - link:
+          - /url: /debts
+          - img
+          - generic: Debts
+        - link:
+          - /url: /gold
+          - img
+          - generic: Gold
+        - link:
+          - /url: /stocks
+          - img
+          - generic: Stocks
+        - link:
+          - /url: /budgets
+          - img
+          - generic: Budgets
+        - link:
+          - /url: /settings
+          - img
+          - generic: Settings
+      - generic:
+        - generic:
+          - generic: E
+          - generic:
+            - paragraph: E2E Test User
+            - paragraph: e2e-budget-1785822541395@test.grandwealth.app
+        - generic:
+          - button:
+            - img
+            - generic: Toggle theme
+          - button:
+            - img
+    - main:
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - heading [level=1]: Bank Savings
+              - paragraph: Track your savings accounts
+            - button [expanded]:
+              - img
+              - text: Record Savings
+          - generic:
+            - generic:
+              - generic:
+                - heading [level=2]: Accounts
+                - img
+              - generic:
+                - generic: "0"
+            - generic:
+              - generic:
+                - heading [level=2]: Total Deposits
+                - img
+              - generic:
+                - generic: Rp 0
+            - generic:
+              - generic:
+                - heading [level=2]: Total Withdrawals
+                - img
+              - generic:
+                - generic: Rp 0
+            - generic:
+              - generic:
+                - heading [level=2]: Net Savings
+                - img
+              - generic:
+                - generic: Rp 0
+                - generic: Positive
+          - generic:
+            - generic:
+              - img
+              - textbox:
+                - /placeholder: Search by account name or notes...
+          - generic:
+            - generic:
+              - heading [level=2]: Transaction History
+            - generic:
+              - generic:
+                - paragraph: No savings records yet. Start tracking your savings!
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e6] [cursor=pointer]:
+    - img [ref=e7]
+  - alert
+  - dialog "Record Savings Transaction" [ref=e11]:
+    - heading "Record Savings Transaction" [level=2] [ref=e13]
+    - generic [ref=e14]:
+      - generic [ref=e15]:
+        - text: Type
+        - generic [ref=e16]:
+          - button "Deposit" [active] [ref=e17]:
+            - img
+            - text: Deposit
+          - button "Withdraw" [ref=e18]:
+            - img
+            - text: Withdraw
+      - generic [ref=e19]:
+        - text: Account Name
+        - combobox "Account Name" [ref=e20]:
+          - generic [ref=e21]: Select or type bank name...
+          - generic [ref=e22]:
+            - img
+      - generic [ref=e23]:
+        - text: Amount (Rp)
+        - spinbutton "Amount (Rp)" [ref=e24]
+      - generic [ref=e25]:
+        - text: Date
+        - textbox "Date" [ref=e26]: 2026-08-04
+      - generic [ref=e27]:
+        - generic [ref=e28]: Notes (optional)
+        - textbox "Notes (optional)" [ref=e29]:
+          - /placeholder: e.g., Monthly salary deposit
+      - button "Add Record" [ref=e30]
+    - button "Close" [ref=e31]:
+      - img [ref=e32]
+      - generic [ref=e35]: Close
 ```
 
 # Test source
@@ -61,7 +221,7 @@ Call log:
   38  |     // Open the combobox
   39  |     const comboboxTrigger = page.getByRole("combobox", { name: "Select or type bank name..." })
 > 40  |     await comboboxTrigger.click()
-      |                           ^ Error: locator.click: Target page, context or browser has been closed
+      |                           ^ Error: locator.click: Test timeout of 30000ms exceeded.
   41  | 
   42  |     // Type a custom bank name in the search input
   43  |     const searchInput = page.getByPlaceholder("Search bank name...")

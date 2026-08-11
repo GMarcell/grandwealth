@@ -44,6 +44,14 @@ const WealthBreakdownChart = dynamic(
   },
 )
 
+const NetWorthChart = dynamic(
+  () => import("@/components/charts/dashboard-charts").then((m) => m.NetWorthChart),
+  {
+    ssr: false,
+    loading: () => <div className="h-72 bg-muted/30 rounded-lg animate-pulse" />,
+  },
+)
+
 interface DashboardData {
   totalIncome: number
   totalExpenses: number
@@ -55,6 +63,8 @@ interface DashboardData {
   totalSavings: number
   savingsAccountCount: number
   totalWealth: number
+  totalDebt: number
+  loanCount: number
   recentTransactions: Array<{
     id: string
     type: string
@@ -126,6 +136,27 @@ export function DashboardContent() {
     refetchInterval: 60_000,
   })
 
+  const { data: netWorthData } = useQuery<{
+    history: Array<{
+      month: string
+      label: string
+      cash: number
+      gold: number
+      stocks: number
+      savings: number
+      debt: number
+      assets: number
+      total: number
+    }>
+  }>({
+    queryKey: ["net-worth"],
+    queryFn: async () => {
+      const res = await fetch("/api/net-worth?months=12");
+      if (!res.ok) throw new Error("Failed to fetch net worth history");
+      return res.json();
+    },
+  })
+
   const netPositive = useMemo(() => (data?.netCashflow ?? 0) >= 0, [data?.netCashflow])
 
   const pieData = useMemo(() =>
@@ -170,6 +201,7 @@ export function DashboardContent() {
               </p>
               <p className="text-xs text-muted-foreground mt-2">
                 Cash flow + gold + stocks + bank savings
+                {data && data.totalDebt > 0 ? ` - ${formatCompactIDR(data.totalDebt)} debt` : ""}
               </p>
             </div>
             <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
@@ -236,7 +268,13 @@ export function DashboardContent() {
               {data?.savingsAccountCount != null && data.savingsAccountCount > 0 && (
                 <> &bull; {data.savingsAccountCount} {data.savingsAccountCount === 1 ? "account" : "accounts"}</>
               )}
+              {data?.loanCount ? <> &bull; {data.loanCount} {data.loanCount === 1 ? "loan" : "loans"}</> : null}
             </p>
+            {data && data.totalDebt > 0 && (
+              <Badge variant="loss" className="mt-2">
+                {formatCompactIDR(data.totalDebt)} debt
+              </Badge>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -493,6 +531,9 @@ export function DashboardContent() {
           </Card>
         </Link>
       )}
+
+      {/* Net Wealth Trend */}
+      <NetWorthChart data={netWorthData?.history ?? []} />
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

@@ -22,6 +22,8 @@ import {
   BarChart3,
   Brain,
   Landmark,
+  Target,
+  CreditCard,
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import { signOut, useSession } from "next-auth/react"
@@ -41,6 +43,8 @@ const navItems = [
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/analysis", label: "AI Analysis", icon: Brain },
   { href: "/savings", label: "Savings", icon: Landmark },
+  { href: "/goals", label: "Goals", icon: Target },
+  { href: "/debts", label: "Debts", icon: CreditCard },
   { href: "/gold", label: "Gold", icon: CircleDollarSign },
   { href: "/stocks", label: "Stocks", icon: TrendingUp },
   { href: "/budgets", label: "Budgets", icon: PiggyBank },
