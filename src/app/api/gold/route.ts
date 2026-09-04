@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { createGoldSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
-import { computeGoldPortfolio } from "@/lib/gold"
+import { computeGoldPortfolio, validateGoldChange } from "@/lib/gold"
 import { parsePagination, paginatedResponse } from "@/lib/utils"
 import type { Prisma } from "@prisma/client"
 
@@ -113,6 +113,26 @@ export async function POST(req: Request) {
     if ("error" in parsed) return parsed.error
 
     const { type, weightGram, pricePerGram, totalAmount, date, notes } = parsed.data
+
+    // Reject sells that would exceed the gold the user currently holds.
+    if (type === "SELL") {
+      const held = await prisma.goldDeposit.findMany({
+        where: { userId: session.user.id },
+        select: { type: true, weightGram: true, totalAmount: true },
+      })
+      const validation = validateGoldChange(held, [
+        ...held,
+        { type, weightGram, totalAmount: totalAmount ?? weightGram * pricePerGram },
+      ])
+      if (!validation.allowed) {
+        return NextResponse.json(
+          {
+            error: `Cannot sell ${weightGram} g: you only hold ${validation.heldWeight} g of gold`,
+          },
+          { status: 400 }
+        )
+      }
+    }
 
     const deposit = await prisma.goldDeposit.create({
       data: {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { computeNetWorthHistory } from "@/lib/wealth-history"
+import { computeGoldPortfolio } from "@/lib/gold"
 import { fetchGoldPriceIdr } from "@/lib/prices"
 
 /**
@@ -47,10 +48,13 @@ export async function GET(req: Request) {
         }),
       ])
 
-    // Use the live gold price when the user holds gold and the fetch succeeds.
-    // Falls back to cost basis otherwise (no external call when there's no gold).
+    // Use the live gold price when the user currently HOLDS gold (net weight
+    // > 0) and the fetch succeeds — the same rule /api/dashboard uses. Falls
+    // back to cost basis otherwise and skips the external call entirely when
+    // there is nothing left to mark to market (e.g. everything was sold).
+    const heldGoldWeight = computeGoldPortfolio(goldDeposits).totalWeight
     let goldPricePerGram: number | null = null
-    if (goldDeposits.length > 0) {
+    if (heldGoldWeight > 0) {
       try {
         const price = await fetchGoldPriceIdr()
         goldPricePerGram = price.pricePerGramIdr

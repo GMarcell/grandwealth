@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { computeGoldPortfolio } from "../gold"
+import { computeGoldPortfolio, validateGoldChange } from "../gold"
 
 describe("computeGoldPortfolio", () => {
   it("returns an empty portfolio when there are no deposits", () => {
@@ -77,5 +77,72 @@ describe("computeGoldPortfolio", () => {
 
     expect(result.totalWeight).toBe(15)
     expect(result.totalInvested).toBe(17_500_000)
+  })
+})
+
+describe("validateGoldChange", () => {
+  const buy = (w: number, total?: number) => ({
+    type: "BUY" as const,
+    weightGram: w,
+    totalAmount: total ?? w * 1_000_000,
+  })
+  const sell = (w: number, total?: number) => ({
+    type: "SELL" as const,
+    weightGram: w,
+    totalAmount: total ?? w * 1_000_000,
+  })
+
+  it("allows buying when nothing is held", () => {
+    expect(validateGoldChange([], [buy(10)])).toMatchObject({ allowed: true })
+  })
+
+  it("allows a partial sell within holdings", () => {
+    const before = [buy(10)]
+    expect(validateGoldChange(before, [...before, sell(4)])).toMatchObject({
+      allowed: true,
+      heldWeight: 10,
+    })
+  })
+
+  it("allows selling exactly all holdings (net zero)", () => {
+    const before = [buy(10)]
+    expect(validateGoldChange(before, [...before, sell(10)])).toMatchObject({
+      allowed: true,
+    })
+  })
+
+  it("rejects a sell larger than holdings", () => {
+    const before = [buy(10)]
+    const result = validateGoldChange(before, [...before, sell(15)])
+
+    expect(result.allowed).toBe(false)
+    expect(result.heldWeight).toBe(10)
+  })
+
+  it("rejects any sell when nothing is held", () => {
+    const result = validateGoldChange([], [sell(1)])
+
+    expect(result.allowed).toBe(false)
+    expect(result.heldWeight).toBe(0)
+  })
+
+  it("rejects edits that deepen a legacy oversold position", () => {
+    // Legacy state already oversold by 5g (sold before ever buying).
+    const before = [sell(5)]
+    expect(validateGoldChange(before, [...before, sell(3)])).toMatchObject({
+      allowed: false,
+    })
+  })
+
+  it("allows edits that repair a legacy oversold position (buying back)", () => {
+    const before = [sell(5)] // net -5g
+    expect(validateGoldChange(before, [...before, buy(10)])).toMatchObject({
+      allowed: true,
+    })
+  })
+
+  it("allows an edit that leaves an unchanged legacy oversold state (e.g. notes)", () => {
+    const before = [sell(5)] // net -5g
+    expect(validateGoldChange(before, before)).toMatchObject({ allowed: true })
   })
 })

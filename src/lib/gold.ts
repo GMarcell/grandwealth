@@ -65,3 +65,45 @@ export function computeGoldPortfolio(deposits: GoldEntry[]): GoldPortfolio {
 
   return { totalWeight, totalInvested, avgPricePerGram }
 }
+
+/** Net signed weight: BUY adds, SELL subtracts. No clamping. */
+function signedWeight(deposits: GoldEntry[]): number {
+  let weight = 0
+  for (const d of deposits) {
+    weight += d.type === "BUY" ? d.weightGram : -d.weightGram
+  }
+  return weight
+}
+
+export interface GoldChangeValidation {
+  /** Whether the change is allowed. */
+  allowed: boolean
+  /** Net weight held before the change (never negative). For error messages. */
+  heldWeight: number
+}
+
+/**
+ * Validate a gold-record change (create or update) against overselling.
+ *
+ * A change is rejected only when it leaves the net position NEGATIVE and makes
+ * it worse than before the change:
+ *   - selling more than you hold (or selling at all from a zero/negative
+ *     position) is blocked with a clear error;
+ *   - buying, selling exactly down to zero, and edits that repair an existing
+ *     negative position (legacy oversell) remain allowed.
+ */
+export function validateGoldChange(
+  before: GoldEntry[],
+  after: GoldEntry[],
+): GoldChangeValidation {
+  const beforeWeight = signedWeight(before)
+  const afterWeight = signedWeight(after)
+
+  const makesOversellWorse =
+    afterWeight < -1e-9 && afterWeight < beforeWeight - 1e-9
+
+  return {
+    allowed: !makesOversellWorse,
+    heldWeight: Math.max(0, beforeWeight),
+  }
+}

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { updateGoldSchema, safeParseBody } from "@/lib/validation"
+import { validateGoldChange } from "@/lib/gold"
 
 export async function PATCH(
   req: Request,
@@ -31,6 +32,37 @@ export async function PATCH(
     if (totalAmount !== undefined) data.totalAmount = totalAmount
     if (date !== undefined) data.date = new Date(date)
     if (notes !== undefined) data.notes = notes
+
+    // When the type or weight changes, reject the edit if it would sell more
+    // gold than the user holds (compared with the position before this edit).
+    if (type !== undefined || weightGram !== undefined) {
+      const others = await prisma.goldDeposit.findMany({
+        where: { userId: session.user.id, NOT: { id } },
+        select: { type: true, weightGram: true, totalAmount: true },
+      })
+      const existingEntry = {
+        type: existing.type,
+        weightGram: existing.weightGram,
+        totalAmount: existing.totalAmount,
+      }
+      const effectiveEntry = {
+        type: type ?? existing.type,
+        weightGram: weightGram ?? existing.weightGram,
+        totalAmount: existing.totalAmount,
+      }
+      const validation = validateGoldChange(
+        [...others, existingEntry],
+        [...others, effectiveEntry],
+      )
+      if (!validation.allowed) {
+        return NextResponse.json(
+          {
+            error: `Cannot sell more gold than you hold (you hold ${validation.heldWeight} g of gold)`,
+          },
+          { status: 400 }
+        )
+      }
+    }
 
     const updated = await prisma.goldDeposit.update({
       where: { id },

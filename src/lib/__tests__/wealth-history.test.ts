@@ -77,6 +77,65 @@ describe("computeNetWorthHistory", () => {
     expect(history[0].gold).toBe(15_000_000)
   })
 
+  it("cost-basis fallback reduces by average cost on sell, not proceeds or gross bought", () => {
+    const history = computeNetWorthHistory({
+      transactions: [],
+      goldDeposits: [
+        { type: "BUY", weightGram: 10, totalAmount: 15_000_000, date: new Date(2026, 0, 5) }, // 1.5jt/g
+        { type: "SELL", weightGram: 4, totalAmount: 6_400_000, date: new Date(2026, 1, 5) }, // sold at 1.6jt/g
+      ],
+      stocks: [],
+      bankSavings: [],
+      loans: [],
+      goldPricePerGram: null,
+      months: 2,
+      endDate: new Date(2026, 1, 15),
+    })
+
+    expect(history[0].gold).toBe(15_000_000) // before the sell
+    // 6g remaining × 1.5jt/g average cost = 9jt — not 15jt (gross bought) and
+    // not 8.6jt (15jt − 6.4jt proceeds).
+    expect(history[1].gold).toBe(9_000_000)
+  })
+
+  it("clamps gold to zero when more is sold than held", () => {
+    const history = computeNetWorthHistory({
+      transactions: [],
+      goldDeposits: [
+        { type: "BUY", weightGram: 5, totalAmount: 5_000_000, date: new Date(2026, 0, 5) },
+        { type: "SELL", weightGram: 10, totalAmount: 12_000_000, date: new Date(2026, 1, 5) },
+      ],
+      stocks: [],
+      bankSavings: [],
+      loans: [],
+      goldPricePerGram: null,
+      months: 2,
+      endDate: new Date(2026, 1, 15),
+    })
+
+    expect(history[1].gold).toBe(0) // never negative
+  })
+
+  it("sells count only from their own date onward in each month's value", () => {
+    const history = computeNetWorthHistory({
+      transactions: [],
+      goldDeposits: [
+        { type: "BUY", weightGram: 10, totalAmount: 10_000_000, date: new Date(2026, 0, 20) },
+        { type: "SELL", weightGram: 3, totalAmount: 3_600_000, date: new Date(2026, 1, 10) },
+      ],
+      stocks: [],
+      bankSavings: [],
+      loans: [],
+      goldPricePerGram: null,
+      months: 3,
+      endDate: new Date(2026, 2, 15), // Jan → Mar
+    })
+
+    expect(history[0].gold).toBe(10_000_000) // Jan: buy only
+    expect(history[1].gold).toBe(7_000_000) // Feb: after 3g sold @ 1jt/g avg cost
+    expect(history[2].gold).toBe(7_000_000) // Mar: unchanged
+  })
+
   it("values stocks with current price per lot, falling back to buy price", () => {
     const history = computeNetWorthHistory({
       transactions: [],
