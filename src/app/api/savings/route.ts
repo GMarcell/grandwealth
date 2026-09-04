@@ -66,7 +66,9 @@ export async function GET(req: Request) {
     }),
     prisma.bankSaving.count({ where }),
     prisma.bankSaving.findMany({
-      where,
+      // Summary cards reflect ALL accounts — never the search filter, which
+      // only shapes the list above.
+      where: { userId: session.user.id },
       select: { type: true, accountName: true, amount: true },
     }),
   ])

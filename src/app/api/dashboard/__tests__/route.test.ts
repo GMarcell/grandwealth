@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 // ─── Hoisted mocks (available before module instantiation) ───
 
@@ -271,5 +271,55 @@ describe("GET /api/dashboard — aggregation correctness", () => {
     expect(mockFetchGoldPrice).not.toHaveBeenCalled()
     expect(body.totalGoldValue).toBe(0)
     expect(body.totalGoldWeight).toBe(0)
+  })
+})
+
+describe("GET /api/dashboard — budget month rollover with non-1st start day", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("rolls over from the true previous budget month when startDay=28 and today is before the 28th", async () => {
+    // Regression: the old inline `new Date(year, month - 1, startDay)` math
+    // collapsed the previous month to the CURRENT budget month on any day
+    // before the 28th, so prevBudgets and prev-spend were read from the
+    // current period (inflating rollover and effective budget).
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 8, 4, 12, 0, 0)) // Sep 4 — before the 28th
+
+    setupMocks({
+      budgetStartDay: 28,
+      windowTransactions: [
+        // Previous budget month (Jul 28 – Aug 27): Jul 29
+        tx("prev-spend", "EXPENSE", "FOOD", 40_000, new Date(2026, 6, 29, 12, 0, 0)),
+        // Current budget month (Aug 28 – Sep 27): Sep 3
+        tx("cur-spend", "EXPENSE", "FOOD", 30_000, new Date(2026, 8, 3, 12, 0, 0)),
+      ],
+      budgets: [{ ...budget("FOOD", 50_000, "2026-08"), rolloverEnabled: true }],
+      prevBudgets: [budget("FOOD", 50_000, "2026-07")],
+    })
+
+    const res = await GET()
+    expect(res.status).toBe(200)
+    const body = await res.json()
+
+    // The prev-budget query must target the true previous budget month.
+    const budgetCalls = mockFindBudgets.mock.calls
+    expect(budgetCalls).toHaveLength(2)
+    expect(budgetCalls[1][0]).toMatchObject({
+      where: { userId: "user-1", month: "2026-07" },
+    })
+
+    // Rollover = 50k prev budget − 40k prev spend = 10k; effective = 60k.
+    // (The old code read prev spend as the current period's 30k → 20k rollover.)
+    expect(body.budgetSummary.totalRollover).toBe(10_000)
+    expect(body.budgetSummary.totalEffective).toBe(60_000)
+    expect(body.budgetSummary.totalSpent).toBe(30_000)
+    expect(body.budgetSummary.remaining).toBe(30_000)
   })
 })

@@ -65,7 +65,9 @@ export async function GET(req: Request) {
     }),
     prisma.goldDeposit.count({ where }),
     prisma.goldDeposit.findMany({
-      where,
+      // Summary cards reflect the FULL portfolio — never the search/type
+      // filters, which only shape the list above.
+      where: { userId: session.user.id },
       select: { type: true, weightGram: true, totalAmount: true },
     }),
   ])

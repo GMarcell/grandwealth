@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mockAuth = vi.hoisted(() => vi.fn())
 const mockFindMany = vi.hoisted(() => vi.fn())
+const mockCount = vi.hoisted(() => vi.fn())
 const mockCreate = vi.hoisted(() => vi.fn())
 const mockRateLimit = vi.hoisted(() => vi.fn())
 const mockGetRateLimitKey = vi.hoisted(() => vi.fn())
@@ -14,6 +15,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     goldDeposit: {
       findMany: mockFindMany,
+      count: mockCount,
       create: mockCreate,
     },
   },
@@ -25,7 +27,7 @@ vi.mock("@/lib/rate-limit", () => ({
 }))
 
 // Import after mocks
-const { POST } = await import("../route")
+const { GET, POST } = await import("../route")
 
 // ─── Helpers ─────────────────────────────────
 
@@ -122,5 +124,65 @@ describe("POST /api/gold — oversell protection", () => {
     const res = await POST(makeRequest({ type: "SELL", weightGram: 10, pricePerGram: 1_000_000 }))
 
     expect(res.status).toBe(201)
+  })
+})
+
+describe("GET /api/gold — summary ignores filters", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } })
+    mockRateLimit.mockResolvedValue({ allowed: true })
+    mockGetRateLimitKey.mockReturnValue("ip-1")
+  })
+
+  it("computes the summary over ALL records, ignoring search and type filters", async () => {
+    // List/count see only the filtered subset; the summary aggregation must
+    // see the user's full portfolio (10g bought − 4g sold = 6g held).
+    const listItems = [
+      {
+        id: "d-buy-10",
+        type: "BUY",
+        weightGram: 10,
+        pricePerGram: 1_000_000,
+        totalAmount: 10_000_000,
+        date: new Date(),
+        notes: "Antam",
+      },
+    ]
+    const allItems = [
+      { type: "BUY", weightGram: 10, totalAmount: 10_000_000 },
+      { type: "SELL", weightGram: 4, totalAmount: 4_000_000 },
+    ]
+    mockCount.mockResolvedValue(1)
+    mockFindMany.mockResolvedValueOnce(listItems).mockResolvedValueOnce(allItems)
+
+    const req = new Request(
+      "http://localhost/api/gold?page=1&pageSize=25&search=Antam&type=BUY"
+    )
+    const res = await GET(req)
+    expect(res.status).toBe(200)
+    const body = await res.json()
+
+    // List + count still apply the search/type filters.
+    expect(mockFindMany.mock.calls[0][0].where).toMatchObject({
+      userId: "user-1",
+      notes: { contains: "Antam", mode: "insensitive" },
+      type: "BUY",
+    })
+    expect(mockCount).toHaveBeenCalledWith({
+      where: mockFindMany.mock.calls[0][0].where,
+    })
+
+    // The summary aggregation ignores filters — userId only.
+    expect(mockFindMany.mock.calls[1][0].where).toEqual({ userId: "user-1" })
+
+    // Summary reflects the FULL portfolio (10g bought − 4g sold = 6g held).
+    expect(body.summary).toEqual({
+      totalWeight: 6,
+      totalInvested: 6_000_000,
+    })
+    // The list is still filtered.
+    expect(body.data).toHaveLength(1)
+    expect(body.data[0].id).toBe("d-buy-10")
   })
 })

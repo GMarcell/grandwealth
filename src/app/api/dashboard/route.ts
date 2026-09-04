@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { getBudgetMonthKey, getBudgetMonthRange } from "@/lib/budget-months"
+import {
+  getBudgetMonthKey,
+  getBudgetMonthRange,
+  getPreviousBudgetMonthKey,
+} from "@/lib/budget-months"
 import { computeGoldPortfolio } from "@/lib/gold"
 import { fetchGoldPriceIdr } from "@/lib/prices"
 
@@ -22,10 +26,11 @@ export async function GET() {
     const startDay = user?.budgetStartDay ?? 1
 
     const currentMonthKey = getBudgetMonthKey(new Date(), startDay)
-    const prevMonthKey = getBudgetMonthKey(
-      new Date(new Date().getFullYear(), new Date().getMonth() - 1, startDay),
-      startDay
-    )
+    // The previous budget month cannot be derived by subtracting one calendar
+    // month from `startDay` — on any day before `startDay` that collapses to
+    // the CURRENT budget month (e.g. startDay=28, today=Sep 4 → both keys are
+    // "2026-08"), double-counting this period's budget and spend as rollover.
+    const prevMonthKey = getPreviousBudgetMonthKey(currentMonthKey, startDay)
     const { start: monthStart, end: monthEnd } = getBudgetMonthRange(currentMonthKey, startDay)
     const { start: prevMonthStart, end: prevMonthEnd } = getBudgetMonthRange(prevMonthKey, startDay)
 
