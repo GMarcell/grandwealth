@@ -13,20 +13,27 @@ import { applyDueRecurringTransactions } from "@/lib/recurring"
  *       https://yourdomain.com/api/cron/apply-recurring
  */
 export async function GET(request: Request) {
-  // Verify cron secret if configured.
+  // Fail closed: CRON_SECRET must be configured, otherwise there is no way to
+  // authorize a caller and the endpoint would run unauthenticated.
   const cronSecret = process.env.CRON_SECRET
-  if (cronSecret) {
-    const authHeader = request.headers.get("authorization")
-    const bearerToken = authHeader?.startsWith("Bearer ")
-      ? authHeader.slice(7)
-      : null
-    const url = new URL(request.url)
-    const querySecret = url.searchParams.get("secret")
-    const providedSecret = bearerToken ?? querySecret
+  if (!cronSecret) {
+    return NextResponse.json(
+      { error: "CRON_SECRET not configured" },
+      { status: 500 }
+    )
+  }
 
-    if (providedSecret !== cronSecret) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+  // Verify the provided secret — supports Authorization header or ?secret= query param
+  const authHeader = request.headers.get("authorization")
+  const bearerToken = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice(7)
+    : null
+  const url = new URL(request.url)
+  const querySecret = url.searchParams.get("secret")
+  const providedSecret = bearerToken ?? querySecret
+
+  if (providedSecret !== cronSecret) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
   try {

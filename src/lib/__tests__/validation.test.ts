@@ -36,6 +36,18 @@ describe("registerSchema", () => {
     expect(result.success).toBe(true)
   })
 
+  it("normalizes email to lowercase and trims surrounding whitespace", () => {
+    const result = registerSchema.safeParse({
+      email: "  User@Example.COM  ",
+      password: "secure123",
+    })
+    expect(result.success).toBe(true)
+    // Email should be lowercased and trimmed by the transform
+    if (result.success) {
+      expect(result.data.email).toBe("user@example.com")
+    }
+  })
+
   it("rejects invalid email", () => {
     const result = registerSchema.safeParse({
       email: "not-an-email",

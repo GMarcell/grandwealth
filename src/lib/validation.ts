@@ -3,7 +3,9 @@ import { z } from "zod"
 // ─── Auth ────────────────────────────────────
 export const registerSchema = z.object({
   name: z.string().min(1, "Name is required").max(100).optional(),
-  email: z.string().email("Invalid email address"),
+  // Trim + lowercase BEFORE the email check: the format validator rejects
+  // strings with surrounding whitespace, so the transforms must run first.
+  email: z.string().trim().toLowerCase().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters").max(128),
 })
 

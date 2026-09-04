@@ -30,8 +30,8 @@ export async function GET() {
   checks.auth = process.env.AUTH_SECRET ? "configured" : "missing"
   if (!process.env.AUTH_SECRET) allHealthy = false
 
-  // Check 3: Cron secret (optional but warn if missing)
-  checks.cron = process.env.CRON_SECRET ? "configured" : "not configured (optional)"
+  // Check 3: Cron secret — cron endpoints fail closed without it
+  checks.cron = process.env.CRON_SECRET ? "configured" : "not configured (cron endpoints disabled)"
 
   // Check 4: Groq API key (optional)
   checks.groq = process.env.GROQ_API_KEY ? "configured" : "not configured (optional)"

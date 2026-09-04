@@ -21,7 +21,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return null
         }
 
-        const email = credentials.email as string
+        // Normalize to lowercase (and trim) so login is case-insensitive and
+        // matches the lowercase emails stored by registration.
+        const email = (credentials.email as string).trim().toLowerCase()
         const password = credentials.password as string
 
         // Brute-force protection: NextAuth's Credentials provider has no
@@ -38,7 +40,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         const accountLimit = await rateLimit(
-          `login-account:${email.trim().toLowerCase()}`,
+          `login-account:${email}`,
           {
             limit: 10,
             windowMs: 15 * 60 * 1000,

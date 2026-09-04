@@ -218,7 +218,7 @@ NEXTAUTH_URL="http://localhost:3000"
 | `DATABASE_URL`    | PostgreSQL connection string                      |
 | `NEXTAUTH_SECRET` | Random string used to encrypt JWT tokens (run `openssl rand -hex 32` to generate) |
 | `NEXTAUTH_URL`    | Full URL of your app (local: `http://localhost:3000`) |
-| `CRON_SECRET`     | (Optional) Secret to secure the cron price update endpoint |
+| `CRON_SECRET`     | Secret that authorizes the cron endpoints (update-prices, apply-recurring, monthly-analysis). Required — the endpoints fail closed (HTTP 500) without it |
 
 ### 3. Database Setup
 
