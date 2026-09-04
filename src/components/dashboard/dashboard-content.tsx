@@ -200,7 +200,7 @@ export function DashboardContent() {
                 {formatCompactIDR(data?.totalWealth ?? 0)}
               </p>
               <p className="text-xs text-muted-foreground mt-2">
-                Cash flow + gold + stocks + bank savings
+                All-time net cash flow + gold + stocks + bank savings
                 {data && data.totalDebt > 0 ? ` - ${formatCompactIDR(data.totalDebt)} debt` : ""}
               </p>
             </div>

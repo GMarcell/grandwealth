@@ -7,13 +7,16 @@
  *
  *   - cash    = cumulative (income - expenses) up to month end
  *   - gold    = weight held at month end × current price/gram
- *               (falls back to cost basis when no live price is available)
+ *               (falls back to the cost basis of holdings when no live price
+ *               is available — see computeGoldPortfolio in ./gold)
  *   - stocks  = holdings at month end × (current price or buy price, per lot)
  *   - savings = cumulative bank deposits - withdrawals
  *   - debt    = sum of remaining loan balances for loans started by month end
  *
  *   net worth = cash + gold + stocks + savings - debt
  */
+
+import { computeGoldPortfolio } from "./gold"
 
 export type TransactionLike = {
   type: "INCOME" | "EXPENSE"
@@ -114,18 +117,13 @@ export function computeNetWorthHistory(input: WealthHistoryInput): WealthPoint[]
       }
     }
 
-    let goldWeight = 0
-    let goldCost = 0
-    for (const g of input.goldDeposits) {
-      if (g.date > cutoff) continue
-      if (g.type === "BUY") {
-        goldWeight += g.weightGram
-        goldCost += g.totalAmount
-      } else {
-        goldWeight -= g.weightGram
-        goldCost -= g.totalAmount
-      }
-    }
+    // Reuse the shared gold accounting helper so month-end holdings (weight
+    // and cost basis) follow the exact same BUY/SELL rules as the gold page,
+    // dashboard, and AI analysis. Filtering by cutoff date also makes sells
+    // count only from their own date onward.
+    const depositsUpTo = input.goldDeposits.filter((g) => g.date <= cutoff)
+    const { totalWeight: goldWeight, totalInvested: goldCost } =
+      computeGoldPortfolio(depositsUpTo)
 
     let stocksValue = 0
     for (const s of input.stocks) {
@@ -149,7 +147,7 @@ export function computeNetWorthHistory(input: WealthHistoryInput): WealthPoint[]
     const goldValue =
       input.goldPricePerGram != null
         ? goldWeight * input.goldPricePerGram
-        : Math.max(0, goldCost)
+        : goldCost
 
     const assets = cash + goldValue + stocksValue + savings
     const total = assets - debt

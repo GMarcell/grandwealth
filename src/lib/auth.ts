@@ -4,6 +4,7 @@ import { compare } from "bcryptjs"
 import { prisma } from "./prisma"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import { authConfig } from "./auth.config"
+import { rateLimit, getRateLimitKey } from "./rate-limit"
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
@@ -15,13 +16,37 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         if (!credentials?.email || !credentials?.password) {
           return null
         }
 
         const email = credentials.email as string
         const password = credentials.password as string
+
+        // Brute-force protection: NextAuth's Credentials provider has no
+        // built-in limiter, so throttle attempts by client IP and per account.
+        // Returns null (a generic "invalid credentials" error) when limited.
+        if (request) {
+          const ipLimit = await rateLimit(`login:${getRateLimitKey(request)}`, {
+            limit: 30,
+            windowMs: 10 * 60 * 1000,
+          })
+          if (!ipLimit.allowed) {
+            return null
+          }
+        }
+
+        const accountLimit = await rateLimit(
+          `login-account:${email.trim().toLowerCase()}`,
+          {
+            limit: 10,
+            windowMs: 15 * 60 * 1000,
+          }
+        )
+        if (!accountLimit.allowed) {
+          return null
+        }
 
         const user = await prisma.user.findUnique({
           where: { email },

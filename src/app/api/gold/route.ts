@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { createGoldSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
+import { computeGoldPortfolio } from "@/lib/gold"
 import { parsePagination, paginatedResponse } from "@/lib/utils"
 import type { Prisma } from "@prisma/client"
 
@@ -70,16 +71,9 @@ export async function GET(req: Request) {
   ])
 
   // Compute aggregate summaries from ALL records (not just current page)
-  let totalWeight = 0
-  let totalInvested = 0
-  for (const d of allDeposits) {
-    if (d.type === "BUY") {
-      totalWeight += d.weightGram
-      totalInvested += d.totalAmount
-    } else {
-      totalWeight -= d.weightGram
-    }
-  }
+  // using the shared gold accounting helper so BUY/SELL cost-basis handling is
+  // identical to the dashboard, net-worth history, and AI analysis.
+  const { totalWeight, totalInvested } = computeGoldPortfolio(allDeposits)
 
   const mapped = deposits.map((d) => ({
     id: d.id,

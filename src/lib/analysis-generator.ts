@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma"
+import { computeGoldPortfolio } from "@/lib/gold"
 import Groq from "groq-sdk"
 
 const groq = new Groq({
@@ -167,21 +168,14 @@ export async function generateAnalysisForUserAndMonth(
     })
   }
 
-  // Gold
+  // Gold — shared accounting helper (BUY adds weight + cost, SELL removes
+  // weight + average-cost share) so the reported value matches the gold page,
+  // dashboard, and net-worth history.
   const goldDeposits = await prisma.goldDeposit.findMany({
     where: { userId },
   })
-  let totalGoldWeight = 0
-  let totalGoldValue = 0
-  for (const deposit of goldDeposits) {
-    if (deposit.type === "BUY") {
-      totalGoldWeight += deposit.weightGram
-      totalGoldValue += deposit.totalAmount
-    } else {
-      totalGoldWeight -= deposit.weightGram
-      totalGoldValue -= deposit.totalAmount
-    }
-  }
+  const { totalWeight: totalGoldWeight, totalInvested: totalGoldValue } =
+    computeGoldPortfolio(goldDeposits)
 
   const rawData = {
     month: monthKey,

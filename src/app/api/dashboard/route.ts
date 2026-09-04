@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { getBudgetMonthKey, getBudgetMonthRange } from "@/lib/budget-months"
+import { computeGoldPortfolio } from "@/lib/gold"
+import { fetchGoldPriceIdr } from "@/lib/prices"
 
 export async function GET() {
   const session = await auth()
@@ -33,8 +35,23 @@ export async function GET() {
     thirteenMonthsAgo.setDate(1)
     thirteenMonthsAgo.setHours(0, 0, 0, 0)
 
+    // Cutoff for the all-time cash aggregate: the end of the current calendar
+    // month, which is exactly how /api/net-worth caps its "latest" cash point
+    // (transactions dated after this are excluded there too).
+    const allTimeNow = new Date()
+    const endOfCurrentMonth = new Date(
+      allTimeNow.getFullYear(),
+      allTimeNow.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999,
+    )
+
     const [
       transactions,
+      allTimeCashByType,
       goldDeposits,
       stocks,
       budgets,
@@ -44,13 +61,26 @@ export async function GET() {
       bankSavings,
       loans,
     ] = await Promise.all([
+      // Fetch the full 13-month window — do NOT cap with `take`. Capping meant
+      // totals, the monthly chart, budget spend, and the 50/30/20 breakdown
+      // were derived from only the latest 50 transactions, silently under- (or
+      // over-) counting for users with more than 50 transactions in range.
       prisma.transaction.findMany({
         where: {
           userId,
           date: { gte: thirteenMonthsAgo },
         },
         orderBy: { date: "desc" },
-        take: 50,
+      }),
+      // All-time income/expense sums (single cheap DB aggregate) for the
+      // hero's cash component — see allTimeNetCashflow below.
+      prisma.transaction.groupBy({
+        by: ["type"],
+        where: {
+          userId,
+          date: { lte: endOfCurrentMonth },
+        },
+        _sum: { amount: true },
       }),
       prisma.goldDeposit.findMany({
         where: { userId },
@@ -95,7 +125,7 @@ export async function GET() {
       }),
     ])
 
-    // Calculate totals
+    // Calculate totals (full window — see the transaction query above)
     const totalIncome = transactions
       .filter((t) => t.type === "INCOME")
       .reduce((sum, t) => sum + t.amount, 0)
@@ -106,17 +136,40 @@ export async function GET() {
 
     const netCashflow = totalIncome - totalExpenses
 
-    // Gold calculations
-    let totalGoldWeight = 0
-    let totalGoldInvested = 0
-    for (const g of goldDeposits) {
-      if (g.type === "BUY") {
-        totalGoldWeight += g.weightGram
-        totalGoldInvested += g.totalAmount
-      } else {
-        totalGoldWeight -= g.weightGram
+    // All-time net cash flow over the user's full transaction history. Used for
+    // the hero's cash component so Total Net Wealth equals the latest point of
+    // the net-worth chart (whose cash is cumulative over ALL transactions,
+    // not just the 13-month window shown in the chart/cards).
+    const incomeSum = allTimeCashByType.find((t) => t.type === "INCOME")?._sum.amount ?? 0
+    const expenseSum = allTimeCashByType.find((t) => t.type === "EXPENSE")?._sum.amount ?? 0
+    const allTimeNetCashflow = incomeSum - expenseSum
+
+    // Gold calculations — shared accounting helper (BUY adds weight + cost,
+    // SELL removes weight + average-cost share) so gold figures never diverge
+    // from the gold page, net-worth history, or AI analysis.
+    const { totalWeight: totalGoldWeight, totalInvested: totalGoldInvested } =
+      computeGoldPortfolio(goldDeposits)
+
+    // Mark gold to the current market price when the user holds any — the same
+    // definition /api/net-worth uses — so the dashboard's gold value (and
+    // therefore total net wealth) matches the net-worth chart on the same page.
+    // Falls back to the cost basis when the market fetch fails.
+    let goldPricePerGram: number | null = null
+    if (totalGoldWeight > 0) {
+      try {
+        const live = await fetchGoldPriceIdr()
+        goldPricePerGram = live.pricePerGramIdr
+      } catch (error) {
+        console.warn(
+          "Could not fetch gold price for dashboard; using cost basis",
+          error,
+        )
       }
     }
+    const totalGoldValue =
+      goldPricePerGram != null
+        ? totalGoldWeight * goldPricePerGram
+        : totalGoldInvested
 
     // Stock calculations: quantity is in lots (1 lot = 100 shares)
     // currentPrice from Yahoo Finance is per share, so multiply by 100 for per-lot value
@@ -320,11 +373,12 @@ export async function GET() {
       totalIncome,
       totalExpenses,
       netCashflow,
-      totalGoldValue: totalGoldInvested,
+      allTimeNetCashflow,
+      totalGoldValue,
       totalGoldWeight,
       totalStockValue,
       stockCount: stocks.length,
-      totalWealth: netCashflow + totalGoldInvested + totalStockValue + totalSavingsValue - totalDebt,
+      totalWealth: allTimeNetCashflow + totalGoldValue + totalStockValue + totalSavingsValue - totalDebt,
       totalDebt,
       loanCount: loans.length,
       totalSavings: totalSavingsValue,

@@ -33,6 +33,18 @@ export async function PATCH(
     if ("error" in parsed) return parsed.error
 
     const { stockId, amount, date, notes } = parsed.data
+
+    // When re-pointing the dividend at a different stock, verify the target
+    // belongs to this user — otherwise a user could link their dividend to
+    // another user's holding, and deleting that holding would cascade-delete
+    // this dividend record (data loss across users).
+    if (stockId !== undefined) {
+      const stock = await prisma.stock.findUnique({ where: { id: stockId } })
+      if (!stock || stock.userId !== session.user.id) {
+        return NextResponse.json({ error: "Stock not found" }, { status: 404 })
+      }
+    }
+
     const data: Record<string, unknown> = {}
     if (stockId !== undefined) data.stockId = stockId
     if (amount !== undefined) data.amount = amount

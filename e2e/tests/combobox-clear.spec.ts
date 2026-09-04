@@ -43,8 +43,10 @@ test.describe("Savings Page — Combobox Clear Button", () => {
     const searchInput = page.getByPlaceholder("Search bank name...")
     await searchInput.fill("My Custom Bank")
 
-    // Click the "Use" option to select custom
-    await page.getByText('Use "My Custom Bank"').click()
+    // Click the "Use" option to select custom. Match the option element
+    // (rendered with typographic quotes from &ldquo;/&rdquo;) instead of the
+    // exact straight-quoted sentence, which the DOM text never contains.
+    await page.getByRole("option").filter({ hasText: "My Custom Bank" }).click()
 
     // The trigger should now show the custom name
     const triggerButton = page.getByRole("combobox")

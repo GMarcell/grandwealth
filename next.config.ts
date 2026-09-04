@@ -50,14 +50,21 @@ const nextConfig: NextConfig = {
           },
           {
             key: "Content-Security-Policy",
+            // 'unsafe-eval' is only needed by Next's dev tooling (fast refresh);
+            // production bundles never eval, so drop it to harden the policy.
+            // 'unsafe-inline' scripts/styles must stay unless nonces are added
+            // to the Next runtime scripts.
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              process.env.NODE_ENV === "production"
+                ? "script-src 'self' 'unsafe-inline'"
+                : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob:",
               "font-src 'self' data:",
               "connect-src 'self' https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://api.groq.com",
               "frame-src 'none'",
+              "frame-ancestors 'none'",
               "object-src 'none'",
               "base-uri 'self'",
               "form-action 'self'",

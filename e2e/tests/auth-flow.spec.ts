@@ -1,4 +1,11 @@
-import { test, expect } from "@playwright/test"
+import { test, expect, type Page } from "@playwright/test"
+
+// Every dashboard page renders an <h1>; assert against it (scoped with
+// hasText) instead of getByText, which also matches the sidebar nav link and
+// other headings and trips Playwright's strict-mode check.
+function pageHeading(page: Page, label: string) {
+  return page.locator("h1").filter({ hasText: label })
+}
 
 // Unique test user for the unauthenticated flow tests.
 // Date.now() ensures a fresh user for each test run.
@@ -11,8 +18,11 @@ const TEST_USER = {
 // ─── Unauthenticated tests ───────────────────
 
 test.describe("Unauthenticated — Auth Flow", () => {
-  // Override storageState so these tests run without authentication
-  test.use({ storageState: undefined })
+  // Override the project-level storageState with an EXPLICIT empty one.
+  // Passing `undefined` does not reliably clear the saved session (the
+  // authenticated cookie is reused and these tests silently run logged in,
+  // causing redirect assertions to time out).
+  test.use({ storageState: { cookies: [], origins: [] } })
 
   // ── Registration ──────────────────────────
 
@@ -30,7 +40,10 @@ test.describe("Unauthenticated — Auth Flow", () => {
     })
 
     test("shows error for short password", async ({ page }) => {
-      await page.goto("/register")
+      // networkidle gives React time to hydrate; before that the browser's
+      // native minLength validation can swallow the submit without firing the
+      // React onSubmit handler that renders the error.
+      await page.goto("/register", { waitUntil: "networkidle" })
       await page.getByLabel("Name").fill("Test")
       await page.getByLabel("Email").fill("test@example.com")
       await page.getByLabel("Password").fill("12345") // < 6 chars
@@ -98,7 +111,7 @@ test.describe("Unauthenticated — Auth Flow", () => {
       await page.getByRole("button", { name: "Sign In" }).click()
 
       await page.waitForURL("/dashboard", { timeout: 10000 })
-      await expect(page.getByText("Dashboard")).toBeVisible()
+      await expect(pageHeading(page, "Dashboard")).toBeVisible()
     })
   })
 
@@ -152,7 +165,7 @@ test.describe("Unauthenticated — Auth Flow", () => {
       await page.getByRole("button", { name: "Sign In" }).click()
 
       await page.waitForURL("/budgets", { timeout: 10000 })
-      await expect(page.getByText("Budgets")).toBeVisible()
+      await expect(pageHeading(page, "Budgets")).toBeVisible()
     })
   })
 })
@@ -164,42 +177,42 @@ test.describe("Authenticated — Dashboard access", () => {
 
   test("dashboard loads for authenticated user", async ({ page }) => {
     await page.goto("/dashboard")
-    await expect(page.getByText("Dashboard")).toBeVisible({ timeout: 10000 })
+    await expect(pageHeading(page, "Dashboard")).toBeVisible({ timeout: 10000 })
   })
 
   test("settings page loads for authenticated user", async ({ page }) => {
     await page.goto("/settings")
-    await expect(page.getByText("Settings")).toBeVisible({ timeout: 10000 })
+    await expect(pageHeading(page, "Settings")).toBeVisible({ timeout: 10000 })
   })
 
   test("transactions page loads for authenticated user", async ({ page }) => {
     await page.goto("/transactions")
-    await expect(page.getByText("Transactions")).toBeVisible()
+    await expect(pageHeading(page, "Transactions")).toBeVisible()
   })
 
   test("gold page loads for authenticated user", async ({ page }) => {
     await page.goto("/gold")
-    await expect(page.getByText("Gold")).toBeVisible()
+    await expect(pageHeading(page, "Gold")).toBeVisible()
   })
 
   test("stocks page loads for authenticated user", async ({ page }) => {
     await page.goto("/stocks")
-    await expect(page.getByText("Stocks")).toBeVisible()
+    await expect(pageHeading(page, "Stocks")).toBeVisible()
   })
 
   test("recurring page loads for authenticated user", async ({ page }) => {
     await page.goto("/recurring")
-    await expect(page.getByText("Recurring")).toBeVisible()
+    await expect(pageHeading(page, "Recurring")).toBeVisible()
   })
 
   test("reports page loads for authenticated user", async ({ page }) => {
     await page.goto("/reports")
-    await expect(page.getByText("Reports")).toBeVisible()
+    await expect(pageHeading(page, "Reports")).toBeVisible()
   })
 
   test("budgets page loads for authenticated user", async ({ page }) => {
     await page.goto("/budgets")
-    await expect(page.getByText("Budgets")).toBeVisible()
+    await expect(pageHeading(page, "Budgets")).toBeVisible()
   })
 
   test("authenticated API returns dashboard data", async ({ request }) => {
