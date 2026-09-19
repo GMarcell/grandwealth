@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { requireProAccess } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { updateGoldSchema, safeParseBody } from "@/lib/validation"
 import { validateGoldChange } from "@/lib/gold"
@@ -12,6 +13,9 @@ export async function PATCH(
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const proAccess = await requireProAccess(session.user.id)
+  if (proAccess instanceof NextResponse) return proAccess
 
   const { id } = await params
 
@@ -95,6 +99,9 @@ export async function DELETE(
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const proAccess = await requireProAccess(session.user.id)
+  if (proAccess instanceof NextResponse) return proAccess
 
   const { id } = await params
 

@@ -8,6 +8,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Plan {
+  FREE
+  PRO
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
 model User {
   id            String        @id @default(cuid())
   name          String?
@@ -15,6 +32,20 @@ model User {
   emailVerified DateTime?
   image         String?
   password      String?
+  role          Role          @default(USER)
+  plan          Plan          @default(FREE)
+  // Subscription state — only meaningful when plan is PRO. Admins manage
+  // these fields manually today; the shape mirrors a typical billing
+  // provider (status + period end) so an online gateway can be wired in
+  // later without another migration.
+  subscriptionStatus SubscriptionStatus?
+  currentPeriodEnd   DateTime?
+  // True while Pro access comes from the automatic trial granted at
+  // registration. Cleared when an admin grants Pro manually or when the
+  // trial lapses (the account is swept back to FREE) — paid subscriptions
+  // are never trials. Trials don't count toward MRR.
+  isTrial       Boolean       @default(false)
+  suspended     Boolean       @default(false)
   budgetStartDay Int           @default(1)
   transactions         Transaction[]
   goldDeposits         GoldDeposit[]

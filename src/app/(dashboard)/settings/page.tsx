@@ -57,6 +57,7 @@ import { RULE_TYPE_ORDER, RULE_TYPE_CONFIGS } from "@/lib/rule-type"
 import { CHART_COLORS } from "@/lib/chart-colors"
 import { FormError } from "@/components/ui/form-error"
 import { toast } from "sonner"
+import { SubscriptionCard } from "@/components/settings/subscription-card"
 
 interface Category {
   id: string
@@ -326,6 +327,9 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Plan & Subscription */}
+      <SubscriptionCard />
 
       {/* Budget Cycle */}
       <Card>

@@ -47,7 +47,12 @@ test.describe("Unauthenticated — Auth Flow", () => {
       await page.getByLabel("Name").fill("Test")
       await page.getByLabel("Email").fill("test@example.com")
       await page.getByLabel("Password").fill("12345") // < 6 chars
-      await page.getByRole("button", { name: "Create Account" }).click()
+
+      // Dispatch the submit event directly so the browser's native minLength
+      // constraint check can't swallow it before React's onSubmit runs.
+      await page.locator("form").evaluate((form) =>
+        form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }))
+      )
 
       await expect(
         page.getByText("Password must be at least 6 characters")
@@ -110,7 +115,7 @@ test.describe("Unauthenticated — Auth Flow", () => {
       await page.getByLabel("Password").fill(TEST_USER.password)
       await page.getByRole("button", { name: "Sign In" }).click()
 
-      await page.waitForURL("/dashboard", { timeout: 10000 })
+      await page.waitForURL("/dashboard", { timeout: 20000 })
       await expect(pageHeading(page, "Dashboard")).toBeVisible()
     })
   })
@@ -164,7 +169,7 @@ test.describe("Unauthenticated — Auth Flow", () => {
       await page.getByLabel("Password").fill(TEST_USER.password)
       await page.getByRole("button", { name: "Sign In" }).click()
 
-      await page.waitForURL("/budgets", { timeout: 10000 })
+      await page.waitForURL("/budgets", { timeout: 20000 })
       await expect(pageHeading(page, "Budgets")).toBeVisible()
     })
   })

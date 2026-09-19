@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { requireProAccess } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { createDividendSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
@@ -9,6 +10,9 @@ export async function GET(req: Request) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const proAccess = await requireProAccess(session.user.id)
+  if (proAccess instanceof NextResponse) return proAccess
 
   const url = new URL(req.url)
   const stockId = url.searchParams.get("stockId")
@@ -44,6 +48,9 @@ export async function POST(req: Request) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const proAccess = await requireProAccess(session.user.id)
+  if (proAccess instanceof NextResponse) return proAccess
 
   const limiter = await rateLimit(`dividends:${session.user.id}`, {
     limit: 30,

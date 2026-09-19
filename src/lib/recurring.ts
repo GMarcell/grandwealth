@@ -33,8 +33,23 @@ export interface ApplyRecurringResult {
 export async function applyDueRecurringTransactions(
   now: Date = new Date(),
 ): Promise<ApplyRecurringResult> {
+  // Recurring automation is a Pro feature — skip schedules whose owner is no
+  // longer entitled (free, lapsed, or suspended) so ex-subscribers can't keep
+  // materializing transactions.
   const due = await prisma.recurringTransaction.findMany({
-    where: { active: true, nextDate: { lte: now } },
+    where: {
+      active: true,
+      nextDate: { lte: now },
+      user: {
+        plan: "PRO",
+        subscriptionStatus: "ACTIVE",
+        suspended: false,
+        OR: [
+          { currentPeriodEnd: null },
+          { currentPeriodEnd: { gt: now } },
+        ],
+      },
+    },
   })
 
   let created = 0

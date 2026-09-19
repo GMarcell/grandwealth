@@ -72,12 +72,12 @@ describe("POST /api/auth/register — email normalization", () => {
     )
 
     expect(res.status).toBe(200)
-    expect(mockCreate).toHaveBeenCalledWith({
-      data: {
-        name: "John",
-        email: "user@example.com",
-        password: "hashed-password",
-      },
+    expect(mockCreate).toHaveBeenCalledTimes(1)
+    const data = mockCreate.mock.calls[0][0].data
+    expect(data).toMatchObject({
+      name: "John",
+      email: "user@example.com",
+      password: "hashed-password",
     })
   })
 
@@ -96,5 +96,47 @@ describe("POST /api/auth/register — email normalization", () => {
       where: { email: "user@example.com" },
     })
     expect(mockCreate).not.toHaveBeenCalled()
+  })
+})
+
+describe("POST /api/auth/register — Pro trial grant", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setupMocks()
+    delete process.env.ADMIN_EMAILS
+  })
+
+  it("grants new users an active 14-day Pro trial", async () => {
+    const res = await POST(
+      makeRequest({ email: "user@example.com", password: "secure123" })
+    )
+
+    expect(res.status).toBe(200)
+    const data = mockCreate.mock.calls[0][0].data
+    expect(data).toMatchObject({
+      email: "user@example.com",
+      plan: "PRO",
+      subscriptionStatus: "ACTIVE",
+      isTrial: true,
+    })
+    const trialEnd = data.currentPeriodEnd as Date
+    const expectedEnd = Date.now() + 14 * 24 * 60 * 60 * 1000
+    expect(trialEnd.getTime()).toBeGreaterThan(expectedEnd - 60_000)
+    expect(trialEnd.getTime()).toBeLessThan(expectedEnd + 60_000)
+  })
+
+  it("does not grant a trial to bootstrap admins", async () => {
+    process.env.ADMIN_EMAILS = "boss@example.com"
+
+    const res = await POST(
+      makeRequest({ email: "boss@example.com", password: "secure123" })
+    )
+
+    expect(res.status).toBe(200)
+    const data = mockCreate.mock.calls[0][0].data
+    expect(data).toMatchObject({ email: "boss@example.com", role: "ADMIN" })
+    // Admins don't need a trial — schema defaults (FREE plan, no subscription).
+    expect(data.plan).toBeUndefined()
+    expect(data.isTrial).toBeUndefined()
   })
 })

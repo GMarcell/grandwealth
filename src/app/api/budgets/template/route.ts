@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { requireProAccess } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { budgetTemplateSchema, safeParseBody } from "@/lib/validation"
 import { buildBudgetTemplate } from "@/lib/budget-template"
@@ -18,6 +19,9 @@ export async function POST(req: Request) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
+
+  const proAccess = await requireProAccess(session.user.id)
+  if (proAccess instanceof NextResponse) return proAccess
 
   const limiter = await rateLimit(`budget-template:${session.user.id}`, {
     limit: 10,

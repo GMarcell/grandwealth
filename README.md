@@ -57,6 +57,7 @@ GrandWealth is a full-stack personal finance dashboard built with **Next.js 16**
 
 ### ⚙️ Settings
 - **Account Info** — Displays user name and email from the session
+- **Plan & Subscription** — Live plan/status from the database, including trial countdown and renewal CTA
 - **Budget Cycle** — Configure which day of the month your budget period starts (1-28). All budget calculations respect this setting
 - **Theme Toggle** — Light / Dark / System mode with persistent preference
 - **Custom Categories** — Create, view, and delete custom income/expense categories beyond the predefined set
@@ -69,6 +70,56 @@ GrandWealth is a full-stack personal finance dashboard built with **Next.js 16**
 - **Hover states & transitions** — Smooth animations, hover-reveal action buttons, micro-interactions throughout
 - **Toast notifications** — Success/error/warning toasts via `sonner`
 - **Custom scrollbar** — Styled to match the theme
+
+---
+
+## 💳 Subscriptions & Admin
+
+GrandWealth runs a **Free + Pro subscription** model. The dashboard and
+Transactions are free; Pro unlocks budgets, gold/stock tracking, recurring
+automation, savings/goals/debts, reports, and AI analysis. Every entitlement
+decision is checked against the database (not the session JWT), so admin
+changes take effect immediately.
+
+**Per-user fields** (on the `User` model):
+
+| Field                 | Meaning                                                       |
+| --------------------- | ------------------------------------------------------------- |
+| `plan`                | `FREE` or `PRO`                                               |
+| `subscriptionStatus`  | `ACTIVE` / `PAST_DUE` / `CANCELED` / `EXPIRED` (Pro only)     |
+| `currentPeriodEnd`    | When Pro access lapses (optional; empty = no end date)        |
+| `isTrial`             | Pro access from the automatic trial (excluded from MRR)       |
+| `role`                | `USER` or `ADMIN` — admins always have full access            |
+| `suspended`           | Blocked account (can’t sign in; open sessions land on /suspended) |
+
+**14-day free trial** — every new non-admin registration gets an active
+14-day Pro trial so they can experience the paid modules. When it lapses the
+account loses Pro access immediately; the sweep in `src/lib/trial.ts` (run by
+the cron endpoints and the admin/subscription endpoints) resets lapsed trials
+to FREE so listings and MRR stay truthful.
+
+**Subscriptions are admin-managed** (no online billing yet). Bootstrap the
+first administrator with the `ADMIN_EMAILS` env var — accounts with those
+emails register and sign in as admins:
+
+```env
+ADMIN_EMAILS="you@example.com"
+```
+
+Admins then manage everything from **/admin** (sidebar → Admin):
+
+- Overview cards: total users, **paying** Pro subscribers, accounts on trial,
+  potential MRR (paying × Rp 39.000/month), suspended accounts
+- Search/filter the user list (name, email, plan, status, role, suspension)
+- Grant or revoke Pro, set subscription status + period end, and mark grants
+  as paid or as free trials
+- Promote/demote admins, suspend/unsuspend, or permanently delete accounts
+  (self-demotion, self-suspension, and deleting the last admin are blocked)
+
+**Enforcement:** Pro module layouts call `requirePro()` and Pro API routes call
+`requireProAccess()`; free users are redirected to `/upgrade`, suspended
+accounts to `/suspended`. Background crons (AI analysis, price updates,
+recurring automation) only run for entitled Pro users.
 
 ---
 
@@ -219,6 +270,7 @@ NEXTAUTH_URL="http://localhost:3000"
 | `NEXTAUTH_SECRET` | Random string used to encrypt JWT tokens (run `openssl rand -hex 32` to generate) |
 | `NEXTAUTH_URL`    | Full URL of your app (local: `http://localhost:3000`) |
 | `CRON_SECRET`     | Secret that authorizes the cron endpoints (update-prices, apply-recurring, monthly-analysis). Required — the endpoints fail closed (HTTP 500) without it |
+| `ADMIN_EMAILS`    | Comma-separated emails granted the ADMIN role at registration/sign-in — bootstraps the first admin, who manages subscriptions from /admin |
 
 ### 3. Database Setup
 
@@ -267,7 +319,7 @@ The database uses **PostgreSQL** with **Prisma ORM**. Key models:
 
 | Model                  | Description                                             |
 | ---------------------- | ------------------------------------------------------- |
-| **User**               | User accounts with email/password auth + `budgetStartDay` setting |
+| **User**               | User accounts with email/password auth + `budgetStartDay` setting, plus role/plan/subscription fields (`plan`, `subscriptionStatus`, `currentPeriodEnd`, `isTrial`, `role`, `suspended`) for the Free+Pro model |
 | **Account**            | NextAuth account linking (for future OAuth)              |
 | **Session**            | NextAuth sessions (JWT strategy currently used)          |
 | **VerificationToken**  | NextAuth verification tokens                             |

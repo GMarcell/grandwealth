@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { fetchStockPrices } from "@/lib/prices"
+import { expireLapsedTrials } from "@/lib/trial"
 
 /**
  * Cron endpoint to update stock prices for ALL users.
@@ -41,9 +42,27 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Get unique stock symbols across all users
+    const now = new Date()
+
+    // Housekeeping: end any lapsed 14-day trials before computing who to
+    // refresh prices for.
+    await expireLapsedTrials(now)
+
+    // Stock tracking is a Pro feature — only refresh prices for users with an
+    // active subscription (ex-subscribers' prices freeze until they renew).
     const stocks = await prisma.stock.findMany({
-      select: { id: true, symbol: true, userId: true },
+      where: {
+        user: {
+          plan: "PRO",
+          subscriptionStatus: "ACTIVE",
+          suspended: false,
+          OR: [
+            { currentPeriodEnd: null },
+            { currentPeriodEnd: { gt: now } },
+          ],
+        },
+      },
+      select: { id: true, symbol: true },
     })
 
     if (stocks.length === 0) {
@@ -54,7 +73,6 @@ export async function GET(request: Request) {
     const prices = await fetchStockPrices(symbols)
 
     let updatedCount = 0
-    const now = new Date()
 
     for (const stock of stocks) {
       const price = prices.get(stock.symbol)

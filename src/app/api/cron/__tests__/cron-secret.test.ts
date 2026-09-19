@@ -5,6 +5,7 @@ import { describe, it, expect, vi, afterEach } from "vitest"
 const mockStockFindMany = vi.hoisted(() => vi.fn())
 const mockStockUpdate = vi.hoisted(() => vi.fn())
 const mockUserFindMany = vi.hoisted(() => vi.fn())
+const mockUserUpdateMany = vi.hoisted(() => vi.fn())
 const mockFetchStockPrices = vi.hoisted(() => vi.fn())
 const mockApplyDue = vi.hoisted(() => vi.fn())
 const mockGenerateAnalysis = vi.hoisted(() => vi.fn())
@@ -12,7 +13,7 @@ const mockGenerateAnalysis = vi.hoisted(() => vi.fn())
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     stock: { findMany: mockStockFindMany, update: mockStockUpdate },
-    user: { findMany: mockUserFindMany },
+    user: { findMany: mockUserFindMany, updateMany: mockUserUpdateMany },
   },
 }))
 
@@ -87,10 +88,12 @@ describe("cron endpoints — CRON_SECRET fail-closed", () => {
 
   it("update-prices proceeds with a valid secret", async () => {
     process.env.CRON_SECRET = SECRET
+    mockUserUpdateMany.mockResolvedValue({ count: 0 }) // trial sweep
     mockStockFindMany.mockResolvedValue([])
 
     const res = await updatePricesGET(makeRequest(SECRET))
     expect(res.status).toBe(200)
+    expect(mockUserUpdateMany).toHaveBeenCalled()
     expect(mockStockFindMany).toHaveBeenCalled()
   })
 

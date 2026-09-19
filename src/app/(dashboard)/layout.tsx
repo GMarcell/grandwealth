@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { requireAuth } from "@/lib/auth-guard"
+import { requireAccount } from "@/lib/auth-guard"
 import { DashboardLayout } from "@/components/layout/dashboard-layout"
 
 export const metadata: Metadata = {
@@ -21,10 +21,10 @@ export default async function Layout({ children }: { children: React.ReactNode }
   // Defense-in-depth: ensure the user is authenticated even if middleware
   // is bypassed (e.g. a future route restructure changes the matcher pattern).
   // Middleware handles this first with proper callbackUrl redirect, but this
-  // guarantees protection at the layout level for ALL dashboard pages:
-  // /dashboard, /transactions, /budgets, /gold, /stocks, /recurring,
-  // /reports, /settings, /savings, /analysis.
-  await requireAuth()
+  // guarantees protection at the layout level for ALL dashboard pages.
+  // requireAccount reads the database, so admin changes (suspension, deletion)
+  // take effect immediately; suspended accounts are sent to /suspended.
+  await requireAccount()
 
   return <DashboardLayout>{children}</DashboardLayout>
 }

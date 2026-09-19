@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { parseCsv } from "@/lib/csv"
 
 export async function POST(req: Request) {
   const session = await auth()
@@ -17,14 +18,14 @@ export async function POST(req: Request) {
     }
 
     const text = await file.text()
-    const lines = text.split("\n").map((l) => l.trim()).filter(Boolean)
+    const rows = parseCsv(text)
 
-    if (lines.length < 2) {
+    if (rows.length < 2) {
       return NextResponse.json({ error: "CSV must have a header row and at least one data row" }, { status: 400 })
     }
 
     // Parse header
-    const header = lines[0].split(",").map((h) => h.trim().toLowerCase())
+    const header = rows[0].map((h) => h.trim().toLowerCase())
     const typeIdx = header.indexOf("type")
     const categoryIdx = header.indexOf("category")
     const amountIdx = header.indexOf("amount")
@@ -50,8 +51,8 @@ export async function POST(req: Request) {
 
     const errors: Array<{ line: number; error: string }> = []
 
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(",").map((c) => c.trim())
+    for (let i = 1; i < rows.length; i++) {
+      const cols = rows[i].map((c) => c.trim())
 
       const type = cols[typeIdx]?.toUpperCase() as CsvTransactionType | undefined
       const category = cols[categoryIdx]?.toUpperCase()

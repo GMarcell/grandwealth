@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { generateAnalysisForUserAndMonth } from "@/lib/analysis-generator"
+import { expireLapsedTrials } from "@/lib/trial"
 
 /**
  * Cron endpoint to generate a monthly spending & savings analysis for every user
@@ -47,13 +48,27 @@ export async function GET(request: Request) {
   }
 
   try {
+    // Housekeeping: end any lapsed 14-day trials before computing who to
+    // analyze.
+    await expireLapsedTrials()
+
     // Determine the month to analyze (the month that just ended).
     // The cron runs at 23:30 on the last calendar day of the month.
     const now = new Date()
     const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
 
-    // Get all users
+    // AI analysis is a Pro feature — only generate reports for users with an
+    // active subscription (keeps Groq usage/cost aligned with paying users).
     const users = await prisma.user.findMany({
+      where: {
+        plan: "PRO",
+        subscriptionStatus: "ACTIVE",
+        suspended: false,
+        OR: [
+          { currentPeriodEnd: null },
+          { currentPeriodEnd: { gt: now } },
+        ],
+      },
       select: { id: true, name: true, email: true, budgetStartDay: true },
     })
 

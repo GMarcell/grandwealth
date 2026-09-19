@@ -28,6 +28,10 @@ setup("authenticate test user", async ({ page, context }) => {
           name: TEST_USER.name,
           email: TEST_USER.email,
           password: hashedPassword,
+          // E2E suites exercise Pro-only modules (budgets, savings, stocks),
+          // so the test user starts with an active Pro subscription.
+          plan: "PRO",
+          subscriptionStatus: "ACTIVE",
         },
       })
       console.log(`Created test user: ${TEST_USER.email}`)

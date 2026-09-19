@@ -139,6 +139,36 @@ export const createDividendSchema = z.object({
 
 export const updateDividendSchema = createDividendSchema.partial()
 
+// ─── Admin (user management) ──────────────────────
+export const adminUpdateUserSchema = z
+  .object({
+    role: z.enum(["USER", "ADMIN"]).optional(),
+    plan: z.enum(["FREE", "PRO"]).optional(),
+    subscriptionStatus: z
+      .enum(["ACTIVE", "PAST_DUE", "CANCELED", "EXPIRED"])
+      .nullable()
+      .optional(),
+    // Accept an ISO date string ("2026-10-31" or full datetime) or null/"".
+    currentPeriodEnd: z.string().optional().nullable(),
+    // Marks a Pro grant as a free trial (excluded from MRR). Defaults to
+    // false whenever the plan/subscription fields are edited.
+    isTrial: z.boolean().optional(),
+    suspended: z.boolean().optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "No fields to update",
+  })
+
+export const adminUsersQuerySchema = z.object({
+  search: z.string().trim().max(100).optional(),
+  role: z.enum(["USER", "ADMIN"]).optional(),
+  plan: z.enum(["FREE", "PRO"]).optional(),
+  subscriptionStatus: z.enum(["ACTIVE", "PAST_DUE", "CANCELED", "EXPIRED"]).optional(),
+  suspended: z.enum(["true", "false"]).optional(),
+  page: z.coerce.number().int().positive().optional(),
+  pageSize: z.coerce.number().int().min(1).max(100).optional(),
+})
+
 // ─── Password Reset ───────────────────────────────
 export const forgotPasswordSchema = z.object({
   email: z.string().email("Invalid email address"),

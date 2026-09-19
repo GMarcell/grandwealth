@@ -6,11 +6,13 @@ const mockAuth = vi.hoisted(() => vi.fn())
 const mockFindUnique = vi.hoisted(() => vi.fn())
 const mockFindMany = vi.hoisted(() => vi.fn())
 const mockUpdate = vi.hoisted(() => vi.fn())
+const mockFindUser = vi.hoisted(() => vi.fn())
 
 vi.mock("@/lib/auth", () => ({ auth: mockAuth }))
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    user: { findUnique: mockFindUser },
     goldDeposit: {
       findUnique: mockFindUnique,
       findMany: mockFindMany,
@@ -18,6 +20,15 @@ vi.mock("@/lib/prisma", () => ({
     },
   },
 }))
+
+/** Entitled user shape returned by the Pro guard's user lookup. */
+const PRO_USER = {
+  role: "USER",
+  plan: "PRO",
+  subscriptionStatus: "ACTIVE",
+  currentPeriodEnd: null,
+  suspended: false,
+}
 
 // Import after mocks
 const { PATCH } = await import("../route")
@@ -64,6 +75,7 @@ function makeRequest(id: string, body: unknown): Request {
 
 function setupMocks(existing: DepositFixture, others: DepositFixture[]) {
   mockAuth.mockResolvedValue({ user: { id: "user-1" } })
+  mockFindUser.mockResolvedValue(PRO_USER)
   mockFindUnique.mockResolvedValue({ ...existing, userId: "user-1" })
   mockFindMany.mockResolvedValue(others)
   mockUpdate.mockImplementation(
@@ -89,8 +101,30 @@ describe("PATCH /api/gold/[id] — auth & ownership", () => {
     expect(mockUpdate).not.toHaveBeenCalled()
   })
 
+  it("returns 403 when the user is on the Free plan (gold is Pro-only)", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } })
+    mockFindUser.mockResolvedValue({
+      role: "USER",
+      plan: "FREE",
+      subscriptionStatus: null,
+      currentPeriodEnd: null,
+      suspended: false,
+    })
+    mockFindUnique.mockResolvedValue({ ...SELL_4, userId: "user-1" })
+
+    const res = await PATCH(makeRequest("sell-4", { notes: "nope" }), {
+      params: Promise.resolve({ id: "sell-4" }),
+    })
+    const body = await res.json()
+
+    expect(res.status).toBe(403)
+    expect(body.error).toBe("Pro subscription required")
+    expect(mockUpdate).not.toHaveBeenCalled()
+  })
+
   it("returns 404 when the record is not found or not owned", async () => {
     mockAuth.mockResolvedValue({ user: { id: "user-1" } })
+    mockFindUser.mockResolvedValue(PRO_USER)
     mockFindUnique.mockResolvedValue(null)
 
     const res = await PATCH(makeRequest("sell-4", { weightGram: 5 }), {

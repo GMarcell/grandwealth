@@ -1,5 +1,20 @@
 import { test, expect } from "@playwright/test"
 
+/**
+ * The savings/stocks dialogs each contain one combobox trigger (a styled
+ * Button with role="combobox"). Its accessible name comes from the form
+ * <Label htmlFor> association ("Account Name"/"Symbol") — NOT from the
+ * placeholder text shown inside it — so locators scope to the dialog's
+ * combobox role and assert on visible text.
+ *
+ * Options are selected with the keyboard (Enter on the highlighted item):
+ * clicking an option in the instant after the popover opens races its open
+ * animation and the selection is silently lost, which made these tests flaky.
+ */
+function comboboxTrigger(page: import("@playwright/test").Page) {
+  return page.getByRole("dialog").getByRole("combobox").first()
+}
+
 test.describe("Savings Page — Combobox Clear Button", () => {
   test("shows X clear button when a popular bank is selected", async ({ page }) => {
     await page.goto("/savings")
@@ -8,18 +23,14 @@ test.describe("Savings Page — Combobox Clear Button", () => {
     await page.getByRole("button", { name: "Record Savings" }).click()
     await expect(page.getByText("Record Savings Transaction")).toBeVisible()
 
-    // Open the combobox
-    const comboboxTrigger = page.getByRole("combobox", { name: "Select or type bank name..." })
-    await comboboxTrigger.click()
-
-    // Select "BCA" from the dropdown
-    await page.getByRole("option", { name: "BCA" }).click()
+    // Open the combobox; "BCA" is the first (highlighted) option, so Enter selects it.
+    const triggerButton = comboboxTrigger(page)
+    await triggerButton.click()
+    await expect(page.getByRole("option", { name: "BCA", exact: true })).toBeVisible()
+    await page.keyboard.press("Enter")
 
     // The X clear button should now be visible on the trigger
-    const triggerButton = page.getByRole("combobox")
     await expect(triggerButton).toContainText("BCA")
-
-    // Click the X to clear
     const xButton = triggerButton.locator("[role=button]")
     await expect(xButton).toBeVisible()
     await xButton.click()
@@ -35,21 +46,18 @@ test.describe("Savings Page — Combobox Clear Button", () => {
     await page.getByRole("button", { name: "Record Savings" }).click()
     await expect(page.getByText("Record Savings Transaction")).toBeVisible()
 
-    // Open the combobox
-    const comboboxTrigger = page.getByRole("combobox", { name: "Select or type bank name..." })
-    await comboboxTrigger.click()
-
-    // Type a custom bank name in the search input
+    // Open the combobox and type a custom bank name in the search input
+    const triggerButton = comboboxTrigger(page)
+    await triggerButton.click()
     const searchInput = page.getByPlaceholder("Search bank name...")
     await searchInput.fill("My Custom Bank")
 
-    // Click the "Use" option to select custom. Match the option element
-    // (rendered with typographic quotes from &ldquo;/&rdquo;) instead of the
-    // exact straight-quoted sentence, which the DOM text never contains.
-    await page.getByRole("option").filter({ hasText: "My Custom Bank" }).click()
+    // The only remaining option is the custom one; Enter selects it.
+    const customOption = page.getByRole("option").filter({ hasText: "My Custom Bank" })
+    await expect(customOption).toBeVisible()
+    await page.keyboard.press("Enter")
 
     // The trigger should now show the custom name
-    const triggerButton = page.getByRole("combobox")
     await expect(triggerButton).toContainText("My Custom Bank")
 
     // The X clear button should be visible
@@ -68,11 +76,13 @@ test.describe("Savings Page — Combobox Clear Button", () => {
 
     // Open the add dialog and select a bank
     await page.getByRole("button", { name: "Record Savings" }).click()
-    await page.getByRole("combobox", { name: "Select or type bank name..." }).click()
-    await page.getByRole("option", { name: "BCA" }).click()
+    const triggerButton = comboboxTrigger(page)
+    await triggerButton.click()
+    await expect(page.getByRole("option", { name: "BCA", exact: true })).toBeVisible()
+    await page.keyboard.press("Enter")
 
     // Click the X to clear — the popover should NOT open
-    const triggerButton = page.getByRole("combobox")
+    await expect(triggerButton).toContainText("BCA")
     const xButton = triggerButton.locator("[role=button]")
     await xButton.click()
 
@@ -87,23 +97,22 @@ test.describe("Stocks Page — Combobox Clear Button", () => {
 
     // Open the add dialog
     await page.getByRole("button", { name: "Add Stock" }).click()
-    await expect(page.getByText("Add Stock")).toBeVisible()
+    const dialog = page.getByRole("dialog")
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole("heading", { name: "Add Stock" })).toBeVisible()
 
-    // Open the symbol combobox
-    const comboboxTrigger = page.getByRole("combobox", { name: "Search stock symbol..." })
-    await comboboxTrigger.click()
-
-    // Type to search for a stock (need at least 2 chars)
+    // Open the symbol combobox and search for a stock
+    const triggerButton = comboboxTrigger(page)
+    await triggerButton.click()
     const searchInput = page.getByPlaceholder("Type company name or symbol...")
     await searchInput.fill("BBCA")
 
-    // Wait for search results and select whatever the first result is
+    // Wait for results, then confirm the highlighted one with Enter.
     const option = page.getByRole("option").first()
     await expect(option).toBeVisible({ timeout: 10000 })
-    await option.click()
+    await page.keyboard.press("Enter")
 
     // The trigger should no longer show the placeholder
-    const triggerButton = page.getByRole("combobox")
     await expect(triggerButton).not.toContainText("Search stock symbol...")
 
     // The X clear button should be visible
@@ -122,17 +131,21 @@ test.describe("Stocks Page — Combobox Clear Button", () => {
 
     // Open the add dialog
     await page.getByRole("button", { name: "Add Stock" }).click()
-    await page.getByRole("combobox", { name: "Search stock symbol..." }).click()
+    const dialog = page.getByRole("dialog")
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole("heading", { name: "Add Stock" })).toBeVisible()
+    const triggerButton = comboboxTrigger(page)
+    await triggerButton.click()
 
     // Search and select a stock
     const searchInput = page.getByPlaceholder("Type company name or symbol...")
     await searchInput.fill("BBCA")
     const option = page.getByRole("option").first()
     await expect(option).toBeVisible({ timeout: 10000 })
-    await option.click()
+    await page.keyboard.press("Enter")
 
     // Click the X to clear — the popover should NOT open
-    const triggerButton = page.getByRole("combobox")
+    await expect(triggerButton).not.toContainText("Search stock symbol...")
     const xButton = triggerButton.locator("[role=button]")
     await xButton.click()
 

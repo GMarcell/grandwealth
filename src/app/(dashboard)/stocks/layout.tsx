@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { requirePro } from "@/lib/auth-guard"
 
 export const metadata: Metadata = {
   title: "Stocks",
@@ -6,10 +7,11 @@ export const metadata: Metadata = {
     "Track your stock portfolio with real-time prices. Monitor gains, losses, and dividend income from your investments.",
 }
 
-export default function StocksLayout({
+export default async function StocksLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  await requirePro()
   return children
 }

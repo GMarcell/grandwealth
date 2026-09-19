@@ -24,6 +24,7 @@ import {
   Landmark,
   Target,
   CreditCard,
+  Shield,
 } from "lucide-react"
 import { useTheme } from "next-themes"
 import { signOut, useSession } from "next-auth/react"
@@ -37,19 +38,19 @@ import {
 import { Badge } from "@/components/ui/badge"
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
-  { href: "/recurring", label: "Recurring", icon: Repeat },
-  { href: "/reports", label: "Reports", icon: BarChart3 },
-  { href: "/analysis", label: "AI Analysis", icon: Brain },
-  { href: "/savings", label: "Savings", icon: Landmark },
-  { href: "/goals", label: "Goals", icon: Target },
-  { href: "/debts", label: "Debts", icon: CreditCard },
-  { href: "/gold", label: "Gold", icon: CircleDollarSign },
-  { href: "/stocks", label: "Stocks", icon: TrendingUp },
-  { href: "/budgets", label: "Budgets", icon: PiggyBank },
-  { href: "/settings", label: "Settings", icon: Settings },
-]
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
+    { href: "/recurring", label: "Recurring", icon: Repeat },
+    { href: "/reports", label: "Reports", icon: BarChart3 },
+    { href: "/analysis", label: "AI Analysis", icon: Brain },
+    { href: "/savings", label: "Savings", icon: Landmark },
+    { href: "/goals", label: "Goals", icon: Target },
+    { href: "/debts", label: "Debts", icon: CreditCard },
+    { href: "/gold", label: "Gold", icon: CircleDollarSign },
+    { href: "/stocks", label: "Stocks", icon: TrendingUp },
+    { href: "/budgets", label: "Budgets", icon: PiggyBank },
+    { href: "/settings", label: "Settings", icon: Settings },
+  ]
 
 interface SidebarProps {
   isMobileOpen: boolean
@@ -60,6 +61,13 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
   const pathname = usePathname()
   const { theme, setTheme } = useTheme()
   const { data: session } = useSession()
+  const isAdmin = session?.user?.role === "ADMIN"
+
+  // Admin panel entry — appended to the nav only for admins. The /admin
+  // layout additionally enforces the role server-side.
+  const items = isAdmin
+    ? [...navItems, { href: "/admin", label: "Admin", icon: Shield }]
+    : navItems
 
   // Fetch budget alert count for sidebar badge (lightweight endpoint)
   const { data: budgetSummary } = useQuery<{ overBudget: number }>({
@@ -76,7 +84,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
   const overBudgetCount = budgetSummary?.overBudget ?? 0
 
   const renderNavItems = (onClick?: () => void) =>
-    navItems.map((item) => {
+    items.map((item) => {
       const isActive = pathname.startsWith(item.href)
       return (
         <Link

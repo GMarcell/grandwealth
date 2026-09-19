@@ -8,11 +8,13 @@ const mockCount = vi.hoisted(() => vi.fn())
 const mockCreate = vi.hoisted(() => vi.fn())
 const mockRateLimit = vi.hoisted(() => vi.fn())
 const mockGetRateLimitKey = vi.hoisted(() => vi.fn())
+const mockFindUser = vi.hoisted(() => vi.fn())
 
 vi.mock("@/lib/auth", () => ({ auth: mockAuth }))
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    user: { findUnique: mockFindUser },
     goldDeposit: {
       findMany: mockFindMany,
       count: mockCount,
@@ -20,6 +22,15 @@ vi.mock("@/lib/prisma", () => ({
     },
   },
 }))
+
+/** Entitled user shape returned by the Pro guard's user lookup. */
+const PRO_USER = {
+  role: "USER",
+  plan: "PRO",
+  subscriptionStatus: "ACTIVE",
+  currentPeriodEnd: null,
+  suspended: false,
+}
 
 vi.mock("@/lib/rate-limit", () => ({
   rateLimit: mockRateLimit,
@@ -51,6 +62,7 @@ const deposit = (type: "BUY" | "SELL", weightGram: number) => ({
 
 function setupMocks() {
   mockAuth.mockResolvedValue({ user: { id: "user-1" } })
+  mockFindUser.mockResolvedValue(PRO_USER)
   mockRateLimit.mockResolvedValue({ allowed: true })
   mockCreate.mockImplementation(async ({ data }: { data: Record<string, unknown> }) =>
     deposit(data.type as "BUY" | "SELL", data.weightGram as number)
@@ -67,6 +79,24 @@ describe("POST /api/gold — auth & rate limit", () => {
 
     const res = await POST(makeRequest({ type: "BUY", weightGram: 1, pricePerGram: 1_000_000 }))
     expect(res.status).toBe(401)
+    expect(mockCreate).not.toHaveBeenCalled()
+  })
+
+  it("returns 403 when the user is on the Free plan (gold is Pro-only)", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } })
+    mockFindUser.mockResolvedValue({
+      role: "USER",
+      plan: "FREE",
+      subscriptionStatus: null,
+      currentPeriodEnd: null,
+      suspended: false,
+    })
+
+    const res = await POST(makeRequest({ type: "BUY", weightGram: 1, pricePerGram: 1_000_000 }))
+    const body = await res.json()
+
+    expect(res.status).toBe(403)
+    expect(body.error).toBe("Pro subscription required")
     expect(mockCreate).not.toHaveBeenCalled()
   })
 })
@@ -131,6 +161,7 @@ describe("GET /api/gold — summary ignores filters", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockAuth.mockResolvedValue({ user: { id: "user-1" } })
+    mockFindUser.mockResolvedValue(PRO_USER)
     mockRateLimit.mockResolvedValue({ allowed: true })
     mockGetRateLimitKey.mockReturnValue("ip-1")
   })

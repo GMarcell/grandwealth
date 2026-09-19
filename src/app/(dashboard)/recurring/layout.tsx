@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { requirePro } from "@/lib/auth-guard"
 
 export const metadata: Metadata = {
   title: "Recurring Transactions",
@@ -6,10 +7,11 @@ export const metadata: Metadata = {
     "Manage your recurring bills, subscriptions, and automated income. Track monthly recurring cash flow.",
 }
 
-export default function RecurringLayout({
+export default async function RecurringLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  await requirePro()
   return children
 }

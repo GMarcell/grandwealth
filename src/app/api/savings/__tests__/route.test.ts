@@ -7,17 +7,28 @@ const mockFindMany = vi.hoisted(() => vi.fn())
 const mockCount = vi.hoisted(() => vi.fn())
 const mockRateLimit = vi.hoisted(() => vi.fn())
 const mockGetRateLimitKey = vi.hoisted(() => vi.fn())
+const mockFindUser = vi.hoisted(() => vi.fn())
 
 vi.mock("@/lib/auth", () => ({ auth: mockAuth }))
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    user: { findUnique: mockFindUser },
     bankSaving: {
       findMany: mockFindMany,
       count: mockCount,
     },
   },
 }))
+
+/** Entitled user shape returned by the Pro guard's user lookup. */
+const PRO_USER = {
+  role: "USER",
+  plan: "PRO",
+  subscriptionStatus: "ACTIVE",
+  currentPeriodEnd: null,
+  suspended: false,
+}
 
 vi.mock("@/lib/rate-limit", () => ({
   rateLimit: mockRateLimit,
@@ -39,12 +50,31 @@ describe("GET /api/savings — auth & rate limit", () => {
     expect(res.status).toBe(401)
     expect(mockFindMany).not.toHaveBeenCalled()
   })
+
+  it("returns 403 when the user is on the Free plan (savings is Pro-only)", async () => {
+    mockAuth.mockResolvedValue({ user: { id: "user-1" } })
+    mockFindUser.mockResolvedValue({
+      role: "USER",
+      plan: "FREE",
+      subscriptionStatus: null,
+      currentPeriodEnd: null,
+      suspended: false,
+    })
+
+    const res = await GET(new Request("http://localhost/api/savings?page=1"))
+    const body = await res.json()
+
+    expect(res.status).toBe(403)
+    expect(body.error).toBe("Pro subscription required")
+    expect(mockFindMany).not.toHaveBeenCalled()
+  })
 })
 
 describe("GET /api/savings — summary ignores search filter", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockAuth.mockResolvedValue({ user: { id: "user-1" } })
+    mockFindUser.mockResolvedValue(PRO_USER)
     mockRateLimit.mockResolvedValue({ allowed: true })
     mockGetRateLimitKey.mockReturnValue("ip-1")
   })

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { escapeCsvField } from "@/lib/csv"
 
 export async function GET() {
   const session = await auth()
@@ -17,9 +18,9 @@ export async function GET() {
     const header = "type,category,amount,description,date"
     const rows = transactions.map((tx) => {
       const date = tx.date.toISOString().split("T")[0]
-      // Escape commas in description
-      const desc = tx.description.includes(",") ? `"${tx.description}"` : tx.description
-      return `${tx.type},${tx.category},${tx.amount},${desc},${date}`
+      return [tx.type, tx.category, tx.amount, tx.description, date]
+        .map(escapeCsvField)
+        .join(",")
     })
 
     const csv = [header, ...rows].join("\n")

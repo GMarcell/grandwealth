@@ -68,29 +68,31 @@ test.describe("Budget Cycle — Settings", () => {
     ).toBeVisible()
   })
 
-  test("changing back to 1st restores calendar mode", async ({ page }) => {
+  test("changing back to 1st restores calendar mode", async ({ page, request }) => {
+    // Baseline: 15th, set via the API so this test is independent of the
+    // order in which earlier tests saved settings.
+    const baseline = await request.patch("/api/user/budget-settings", {
+      data: { budgetStartDay: 15 },
+    })
+    expect(baseline.ok()).toBeTruthy()
+
+    // Verify the UI reflects the 15th cycle, then switch back to 1st through
+    // the UI (selecting a value that differs from the saved one shows Save).
     await page.goto("/settings")
-
-    // First change to 15th
     const selectTrigger = page.getByRole("combobox").first()
-    await selectTrigger.click()
-    await page.getByRole("option", { name: "15th" }).click()
+    await expect(selectTrigger).toContainText("15th")
+    await expect(page.getByText(/Budget months run from the 15th/)).toBeVisible()
 
-    // Save
+    await selectTrigger.click()
+    await page.getByRole("option", { name: "1st", exact: true }).click()
+    await expect(selectTrigger).toContainText("1st")
     await page.getByRole("button", { name: "Save Budget Settings" }).click()
     await expect(page.getByText("Budget settings updated")).toBeVisible({ timeout: 10000 })
 
-    // Change back to 1st
-    await selectTrigger.click()
-    await page.getByRole("option", { name: "1st" }).click()
-
+    // The description reverts to calendar mode.
     await expect(
       page.getByText("Budget months align with calendar months")
     ).toBeVisible()
-
-    // Save again
-    await page.getByRole("button", { name: "Save Budget Settings" }).click()
-    await expect(page.getByText("Budget settings updated")).toBeVisible({ timeout: 10000 })
   })
 })
 
@@ -98,8 +100,8 @@ test.describe("Budget Cycle — Budgets Page", () => {
   test("budgets page loads and shows month selector", async ({ page }) => {
     await page.goto("/budgets")
 
-    // Page title is visible
-    await expect(page.getByText("Budgets")).toBeVisible()
+    // Page title is visible (h1, not the sidebar nav link).
+    await expect(page.locator("h1").filter({ hasText: "Budgets" })).toBeVisible()
     await expect(
       page.getByText("Set monthly spending limits")
     ).toBeVisible()
@@ -121,40 +123,40 @@ test.describe("Budget Cycle — Budgets Page", () => {
     await expect(options.first()).toBeVisible()
   })
 
-  test("month labels reflect budget start day setting", async ({ page }) => {
-    // First set the budget start day to 15th
-    await page.goto("/settings")
-    const selectTrigger = page.getByRole("combobox").first()
-    await selectTrigger.click()
-    await page.getByRole("option", { name: "15th" }).click()
-    await page.getByRole("button", { name: "Save Budget Settings" }).click()
-    await expect(page.getByText("Budget settings updated")).toBeVisible({ timeout: 10000 })
+  test("month labels reflect budget start day setting", async ({ page, request }) => {
+    // Baseline: set the start day to 15th via the API (order-independent) and
+    // verify the UI shows the updated cycle.
+    const baseline = await request.patch("/api/user/budget-settings", {
+      data: { budgetStartDay: 15 },
+    })
+    expect(baseline.ok()).toBeTruthy()
 
-    // Go to budgets page
+    await page.goto("/settings")
+    await expect(page.getByRole("combobox").first()).toContainText("15th")
+    await expect(page.getByText(/Budget months run from the 15th/)).toBeVisible()
+
+    // On the budgets page the month selector still renders for a 15th cycle.
     await page.goto("/budgets")
-
-    // The budget month in the summary card should be visible
-    await expect(page.getByText("Budget")).toBeVisible()
-
-    // Reset settings back to 1st
-    await page.goto("/settings")
-    await page.getByRole("combobox").first().click()
-    await page.getByRole("option", { name: "1st" }).click()
-    await page.getByRole("button", { name: "Save Budget Settings" }).click()
-    await expect(page.getByText("Budget settings updated")).toBeVisible({ timeout: 10000 })
+    await expect(
+      page.locator("h1").filter({ hasText: "Budgets" })
+    ).toBeVisible()
+    await expect(page.getByRole("combobox").first()).toBeVisible()
   })
 
   test("add budget dialog opens", async ({ page }) => {
     await page.goto("/budgets")
 
     // Click "Add Budget" button
-    const addButton = page.getByRole("button", { name: "Add Budget" })
+    const addButton = page.getByRole("button", { name: "Add Budget", exact: true })
     // If button is disabled (no categories without budgets), test dialog via another approach
     if (await addButton.isEnabled()) {
       await addButton.click()
-      await expect(page.getByText("Add Budget")).toBeVisible()
-      await expect(page.getByText("Category")).toBeVisible()
-      await expect(page.getByText("Monthly Budget")).toBeVisible()
+      const dialog = page.getByRole("dialog")
+      await expect(dialog).toBeVisible()
+      // Scope to the dialog so the trigger/submit buttons don't collide.
+      await expect(dialog.getByRole("heading", { name: "Add Budget" })).toBeVisible()
+      await expect(dialog.getByText("Category", { exact: true })).toBeVisible()
+      await expect(dialog.getByText("Monthly Budget (Rp)")).toBeVisible()
     }
   })
 })
