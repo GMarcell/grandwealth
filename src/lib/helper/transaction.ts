@@ -1,12 +1,17 @@
-import { getBudgetMonthKey, getBudgetMonthRange } from "../budget-months";
+import { getBudgetMonthKey } from "../budget-months";
 import { formatIDR } from "../utils";
 
-// Helper to check budget alert level
+// Helper to check budget alert level.
+//
+// `spentByCategory` must be the total already spent per category for the
+// current budget month across ALL matching transactions — not just the page
+// currently rendered. Callers pass the server-side aggregate so the alert
+// never under-counts when a month spans more than one page of transactions.
 export function getBudgetAlert(
   category: string,
   newAmount: number,
   budgets: any[],
-  transactions: any[],
+  spentByCategory: Map<string, number>,
   startDay: number = 1,
 ): { level: "near" | "over" | null; message: string } {
   const monthKey = getBudgetMonthKey(new Date(), startDay);
@@ -16,17 +21,8 @@ export function getBudgetAlert(
   );
   if (!budget) return { level: null, message: "" };
 
-  // Calculate total spent for this category this budget month INCLUDING the new transaction
-  const { start, end } = getBudgetMonthRange(monthKey, startDay);
-
-  let totalSpent = newAmount; // include the new transaction
-  for (const tx of transactions ?? []) {
-    if (tx.type !== "EXPENSE" || tx.category !== category) continue;
-    const txDate = new Date(tx.date);
-    if (txDate >= start && txDate <= end) {
-      totalSpent += tx.amount;
-    }
-  }
+  // Total spent for this category this budget month INCLUDING the new transaction
+  const totalSpent = (spentByCategory.get(category) ?? 0) + newAmount;
 
   const percentUsed = (totalSpent / budget.amount) * 100;
   const remaining = budget.amount - totalSpent;

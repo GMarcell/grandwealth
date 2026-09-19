@@ -130,6 +130,15 @@ describe("generateBudgetMonths", () => {
     expect(months[0]).toBe(currentKey)
   })
 
+  it("starts at the current budget month for a mid-month cycle", () => {
+    const months = generateBudgetMonths(12, 28)
+    expect(months[0]).toBe(getCurrentBudgetMonthKey(28))
+    expect(new Set(months).size).toBe(12)
+    for (let i = 0; i < months.length - 1; i++) {
+      expect(months[i].localeCompare(months[i + 1])).toBeGreaterThan(0)
+    }
+  })
+
   it("returns months in descending order", () => {
     const months = generateBudgetMonths(6, 1)
     for (let i = 0; i < months.length - 1; i++) {
@@ -139,17 +148,65 @@ describe("generateBudgetMonths", () => {
 })
 
 describe("getBudgetMonthLabel", () => {
-  it("returns a human-readable month label", () => {
+  it("returns a calendar month label when startDay is 1", () => {
     expect(getBudgetMonthLabel("2026-07", 1)).toBe("Jul 2026")
     expect(getBudgetMonthLabel("2026-01", 1)).toBe("Jan 2026")
     expect(getBudgetMonthLabel("2026-12", 1)).toBe("Dec 2026")
   })
 
+  it("names a budget month after the calendar month it ends in", () => {
+    // Key "2026-08" with startDay=28 covers 28 Aug – 27 Sep, so it is September.
+    expect(getBudgetMonthLabel("2026-08", 28)).toBe("Sep 2026")
+    expect(getBudgetMonthLabel("2026-07", 28)).toBe("Aug 2026")
+    // Key "2026-07" with startDay=15 covers 15 Jul – 14 Aug, so it is August.
+    expect(getBudgetMonthLabel("2026-07", 15)).toBe("Aug 2026")
+  })
+
+  it("names every start day from 2 to 28 after the ending month", () => {
+    // Any startDay > 1 runs from `startDay` of the key month to `startDay - 1`
+    // of the next, so the label is always the following calendar month.
+    for (let startDay = 2; startDay <= 28; startDay++) {
+      expect(getBudgetMonthLabel("2026-06", startDay)).toBe("Jul 2026")
+      expect(getBudgetMonthLabel("2026-01", startDay)).toBe("Feb 2026")
+    }
+  })
+
+  it("labels a 28th cycle so September covers late August", () => {
+    expect(getBudgetMonthLabel("2026-02", 28)).toBe("Mar 2026")
+    expect(getBudgetMonthLabel("2026-08", 28)).toBe("Sep 2026")
+  })
+
+  it("pads single-digit months and keeps the year", () => {
+    expect(getBudgetMonthLabel("2026-01", 28)).toBe("Feb 2026")
+    expect(getBudgetMonthLabel("2026-09", 15)).toBe("Oct 2026")
+  })
+
+  it("rolls the label into the next year when needed", () => {
+    // 15 Dec – 14 Jan belongs to January of the following year.
+    expect(getBudgetMonthLabel("2026-12", 15)).toBe("Jan 2027")
+    // 28 Dec – 27 Jan also belongs to January.
+    expect(getBudgetMonthLabel("2026-12", 28)).toBe("Jan 2027")
+    expect(getBudgetMonthLabel("2026-11", 15)).toBe("Dec 2026")
+    expect(getBudgetMonthLabel("2027-01", 28)).toBe("Feb 2027")
+  })
+
   it("includes date range when showRange is true and startDay > 1", () => {
     const label = getBudgetMonthLabel("2026-07", 15, true)
-    expect(label).toContain("Jul 2026")
+    expect(label).toContain("Aug 2026")
     expect(label).toContain("15 Jul")
     expect(label).toContain("14 Aug")
+  })
+
+  it("shows the full range for a 28th cycle", () => {
+    expect(getBudgetMonthLabel("2026-08", 28, true)).toBe(
+      "Sep 2026 (28 Aug - 27 Sep 2026)"
+    )
+  })
+
+  it("shows a range that crosses the year boundary", () => {
+    expect(getBudgetMonthLabel("2026-12", 15, true)).toBe(
+      "Jan 2027 (15 Dec - 14 Jan 2027)"
+    )
   })
 
   it("does not show range when startDay is 1 even if showRange is true", () => {

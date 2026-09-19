@@ -66,40 +66,53 @@ export function getBudgetMonthRange(monthKey: string, startDay: number): { start
 }
 
 /**
- * Generate an array of budget month keys going back from the current month.
- * Similar to MONTHS in budgets/page.tsx but using budget month logic.
+ * Generate an array of budget month keys starting from the CURRENT budget month
+ * and going back. The first entry is always `getCurrentBudgetMonthKey(startDay)`
+ * so callers (budgets, analysis, transactions) don't offer a not-yet-started
+ * future budget month at the top of their selectors.
  */
 export function generateBudgetMonths(count: number, startDay: number): string[] {
   const months: string[] = []
-  const now = new Date()
+  let key = getCurrentBudgetMonthKey(startDay)
   for (let i = 0; i < count; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, startDay)
-    months.push(getBudgetMonthKey(d, startDay))
+    months.push(key)
+    key = getPreviousBudgetMonthKey(key, startDay)
   }
   return months
 }
 
 /**
  * Get a human-readable label for a budget month, optionally showing the date range.
+ *
+ * A budget month is named after the calendar month it ENDS in. With a start day
+ * of 28, the period 28 Aug – 27 Sep is labelled "Sep", because the budget month
+ * that starts on the 28th of the previous month belongs to September. With the
+ * default start day of 1 the period is the calendar month itself.
  */
 export function getBudgetMonthLabel(monthKey: string, startDay: number, showRange?: boolean): string {
   const [yearStr, monthStr] = monthKey.split("-")
   const year = parseInt(yearStr)
-  const month = parseInt(monthStr) - 1
+  const month = parseInt(monthStr) - 1 // 0-indexed month the period starts in
 
   const monthNames = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
   ]
 
+  // The month the period ends in is the next calendar month when the cycle
+  // starts mid-month, and the same calendar month otherwise.
+  const labelDate =
+    startDay > 1 ? new Date(year, month + 1, 1) : new Date(year, month, 1)
+  const labelMonth = monthNames[labelDate.getMonth()]
+  const labelYear = labelDate.getFullYear()
+
   if (showRange && startDay > 1) {
     const { start, end } = getBudgetMonthRange(monthKey, startDay)
     const startMonth = monthNames[start.getMonth()]
     const endMonth = monthNames[end.getMonth()]
-    const startYear = start.getFullYear()
     const endYear = end.getFullYear()
-    return `${monthNames[month]} ${year} (${startDay} ${startMonth} - ${startDay - 1} ${endMonth} ${endYear})`
+    return `${labelMonth} ${labelYear} (${startDay} ${startMonth} - ${startDay - 1} ${endMonth} ${endYear})`
   }
 
-  return `${monthNames[month]} ${year}`
+  return `${labelMonth} ${labelYear}`
 }

@@ -17,6 +17,12 @@
  */
 
 import { computeGoldPortfolio } from "./gold"
+import {
+  getBudgetMonthKey,
+  getBudgetMonthLabel,
+  getBudgetMonthRange,
+  getPreviousBudgetMonthKey,
+} from "./budget-months"
 
 export type TransactionLike = {
   type: "INCOME" | "EXPENSE"
@@ -73,42 +79,35 @@ export interface WealthHistoryInput {
   months?: number
   /** Reference "now" date for the series end. Defaults to the current date. */
   endDate?: Date
+  /**
+   * Day the budget month starts (1-28). Defaults to 1 (calendar months). When
+   * set, each point's cutoff is the END of that budget month period, so the
+   * series lines up with budgets, the dashboard, and the transactions page.
+   */
+  startDay?: number
 }
 
 export const SHARES_PER_LOT = 100
 
-const MONTH_NAMES = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-]
-
-function monthLabel(monthKey: string): string {
-  const [, monthStr] = monthKey.split("-")
-  const month = parseInt(monthStr, 10) - 1
-  const year = parseInt(monthKey.slice(0, 4), 10)
-  return `${MONTH_NAMES[month]} ${year}`
-}
-
-/** End of the given "YYYY-MM" month (23:59:59.999 on the last day). */
-function endOfMonth(monthKey: string): Date {
-  const year = parseInt(monthKey.slice(0, 4), 10)
-  const month = parseInt(monthKey.slice(5, 7), 10) // 1-based
-  return new Date(year, month, 0, 23, 59, 59, 999)
-}
-
 export function computeNetWorthHistory(input: WealthHistoryInput): WealthPoint[] {
-  const { months = 12, endDate = new Date() } = input
+  const { months = 12, endDate = new Date(), startDay = 1 } = input
   const now = new Date(endDate)
 
-  // Month keys from oldest to newest.
+  // Budget month keys from oldest to newest, ending with the budget month that
+  // contains `endDate` (a plain calendar month when startDay is 1).
   const keys: string[] = []
-  for (let i = months - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
+  let key = getBudgetMonthKey(now, startDay)
+  for (let i = 0; i < months; i++) {
+    keys.unshift(key)
+    key = getPreviousBudgetMonthKey(key, startDay)
   }
 
   return keys.map((key) => {
-    const cutoff = endOfMonth(key)
+    // Cumulative values are taken up to the last day of the budget month period
+    // (e.g. 27 Sep for a 28 Aug – 27 Sep budget month).
+    const period = getBudgetMonthRange(key, startDay)
+    const cutoff = new Date(period.end)
+    cutoff.setHours(23, 59, 59, 999)
 
     let cash = 0
     for (const tx of input.transactions) {
@@ -154,7 +153,7 @@ export function computeNetWorthHistory(input: WealthHistoryInput): WealthPoint[]
 
     return {
       month: key,
-      label: monthLabel(key),
+      label: getBudgetMonthLabel(key, startDay),
       cash,
       gold: goldValue,
       stocks: stocksValue,

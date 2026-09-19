@@ -113,6 +113,8 @@ interface DashboardData {
   latestAnalysis: {
     id: string;
     month: string;
+    /** Budget-month label (e.g. "Sep 2026"), named after the month it ends in. */
+    monthLabel?: string;
     summary: string;
     totalIncome: number;
     totalExpenses: number;
@@ -553,7 +555,8 @@ export function DashboardContent() {
                       <Sparkles className="h-3.5 w-3.5 text-purple-500" />
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {data.latestAnalysis.month} &bull; Generated{" "}
+                      {data.latestAnalysis.monthLabel ?? data.latestAnalysis.month}{" "}
+                      &bull; Generated{" "}
                       {new Date(
                         data.latestAnalysis.createdAt,
                       ).toLocaleDateString("en-US")}

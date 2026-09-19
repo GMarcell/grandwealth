@@ -20,8 +20,12 @@ export async function GET(req: Request) {
   const months = Math.min(36, Math.max(3, isNaN(monthsParam) ? 12 : monthsParam))
 
   try {
-    const [transactions, goldDeposits, stocks, bankSavings, loans] =
+    const [user, transactions, goldDeposits, stocks, bankSavings, loans] =
       await Promise.all([
+        prisma.user.findUnique({
+          where: { id: session.user.id },
+          select: { budgetStartDay: true },
+        }),
         prisma.transaction.findMany({
           where: { userId: session.user.id },
           select: { type: true, amount: true, date: true },
@@ -71,6 +75,7 @@ export async function GET(req: Request) {
       loans,
       goldPricePerGram,
       months,
+      startDay: user?.budgetStartDay ?? 1,
     })
 
     const latest = history[history.length - 1] ?? null

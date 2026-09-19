@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { computeGoldPortfolio } from "@/lib/gold"
-import { getBudgetMonthRange } from "@/lib/budget-months"
+import { getBudgetMonthLabel, getBudgetMonthRange } from "@/lib/budget-months"
 import Groq from "groq-sdk"
 
 const groq = new Groq({
@@ -196,7 +196,7 @@ export async function generateAnalysisForUserAndMonth(
 
   // ── Generate analysis with Groq AI ──
 
-  const userPrompt = `Buat analisis keuangan bulanan untuk ${user.name || "pengguna"} untuk bulan ${monthKey}. FOKUS pada rekomendasi tabungan dan cara menghemat lebih banyak.
+  const userPrompt = `Buat analisis keuangan bulanan untuk ${user.name || "pengguna"} untuk bulan ${getBudgetMonthLabel(monthKey, user.budgetStartDay)}. FOKUS pada rekomendasi tabungan dan cara menghemat lebih banyak.
 
 Data keuangan bulan ini:
 - Total Pendapatan: Rp ${totalIncome.toLocaleString("id-ID")}

@@ -26,6 +26,7 @@ import {
   Home,
   Sparkles,
   PiggyBank,
+  CalendarDays,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,7 +56,16 @@ import {
   OTHER_CONFIG,
 } from "@/lib/rule-type";
 import { toast } from "sonner";
-import { TransactionFormData, TransactionInterface } from "@/types/transaction";
+import {
+  TransactionFormData,
+  TransactionInterface,
+  TransactionSummary,
+} from "@/types/transaction";
+import {
+  generateBudgetMonths,
+  getCurrentBudgetMonthKey,
+  getBudgetMonthLabel,
+} from "@/lib/budget-months";
 import { getBudgetAlert } from "@/lib/helper/transaction";
 import {
   PREDEFINED_EXPENSE,
@@ -69,6 +79,8 @@ export default function TransactionsPage() {
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
+  const [ruleFilter, setRuleFilter] = useState<string>("ALL");
+  const [pickedMonth, setPickedMonth] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] =
@@ -97,6 +109,36 @@ export default function TransactionsPage() {
     setPage(1);
   }, []);
 
+  // Reset page when rule filter changes
+  const handleRuleFilterChange = useCallback((value: string) => {
+    setRuleFilter(value);
+    setPage(1);
+  }, []);
+
+  // Reset page when the month filter changes
+  const handleMonthChange = useCallback((value: string) => {
+    setPickedMonth(value);
+    setPage(1);
+  }, []);
+
+  const { data: budgetSettings } = useQuery<{ budgetStartDay: number }>({
+    queryKey: ["budget-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/user/budget-settings");
+      if (!res.ok) throw new Error("Failed to fetch budget settings");
+      return res.json();
+    },
+  });
+  const startDay = budgetSettings?.budgetStartDay ?? 1;
+
+  // Selected month falls back to the current budget month once settings load.
+  const currentMonthKey = useMemo(
+    () => getCurrentBudgetMonthKey(startDay),
+    [startDay],
+  );
+  const selectedMonth = pickedMonth ?? currentMonthKey;
+  const months = useMemo(() => generateBudgetMonths(12, startDay), [startDay]);
+
   const {
     register,
     handleSubmit: formSubmit,
@@ -119,23 +161,62 @@ export default function TransactionsPage() {
   const formType = watch("type");
 
   const { data: transactions, isLoading } = useQuery({
-    queryKey: ["transactions", page, debouncedSearch, typeFilter],
+    queryKey: [
+      "transactions",
+      page,
+      debouncedSearch,
+      typeFilter,
+      selectedMonth,
+      ruleFilter,
+    ],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(page),
         pageSize: "50",
+        month: selectedMonth,
       });
       if (debouncedSearch) params.set("search", debouncedSearch);
       if (typeFilter !== "ALL") params.set("type", typeFilter);
+      if (ruleFilter !== "ALL") params.set("rule", ruleFilter);
       const res = await fetch(`/api/transactions?${params}`);
       if (!res.ok) throw new Error("Failed to fetch transactions");
-      const json: PaginatedResponse<TransactionInterface> = await res.json();
+      const json: PaginatedResponse<
+        TransactionInterface,
+        TransactionSummary
+      > = await res.json();
       return json;
     },
   });
 
   const transactionList = transactions?.data ?? [];
   const pagination = transactions?.pagination;
+  const summary = transactions?.summary;
+
+  // Full-month spend per category for the CURRENT budget month (unfiltered and
+  // unpaginated) so budget alerts below count every transaction, not just the
+  // page/filters currently on screen.
+  const { data: monthSpending } = useQuery<Record<string, number>>({
+    queryKey: ["transactions", "month-spending", currentMonthKey],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        page: "1",
+        pageSize: "1",
+        month: currentMonthKey,
+        type: "EXPENSE",
+        summaryByCategory: "1",
+      });
+      const res = await fetch(`/api/transactions?${params}`);
+      if (!res.ok) throw new Error("Failed to fetch month spending");
+      const json: PaginatedResponse<TransactionInterface, TransactionSummary> =
+        await res.json();
+      return json.summary?.byCategory ?? {};
+    },
+  });
+
+  const spentByCategory = useMemo(
+    () => new Map(Object.entries(monthSpending ?? {})),
+    [monthSpending],
+  );
 
   const { data: customCategories } = useQuery<
     Array<{
@@ -163,16 +244,6 @@ export default function TransactionsPage() {
     },
   });
 
-  const { data: budgetSettings } = useQuery<{ budgetStartDay: number }>({
-    queryKey: ["budget-settings"],
-    queryFn: async () => {
-      const res = await fetch("/api/user/budget-settings");
-      if (!res.ok) throw new Error("Failed to fetch budget settings");
-      return res.json();
-    },
-  });
-  const startDay = budgetSettings?.budgetStartDay ?? 1;
-
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
       const res = await fetch("/api/transactions", {
@@ -195,12 +266,12 @@ export default function TransactionsPage() {
       toast.success("Transaction added");
 
       // Check budget alert for expense transactions
-      if (variables.type === "EXPENSE") {
+      if (variables.type === "EXPENSE" && monthSpending) {
         const alert = getBudgetAlert(
           variables.category,
           parseFloat(variables.amount.toString()),
           budgets ?? [],
-          transactionList,
+          spentByCategory,
           startDay,
         );
         if (alert.level === "over") {
@@ -237,8 +308,9 @@ export default function TransactionsPage() {
       toast.success("Transaction updated");
 
       // Check budget alert for expense transactions
-      if (variables.type === "EXPENSE") {
-        // When editing, subtract the old amount from the total since it's still in cached data
+      if (variables.type === "EXPENSE" && monthSpending) {
+        // The stored transaction is already counted in the month's spend, so
+        // only the amount delta is added on top.
         const oldAmount = editingTransaction?.amount
           ? parseFloat(editingTransaction.amount.toString())
           : 0;
@@ -248,7 +320,7 @@ export default function TransactionsPage() {
           variables.category,
           netAdditional,
           budgets ?? [],
-          transactionList,
+          spentByCategory,
           startDay,
         );
         if (alert.level === "over") {
@@ -356,30 +428,31 @@ export default function TransactionsPage() {
         total: txs.reduce((sum, tx) => sum + tx.amount, 0),
       },
     });
-    const income = sortedTransactions.filter((tx) => tx.type === "INCOME");
-    const expenses = sortedTransactions.filter((tx) => tx.type !== "INCOME");
     return {
       income: makeGroup(sortedTransactions),
       expenses: makeGroup([]),
-      incomeTotal: income.reduce((sum, tx) => sum + tx.amount, 0),
-      expenseTotal: expenses.reduce((sum, tx) => sum + tx.amount, 0),
     };
   }, [sortedTransactions]);
 
+  // Totals come from the server summary so they cover every transaction in the
+  // selected month/filters, not just the current page. Fall back to the loaded
+  // page while the summary is still in flight.
   const totalIncome = useMemo(
     () =>
+      summary?.totalIncome ??
       transactionList
         .filter((tx) => tx.type === "INCOME")
         .reduce((sum, tx) => sum + tx.amount, 0),
-    [transactionList],
+    [summary, transactionList],
   );
 
   const totalExpenses = useMemo(
     () =>
+      summary?.totalExpenses ??
       transactionList
         .filter((tx) => tx.type === "EXPENSE")
         .reduce((sum, tx) => sum + tx.amount, 0),
-    [transactionList],
+    [summary, transactionList],
   );
 
   const categories = useMemo(() => {
@@ -786,6 +859,12 @@ export default function TransactionsPage() {
           </CardContent>
         </Card>
       </div>
+      <p className="text-xs text-muted-foreground -mt-2">
+        Totals for{" "}
+        {selectedMonth === "ALL"
+          ? "all time"
+          : getBudgetMonthLabel(selectedMonth, startDay)}
+      </p>
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -801,6 +880,20 @@ export default function TransactionsPage() {
             }}
           />
         </div>
+        <Select value={selectedMonth} onValueChange={handleMonthChange}>
+          <SelectTrigger className="w-full sm:w-40">
+            <CalendarDays className="h-4 w-4 mr-1" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All time</SelectItem>
+            {months.map((m, index) => (
+              <SelectItem key={`${m}-${index}`} value={m}>
+                {getBudgetMonthLabel(m, startDay)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Select value={typeFilter} onValueChange={handleTypeFilterChange}>
           <SelectTrigger className="w-full sm:w-36">
             <Filter className="h-4 w-4 mr-1" />
@@ -810,6 +903,20 @@ export default function TransactionsPage() {
             <SelectItem value="ALL">All</SelectItem>
             <SelectItem value="INCOME">Income</SelectItem>
             <SelectItem value="EXPENSE">Expense</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={ruleFilter} onValueChange={handleRuleFilterChange}>
+          <SelectTrigger className="w-full sm:w-32">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">All rules</SelectItem>
+            {RULE_TYPES.map((r) => (
+              <SelectItem key={r} value={r}>
+                {RULE_TYPE_CONFIGS[r].label}
+              </SelectItem>
+            ))}
+            <SelectItem value="OTHER">{OTHER_CONFIG.label}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -824,7 +931,7 @@ export default function TransactionsPage() {
           ) : transactionList.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-sm text-muted-foreground">
-                {debouncedSearch || typeFilter !== "ALL"
+                {debouncedSearch || typeFilter !== "ALL" || ruleFilter !== "ALL"
                   ? "No transactions match your filters."
                   : "No transactions yet. Add your first one!"}
               </p>
@@ -841,11 +948,11 @@ export default function TransactionsPage() {
                     </h3>
                     <span className="text-sm font-bold">
                       <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                        +{formatIDR(groupedByType.incomeTotal)}
+                        +{formatIDR(totalIncome)}
                       </span>{" "}
                       /{" "}
                       <span className="text-sm font-bold text-red-600 dark:text-red-400">
-                        -{formatIDR(groupedByType.expenseTotal)}
+                        -{formatIDR(totalExpenses)}
                       </span>
                     </span>
                   </div>
@@ -854,7 +961,7 @@ export default function TransactionsPage() {
               )}
 
               {/* Expense Section */}
-              {false && groupedByType.expenseTotal > 0 && (
+              {false && totalExpenses > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold flex items-center gap-2 text-red-600 dark:text-red-400">
@@ -862,7 +969,7 @@ export default function TransactionsPage() {
                       Expenses
                     </h3>
                     <span className="text-sm font-bold text-red-600 dark:text-red-400">
-                      -{formatIDR(groupedByType.expenseTotal)}
+                      -{formatIDR(totalExpenses)}
                     </span>
                   </div>
                   {renderRuleTypeGroup(groupedByType.expenses, "red")}

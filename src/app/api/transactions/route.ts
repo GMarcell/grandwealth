@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma"
 import { createTransactionSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 import { parsePagination, paginatedResponse } from "@/lib/utils"
+import { getBudgetMonthRange } from "@/lib/budget-months"
+import { RULE_TYPES } from "@/lib/rule-type"
 import type { Prisma } from "@prisma/client"
 
 export async function GET(req: Request) {
@@ -23,6 +25,10 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
   const searchQuery = url.searchParams.get("search")?.trim()
   const typeFilter = url.searchParams.get("type")?.trim()
+  const monthFilter = url.searchParams.get("month")?.trim()
+  const ruleFilter = url.searchParams.get("rule")?.trim()
+  const wantsCategorySummary =
+    url.searchParams.get("summaryByCategory") === "1"
 
   const where: Prisma.TransactionWhereInput = {
     userId: session.user.id,
@@ -32,6 +38,40 @@ export async function GET(req: Request) {
     ...(typeFilter && (typeFilter === "INCOME" || typeFilter === "EXPENSE")
       ? { type: typeFilter }
       : {}),
+  }
+
+  // Month filter uses the user's budget-month boundaries so it lines up with
+  // budgets, the dashboard, and the analysis pages.
+  if (monthFilter && monthFilter !== "ALL") {
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { budgetStartDay: true },
+    })
+    const startDay = user?.budgetStartDay ?? 1
+    const { start, end } = getBudgetMonthRange(monthFilter, startDay)
+    where.date = { gte: start, lte: end }
+  }
+
+  // Rule filter resolves category names to their 50/30/20 classification.
+  // Categories without a rule type (and any uncategorized name) count as OTHER.
+  if (ruleFilter && ruleFilter !== "ALL") {
+    const categories = await prisma.category.findMany({
+      where: { userId: session.user.id },
+      select: { name: true, ruleType: true },
+    })
+    const classifiedNames = categories
+      .filter((c) => RULE_TYPES.includes(c.ruleType as any))
+      .map((c) => c.name)
+
+    if (ruleFilter === "OTHER") {
+      where.category = { notIn: classifiedNames }
+    } else if (RULE_TYPES.includes(ruleFilter as any)) {
+      where.category = {
+        in: categories
+          .filter((c) => c.ruleType === ruleFilter)
+          .map((c) => c.name),
+      }
+    }
   }
 
   const pagination = parsePagination(req.url)
@@ -54,7 +94,7 @@ export async function GET(req: Request) {
     )
   }
 
-  const [transactions, total] = await Promise.all([
+  const [transactions, total, summaryRows, categoryRows] = await Promise.all([
     prisma.transaction.findMany({
       where,
       orderBy: { date: "desc" },
@@ -62,6 +102,23 @@ export async function GET(req: Request) {
       take: pagination.pageSize,
     }),
     prisma.transaction.count({ where }),
+    // Totals span the whole filtered set, not just the current page.
+    prisma.transaction.groupBy({
+      by: ["type"],
+      where,
+      _sum: { amount: true },
+    }),
+    // Optional per-category spend (e.g. full-month budget alerts) that also
+    // spans the whole filtered set rather than the current page.
+    wantsCategorySummary
+      ? prisma.transaction.groupBy({
+          by: ["category"],
+          where,
+          _sum: { amount: true },
+        })
+      : Promise.resolve(
+          [] as Array<{ category: string; _sum: { amount: number | null } }>,
+        ),
   ])
 
   const mapped = transactions.map((tx) => ({
@@ -73,7 +130,24 @@ export async function GET(req: Request) {
     date: tx.date.toISOString(),
   }))
 
-  return NextResponse.json(paginatedResponse(mapped, total, pagination))
+  const summary = {
+    totalIncome:
+      summaryRows.find((row) => row.type === "INCOME")?._sum.amount ?? 0,
+    totalExpenses:
+      summaryRows.find((row) => row.type === "EXPENSE")?._sum.amount ?? 0,
+    ...(wantsCategorySummary
+      ? {
+          byCategory: Object.fromEntries(
+            categoryRows.map((row) => [row.category, row._sum.amount ?? 0]),
+          ),
+        }
+      : {}),
+  }
+
+  return NextResponse.json({
+    ...paginatedResponse(mapped, total, pagination),
+    summary,
+  })
 }
 
 export async function POST(req: Request) {

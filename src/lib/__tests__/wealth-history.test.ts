@@ -178,6 +178,31 @@ describe("computeNetWorthHistory", () => {
     expect(history[1].total).toBe(-50_000_000)
   })
 
+  it("buckets by budget month when a start day is set", () => {
+    const history = computeNetWorthHistory({
+      // Aug 29 falls in the budget month that ends 27 Sep → "Sep 2026".
+      transactions: [
+        { type: "INCOME", amount: 5_000_000, date: new Date(2026, 7, 29) },
+      ],
+      goldDeposits: [],
+      stocks: [],
+      bankSavings: [],
+      loans: [],
+      goldPricePerGram: null,
+      months: 2,
+      endDate: new Date(2026, 8, 20), // Sep 20 → current budget month is "2026-08"
+      startDay: 28,
+    })
+
+    expect(history[0].month).toBe("2026-07") // Jul 28 – Aug 27
+    expect(history[0].label).toBe("Aug 2026")
+    expect(history[0].cash).toBe(0) // Aug 29 is after the 27 Aug cutoff
+
+    expect(history[1].month).toBe("2026-08") // Aug 28 – Sep 27
+    expect(history[1].label).toBe("Sep 2026")
+    expect(history[1].cash).toBe(5_000_000) // included here, not in "August"
+  })
+
   it("combines all components into a total", () => {
     const history = computeNetWorthHistory({
       transactions: [{ type: "INCOME", amount: 10_000_000, date: new Date(2026, 0, 10) }],

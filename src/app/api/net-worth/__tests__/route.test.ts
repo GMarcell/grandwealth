@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 // ─── Hoisted mocks (available before module instantiation) ───
 
 const mockAuth = vi.hoisted(() => vi.fn())
+const mockFindUser = vi.hoisted(() => vi.fn())
 const mockFindTransactions = vi.hoisted(() => vi.fn())
 const mockFindGold = vi.hoisted(() => vi.fn())
 const mockFindStocks = vi.hoisted(() => vi.fn())
@@ -14,6 +15,7 @@ vi.mock("@/lib/auth", () => ({ auth: mockAuth }))
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
+    user: { findUnique: mockFindUser },
     transaction: { findMany: mockFindTransactions },
     goldDeposit: { findMany: mockFindGold },
     stock: { findMany: mockFindStocks },
@@ -52,10 +54,13 @@ interface NetWorthMockOptions {
   transactions?: Array<{ type: "INCOME" | "EXPENSE"; amount: number; date: Date }>
   /** Live gold price to return, or "error" to force the cost-basis fallback. */
   goldPricePerGram?: number | "error"
+  /** Budget start day returned by the user lookup. Default 1 (calendar). */
+  budgetStartDay?: number
 }
 
 function setupMocks(options: NetWorthMockOptions = {}) {
   mockAuth.mockResolvedValue({ user: { id: "user-1" } })
+  mockFindUser.mockResolvedValue({ budgetStartDay: options.budgetStartDay ?? 1 })
   mockFindTransactions.mockResolvedValue(options.transactions ?? [])
   mockFindGold.mockResolvedValue(options.goldDeposits ?? [])
   mockFindStocks.mockResolvedValue([])
@@ -206,5 +211,57 @@ describe("GET /api/net-worth — gold valuation", () => {
     expect(mockFetchGoldPrice).not.toHaveBeenCalled()
     expect(body.goldPricePerGram).toBeNull()
     expect(body.latest.gold).toBe(0)
+  })
+})
+
+describe("GET /api/net-worth — budget month boundaries", () => {
+  beforeEach(() => vi.clearAllMocks())
+  afterEach(() => vi.useRealTimers())
+
+  it("buckets the series by the user's budget month", async () => {
+    // Sep 20 is before the 28th, so the current budget month is Aug 28 – Sep 27.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 8, 20, 12, 0, 0))
+
+    setupMocks({
+      budgetStartDay: 28,
+      // Salary paid on Aug 29 belongs to the "Sep 2026" budget month.
+      transactions: [
+        { type: "INCOME", amount: 5_000_000, date: new Date(2026, 7, 29, 12, 0, 0) },
+      ],
+    })
+
+    // The route clamps `months` to a minimum of 3.
+    const body = await (await get("/api/net-worth?months=3")).json()
+    const [, mid, latest] = body.history
+
+    expect(latest.label).toBe("Sep 2026")
+    expect(latest.month).toBe("2026-08")
+    expect(latest.cash).toBe(5_000_000)
+
+    // The "Aug 2026" budget month runs Jul 28 – Aug 27, so the Aug 29 salary
+    // is NOT counted there (it belongs to September).
+    expect(mid.label).toBe("Aug 2026")
+    expect(mid.month).toBe("2026-07")
+    expect(mid.cash).toBe(0)
+  })
+
+  it("keeps calendar months when the start day is 1", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 8, 20, 12, 0, 0))
+
+    setupMocks({
+      budgetStartDay: 1,
+      transactions: [
+        { type: "INCOME", amount: 5_000_000, date: new Date(2026, 7, 29, 12, 0, 0) },
+      ],
+    })
+
+    const body = await (await get("/api/net-worth?months=3")).json()
+
+    // Calendar months: the Aug 29 salary sits in "Aug 2026" (cutoff 31 Aug).
+    const august = body.history.find((h: { label: string }) => h.label === "Aug 2026")
+    expect(august.month).toBe("2026-08")
+    expect(august.cash).toBe(5_000_000)
   })
 })

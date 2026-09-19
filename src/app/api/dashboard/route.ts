@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import {
   getBudgetMonthKey,
+  getBudgetMonthLabel,
   getBudgetMonthRange,
   getPreviousBudgetMonthKey,
 } from "@/lib/budget-months"
@@ -198,11 +199,12 @@ export async function GET() {
     const totalDebt = loans.reduce((sum, l) => sum + l.remainingBalance, 0)
     const totalPrincipal = loans.reduce((sum, l) => sum + l.principal, 0)
 
-    // Monthly aggregation for chart
+    // Monthly aggregation for chart — bucketed by BUDGET month so a transaction
+    // dated 28-31 Aug lands in the "Sep" budget month (28 Aug – 27 Sep) rather
+    // than showing up under August while every other surface calls it September.
     const monthlyMap = new Map<string, { income: number; expenses: number }>()
     for (const tx of transactions) {
-      const d = new Date(tx.date)
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+      const key = getBudgetMonthKey(new Date(tx.date), startDay)
       const existing = monthlyMap.get(key) || { income: 0, expenses: 0 }
       if (tx.type === "INCOME") {
         existing.income += tx.amount
@@ -214,18 +216,11 @@ export async function GET() {
 
     const monthlyData = Array.from(monthlyMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, data]) => {
-        const [year, m] = month.split("-")
-        const monthNames = [
-          "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-        ]
-        return {
-          month: `${monthNames[parseInt(m) - 1]} ${year}`,
-          income: data.income,
-          expenses: data.expenses,
-        }
-      })
+      .map(([month, data]) => ({
+        month: getBudgetMonthLabel(month, startDay),
+        income: data.income,
+        expenses: data.expenses,
+      }))
 
     // Budget calculations using budget month ranges
     const monthExpenses = transactions.filter((tx) => {
@@ -395,6 +390,7 @@ export async function GET() {
         ? {
             id: latestAnalysis.id,
             month: latestAnalysis.month,
+            monthLabel: getBudgetMonthLabel(latestAnalysis.month, startDay),
             summary: latestAnalysis.summary,
             totalIncome: latestAnalysis.totalIncome,
             totalExpenses: latestAnalysis.totalExpenses,

@@ -11,3 +11,14 @@ export interface TransactionInterface {
 }
 
 export type TransactionFormData = z.infer<typeof transactionFormSchema>;
+
+/**
+ * Aggregate totals for the current transaction filters, computed across every
+ * matching transaction (not just the current page).
+ */
+export interface TransactionSummary {
+  totalIncome: number;
+  totalExpenses: number;
+  /** Total spent per category across the filtered set (opt-in via summaryByCategory=1). */
+  byCategory?: Record<string, number>;
+}

@@ -181,16 +181,6 @@ function AnalysisSkeleton() {
   )
 }
 
-const monthNames = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-]
-
-function formatMonthLabel(monthKey: string): string {
-  const [year, m] = monthKey.split("-")
-  return `${monthNames[parseInt(m) - 1]} ${year}`
-}
-
 export default function AnalysisPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>("latest")
   const [newAnalysisMonth, setNewAnalysisMonth] = useState("latest")
@@ -322,7 +312,7 @@ export default function AnalysisPage() {
               <SelectItem value="latest">Latest analysis</SelectItem>
               {listData?.analyses?.map((a) => (
                 <SelectItem key={a.month} value={a.month}>
-                  {formatMonthLabel(a.month)}
+                  {getBudgetMonthLabel(a.month, budgetStartDay)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -377,7 +367,7 @@ export default function AnalysisPage() {
                   {formatCompactIDR(analysis.totalIncome)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {formatMonthLabel(analysis.month)}
+                  {getBudgetMonthLabel(analysis.month, budgetStartDay)}
                 </p>
               </CardContent>
             </Card>
@@ -499,7 +489,7 @@ export default function AnalysisPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
                 <Sparkles className="h-5 w-5" />
-                AI Analysis Report — {formatMonthLabel(analysis.month)}
+                AI Analysis Report — {getBudgetMonthLabel(analysis.month, budgetStartDay)}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -539,7 +529,7 @@ export default function AnalysisPage() {
                 <DialogHeader>
                   <DialogTitle>Regenerate Analysis?</DialogTitle>
                   <DialogDescription>
-                    This will generate a new AI analysis for {formatMonthLabel(analysis.month)} based on your current financial data. The existing analysis will be replaced.
+                    This will generate a new AI analysis for {getBudgetMonthLabel(analysis.month, budgetStartDay)} based on your current financial data. The existing analysis will be replaced.
                   </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>

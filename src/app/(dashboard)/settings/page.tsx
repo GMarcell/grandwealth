@@ -52,7 +52,10 @@ import {
   Sparkles,
   PiggyBank,
 } from "lucide-react"
-import { getBudgetMonthLabel } from "@/lib/budget-months"
+import {
+  getBudgetMonthLabel,
+  getCurrentBudgetMonthKey,
+} from "@/lib/budget-months"
 import { RULE_TYPE_ORDER, RULE_TYPE_CONFIGS } from "@/lib/rule-type"
 import { CHART_COLORS } from "@/lib/chart-colors"
 import { FormError } from "@/components/ui/form-error"
@@ -374,7 +377,7 @@ export default function SettingsPage() {
               <p className="text-sm text-muted-foreground">
                 {budgetStartDay === 1
                   ? "Budget months align with calendar months"
-                  : `Budget months run from the ${budgetStartDay}th to the ${budgetStartDay - 1}st of the next month`}
+                  : `Budget months run from the ${budgetStartDay}th of the previous month to the ${budgetStartDay - 1}th, and are named after the month they end in`}
               </p>
             </div>
           </div>
@@ -385,7 +388,7 @@ export default function SettingsPage() {
                 Example: With this setting,{" "}
                 <span className="font-medium text-foreground">
                   {getBudgetMonthLabel(
-                    `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`,
+                    getCurrentBudgetMonthKey(budgetStartDay),
                     budgetStartDay,
                     true
                   )}

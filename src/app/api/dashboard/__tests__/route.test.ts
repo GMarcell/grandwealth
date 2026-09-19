@@ -322,4 +322,31 @@ describe("GET /api/dashboard — budget month rollover with non-1st start day", 
     expect(body.budgetSummary.totalSpent).toBe(30_000)
     expect(body.budgetSummary.remaining).toBe(30_000)
   })
+
+  it("buckets the Monthly Cash Flow chart by budget month", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 8, 20, 12, 0, 0)) // Sep 20 — before the 28th
+
+    setupMocks({
+      budgetStartDay: 28,
+      windowTransactions: [
+        // Salary paid Aug 29 → the "Sep 2026" budget month (28 Aug – 27 Sep).
+        tx("sep-income", "INCOME", "SALARY", 5_000_000, new Date(2026, 7, 29, 12, 0, 0)),
+        // Expense on Sep 3 → same budget month.
+        tx("sep-expense", "EXPENSE", "FOOD", 500_000, new Date(2026, 8, 3, 12, 0, 0)),
+      ],
+    })
+
+    const res = await GET()
+    const body = await res.json()
+
+    const sep = body.monthlyData.find(
+      (m: { month: string }) => m.month === "Sep 2026"
+    )
+    expect(sep).toBeDefined()
+    expect(sep.income).toBe(5_000_000)
+    expect(sep.expenses).toBe(500_000)
+    // Everything lands in the single "Sep 2026" bucket — no separate "Aug 2026".
+    expect(body.monthlyData).toHaveLength(1)
+  })
 })
