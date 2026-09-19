@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -115,6 +115,7 @@ export default function BudgetsPage() {
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
+  const [quickAmounts, setQuickAmounts] = useState<Record<string, string>>({});
 
   const {
     register,
@@ -295,6 +296,36 @@ export default function BudgetsPage() {
     () => (budgets ?? []).filter((b) => b.month === selectedMonth),
     [budgets, selectedMonth],
   );
+
+  useEffect(() => {
+    setQuickAmounts(
+      Object.fromEntries(monthBudgets.map((budget) => [budget.categoryName, String(budget.amount)])),
+    );
+  }, [selectedMonth, budgets]);
+
+  function saveQuickBudget(categoryName: string) {
+    const amount = Number(quickAmounts[categoryName] || 0);
+    if (!Number.isFinite(amount) || amount < 0) {
+      toast.error("Enter a valid budget amount");
+      return;
+    }
+    const existing = monthBudgets.find((budget) => budget.categoryName === categoryName);
+    createMutation.mutate({
+      categoryName,
+      amount,
+      month: selectedMonth,
+      rolloverEnabled: existing?.rolloverEnabled ?? true,
+      rolloverCap: existing?.rolloverCap ?? null,
+    });
+  }
+
+  function formatCategoryName(category: string) {
+    return category
+      .toLowerCase()
+      .split("_")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+  }
 
   // Previous month for rollover calculation
   const prevMonthKey = getPreviousBudgetMonthKey(selectedMonth, startDay);
@@ -656,6 +687,42 @@ export default function BudgetsPage() {
 
       {/* Budget Breakdown Chart — dynamically loaded */}
       {pieData.length > 0 && <BudgetAllocationChart data={pieData} />}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Adjust Category Budgets</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Set or update the budget for every expense category in this budget period.
+          </p>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {uniqueCategories.map((category) => (
+            <div key={category} className="rounded-lg border p-3">
+              <div className="min-w-0 flex-1 space-y-1">
+                <Label htmlFor={`quick-${category}`} className="truncate text-xs">
+                  {formatCategoryName(category)}
+                </Label>
+                <Input
+                  id={`quick-${category}`}
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  value={quickAmounts[category] ?? ""}
+                  onChange={(event) => setQuickAmounts((current) => ({ ...current, [category]: event.target.value }))}
+                />
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <span className="truncate text-[11px] text-muted-foreground">
+                  Spent: {formatIDR(expenseByCategory.get(category) ?? 0)}
+                </span>
+                <Button size="sm" variant="outline" onClick={() => saveQuickBudget(category)} disabled={createMutation.isPending}>
+                  Save
+                </Button>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       {/* Rollover History */}
       {(historyLoading || rolloverHistory?.categories?.length > 0) && (
