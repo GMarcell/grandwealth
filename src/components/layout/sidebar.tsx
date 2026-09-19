@@ -1,9 +1,9 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { cn } from "@/lib/utils"
-import { useQuery } from "@tanstack/react-query"
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   ArrowLeftRight,
@@ -25,49 +25,49 @@ import {
   Target,
   CreditCard,
   Shield,
-} from "lucide-react"
-import { useTheme } from "next-themes"
-import { signOut, useSession } from "next-auth/react"
-import { Button } from "@/components/ui/button"
+} from "lucide-react";
+import { useTheme } from "next-themes";
+import { signOut, useSession } from "next-auth/react";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-} from "@/components/ui/dropdown-menu"
-import { Badge } from "@/components/ui/badge"
+} from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
 
 const navItems = [
-    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
-    { href: "/recurring", label: "Recurring", icon: Repeat },
-    { href: "/reports", label: "Reports", icon: BarChart3 },
-    { href: "/analysis", label: "AI Analysis", icon: Brain },
-    { href: "/savings", label: "Savings", icon: Landmark },
-    { href: "/goals", label: "Goals", icon: Target },
-    { href: "/debts", label: "Debts", icon: CreditCard },
-    { href: "/gold", label: "Gold", icon: CircleDollarSign },
-    { href: "/stocks", label: "Stocks", icon: TrendingUp },
-    { href: "/budgets", label: "Budgets", icon: PiggyBank },
-    { href: "/settings", label: "Settings", icon: Settings },
-  ]
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
+  { href: "/budgets", label: "Budgets", icon: PiggyBank },
+  { href: "/recurring", label: "Recurring", icon: Repeat },
+  { href: "/reports", label: "Reports", icon: BarChart3 },
+  { href: "/analysis", label: "AI Analysis", icon: Brain },
+  { href: "/savings", label: "Savings", icon: Landmark },
+  { href: "/goals", label: "Goals", icon: Target },
+  { href: "/debts", label: "Debts", icon: CreditCard },
+  { href: "/gold", label: "Gold", icon: CircleDollarSign },
+  { href: "/stocks", label: "Stocks", icon: TrendingUp },
+  { href: "/settings", label: "Settings", icon: Settings },
+];
 
 interface SidebarProps {
-  isMobileOpen: boolean
-  onMobileClose: () => void
+  isMobileOpen: boolean;
+  onMobileClose: () => void;
 }
 
 export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
-  const pathname = usePathname()
-  const { theme, setTheme } = useTheme()
-  const { data: session } = useSession()
-  const isAdmin = session?.user?.role === "ADMIN"
+  const pathname = usePathname();
+  const { theme, setTheme } = useTheme();
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
 
   // Admin panel entry — appended to the nav only for admins. The /admin
   // layout additionally enforces the role server-side.
   const items = isAdmin
     ? [...navItems, { href: "/admin", label: "Admin", icon: Shield }]
-    : navItems
+    : navItems;
 
   // Fetch budget alert count for sidebar badge (lightweight endpoint)
   const { data: budgetSummary } = useQuery<{ overBudget: number }>({
@@ -79,13 +79,13 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
     },
     refetchInterval: 300_000,
     staleTime: 120_000,
-  })
+  });
 
-  const overBudgetCount = budgetSummary?.overBudget ?? 0
+  const overBudgetCount = budgetSummary?.overBudget ?? 0;
 
   const renderNavItems = (onClick?: () => void) =>
     items.map((item) => {
-      const isActive = pathname.startsWith(item.href)
+      const isActive = pathname.startsWith(item.href);
       return (
         <Link
           key={item.href}
@@ -95,19 +95,22 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
             "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
             isActive
               ? "bg-sidebar-accent text-sidebar-accent-foreground"
-              : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+              : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
           )}
         >
           <item.icon className="h-4 w-4" />
           <span className="flex-1">{item.label}</span>
           {item.href === "/budgets" && overBudgetCount > 0 && (
-            <Badge variant="loss" className="h-5 min-w-5 px-1 text-[10px] flex items-center justify-center">
+            <Badge
+              variant="loss"
+              className="h-5 min-w-5 px-1 text-[10px] flex items-center justify-center"
+            >
               {overBudgetCount}
             </Badge>
           )}
         </Link>
-      )
-    })
+      );
+    });
 
   return (
     <>
@@ -124,14 +127,16 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
         className={cn(
           "fixed left-0 top-0 z-50 flex h-full w-64 max-w-[calc(100vw-3rem)] flex-col border-r bg-sidebar text-sidebar-foreground transition-transform duration-300 ease-in-out",
           "lg:translate-x-0 lg:z-40",
-          isMobileOpen ? "translate-x-0" : "-translate-x-full"
+          isMobileOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
         {/* Logo + Close button */}
         <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4 sm:px-6">
           <div className="flex items-center gap-2">
             <Wallet className="h-6 w-6 text-sidebar-primary" />
-            <span className="text-lg font-bold tracking-tight">GrandWealth</span>
+            <span className="text-lg font-bold tracking-tight">
+              GrandWealth
+            </span>
           </div>
           <Button
             variant="ghost"
@@ -178,20 +183,35 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="min-w-36">
-                <DropdownMenuItem onClick={() => setTheme("light")} className="gap-3">
+                <DropdownMenuItem
+                  onClick={() => setTheme("light")}
+                  className="gap-3"
+                >
                   <Sun className="h-4 w-4" />
                   Light
-                  {theme === "light" && <Check className="ml-auto h-3.5 w-3.5 text-primary" />}
+                  {theme === "light" && (
+                    <Check className="ml-auto h-3.5 w-3.5 text-primary" />
+                  )}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTheme("dark")} className="gap-3">
+                <DropdownMenuItem
+                  onClick={() => setTheme("dark")}
+                  className="gap-3"
+                >
                   <Moon className="h-4 w-4" />
                   Dark
-                  {theme === "dark" && <Check className="ml-auto h-3.5 w-3.5 text-primary" />}
+                  {theme === "dark" && (
+                    <Check className="ml-auto h-3.5 w-3.5 text-primary" />
+                  )}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTheme("system")} className="gap-3">
+                <DropdownMenuItem
+                  onClick={() => setTheme("system")}
+                  className="gap-3"
+                >
                   <Monitor className="h-4 w-4" />
                   System
-                  {theme === "system" && <Check className="ml-auto h-3.5 w-3.5 text-primary" />}
+                  {theme === "system" && (
+                    <Check className="ml-auto h-3.5 w-3.5 text-primary" />
+                  )}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -208,5 +228,5 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
         </div>
       </aside>
     </>
-  )
+  );
 }

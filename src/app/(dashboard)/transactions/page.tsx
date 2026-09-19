@@ -1,11 +1,17 @@
-"use client"
+"use client";
 
-import { useState, useMemo, useRef, useEffect, useCallback, type ReactNode } from "react"
-import { useForm, Controller } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { z } from "zod"
-import { transactionFormSchema } from "@/lib/validation"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import {
+  useState,
+  useMemo,
+  useRef,
+  useEffect,
+  useCallback,
+  type ReactNode,
+} from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { transactionFormSchema } from "@/lib/validation";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
   TrendingUp,
@@ -20,141 +26,76 @@ import {
   Home,
   Sparkles,
   PiggyBank,
-} from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Skeleton } from "@/components/ui/skeleton"
+} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog"
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import { formatIDR, formatDateTime, type PaginatedResponse } from "@/lib/utils"
-import { Pagination } from "@/components/ui/pagination"
-import { FormError } from "@/components/ui/form-error"
-import { getBudgetMonthKey, getBudgetMonthRange } from "@/lib/budget-months"
-import { RULE_TYPES, RULE_TYPE_ORDER, RULE_TYPE_CONFIGS, OTHER_CONFIG } from "@/lib/rule-type"
-import { toast } from "sonner"
-
-// Helper to check budget alert level
-function getBudgetAlert(category: string, newAmount: number, budgets: any[], transactions: any[], startDay: number = 1): { level: "near" | "over" | null; message: string } {
-  const monthKey = getBudgetMonthKey(new Date(), startDay)
-  
-  const budget = budgets?.find((b: any) => b.categoryName === category && b.month === monthKey)
-  if (!budget) return { level: null, message: "" }
-
-  // Calculate total spent for this category this budget month INCLUDING the new transaction
-  const { start, end } = getBudgetMonthRange(monthKey, startDay)
-
-  let totalSpent = newAmount // include the new transaction
-  for (const tx of transactions ?? []) {
-    if (tx.type !== "EXPENSE" || tx.category !== category) continue
-    const txDate = new Date(tx.date)
-    if (txDate >= start && txDate <= end) {
-      totalSpent += tx.amount
-    }
-  }
-
-  const percentUsed = (totalSpent / budget.amount) * 100
-  const remaining = budget.amount - totalSpent
-
-  if (percentUsed > 100) {
-    return {
-      level: "over",
-      message: `${category.replace("_", " ")} budget exceeded! ${formatIDR(Math.abs(remaining))} over budget (${Math.round(percentUsed)}% used)`,
-    }
-  }
-  if (percentUsed >= 80) {
-    return {
-      level: "near",
-      message: `${category.replace("_", " ")} nearing budget limit: ${formatIDR(remaining)} remaining (${Math.round(percentUsed)}% used)`,
-    }
-  }
-
-  return { level: null, message: "" }
-}
-
-const TRANSACTION_TYPES = ["INCOME", "EXPENSE"] as const
-
-const PREDEFINED_INCOME = [
-  "SALARY", "FREELANCE", "BUSINESS", "INVESTMENT", "DIVIDEND",
-  "INTEREST", "RENTAL", "GIFT", "REFUND", "OTHER_INCOME",
-] as const
-
-const PREDEFINED_EXPENSE = [
-  "FOOD", "TRANSPORTATION", "HOUSING", "UTILITIES", "HEALTHCARE",
-  "EDUCATION", "ENTERTAINMENT", "SHOPPING", "TRAVEL", "INSURANCE",
-  "TAX", "SUBSCRIPTION", "OTHER_EXPENSE",
-] as const
-
-interface Transaction {
-  id: string
-  type: string
-  category: string
-  amount: number
-  description: string
-  date: string
-}
-
-type TransactionFormData = z.infer<typeof transactionFormSchema>
-
-function TransactionSkeleton() {
-  return (
-    <div className="flex items-center justify-between rounded-lg border p-3">
-      <div className="flex items-center gap-3">
-        <Skeleton className="h-9 w-9 rounded-full" />
-        <div>
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-3 w-24 mt-1" />
-        </div>
-      </div>
-      <Skeleton className="h-4 w-20" />
-    </div>
-  )
-}
+} from "@/components/ui/select";
+import { formatIDR, formatDateTime, type PaginatedResponse } from "@/lib/utils";
+import { Pagination } from "@/components/ui/pagination";
+import { FormError } from "@/components/ui/form-error";
+import {
+  RULE_TYPES,
+  RULE_TYPE_ORDER,
+  RULE_TYPE_CONFIGS,
+  OTHER_CONFIG,
+} from "@/lib/rule-type";
+import { toast } from "sonner";
+import { TransactionFormData, TransactionInterface } from "@/types/transaction";
+import { getBudgetAlert } from "@/lib/helper/transaction";
+import {
+  PREDEFINED_EXPENSE,
+  PREDEFINED_INCOME,
+  TRANSACTION_TYPES,
+} from "@/const/transaction";
+import TransactionSkeleton from "@/components/dashboard/transaction/skeleton";
 
 export default function TransactionsPage() {
-  const queryClient = useQueryClient()
-  const [searchInput, setSearchInput] = useState("")
-  const [debouncedSearch, setDebouncedSearch] = useState("")
-  const [typeFilter, setTypeFilter] = useState<string>("ALL")
-  const [page, setPage] = useState(1)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const queryClient = useQueryClient();
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string>("ALL");
+  const [page, setPage] = useState(1);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] =
+    useState<TransactionInterface | null>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Debounce search input (300ms) before sending to server
   const debouncedSetSearch = useCallback((value: string) => {
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     searchTimerRef.current = setTimeout(() => {
-      setDebouncedSearch(value)
-      setPage(1) // Reset page when search changes
-    }, 300)
-  }, [])
+      setDebouncedSearch(value);
+      setPage(1); // Reset page when search changes
+    }, 300);
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
-    }
-  }, [])
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, []);
 
   // Reset page when type filter changes
   const handleTypeFilterChange = useCallback((value: string) => {
-    setTypeFilter(value)
-    setPage(1)
-  }, [])
+    setTypeFilter(value);
+    setPage(1);
+  }, []);
 
   const {
     register,
@@ -173,9 +114,9 @@ export default function TransactionsPage() {
       description: "",
       date: new Date().toISOString().split("T")[0],
     },
-  })
+  });
 
-  const formType = watch("type")
+  const formType = watch("type");
 
   const { data: transactions, isLoading } = useQuery({
     queryKey: ["transactions", page, debouncedSearch, typeFilter],
@@ -183,27 +124,35 @@ export default function TransactionsPage() {
       const params = new URLSearchParams({
         page: String(page),
         pageSize: "50",
-      })
-      if (debouncedSearch) params.set("search", debouncedSearch)
-      if (typeFilter !== "ALL") params.set("type", typeFilter)
+      });
+      if (debouncedSearch) params.set("search", debouncedSearch);
+      if (typeFilter !== "ALL") params.set("type", typeFilter);
       const res = await fetch(`/api/transactions?${params}`);
       if (!res.ok) throw new Error("Failed to fetch transactions");
-      const json: PaginatedResponse<Transaction> = await res.json();
+      const json: PaginatedResponse<TransactionInterface> = await res.json();
       return json;
     },
-  })
+  });
 
-  const transactionList = transactions?.data ?? []
-  const pagination = transactions?.pagination
+  const transactionList = transactions?.data ?? [];
+  const pagination = transactions?.pagination;
 
-  const { data: customCategories } = useQuery<Array<{ id: string; name: string; type: string; color: string; ruleType: string | null }>>({
+  const { data: customCategories } = useQuery<
+    Array<{
+      id: string;
+      name: string;
+      type: string;
+      color: string;
+      ruleType: string | null;
+    }>
+  >({
     queryKey: ["categories"],
     queryFn: async () => {
       const res = await fetch("/api/categories");
       if (!res.ok) throw new Error("Failed to fetch categories");
       return res.json();
     },
-  })
+  });
 
   const { data: budgets } = useQuery<any[]>({
     queryKey: ["budgets"],
@@ -212,7 +161,7 @@ export default function TransactionsPage() {
       if (!res.ok) throw new Error("Failed to fetch budgets");
       return res.json();
     },
-  })
+  });
 
   const { data: budgetSettings } = useQuery<{ budgetStartDay: number }>({
     queryKey: ["budget-settings"],
@@ -221,8 +170,8 @@ export default function TransactionsPage() {
       if (!res.ok) throw new Error("Failed to fetch budget settings");
       return res.json();
     },
-  })
-  const startDay = budgetSettings?.budgetStartDay ?? 1
+  });
+  const startDay = budgetSettings?.budgetStartDay ?? 1;
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -230,33 +179,41 @@ export default function TransactionsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
-      })
+      });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Failed to add transaction" }))
-        throw new Error(err.error || "Failed to add transaction")
+        const err = await res
+          .json()
+          .catch(() => ({ error: "Failed to add transaction" }));
+        throw new Error(err.error || "Failed to add transaction");
       }
-      return res.json()
+      return res.json();
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["transactions"] })
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
-      queryClient.invalidateQueries({ queryKey: ["budgets"] })
-      toast.success("Transaction added")
-      
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["budgets"] });
+      toast.success("Transaction added");
+
       // Check budget alert for expense transactions
       if (variables.type === "EXPENSE") {
-        const alert = getBudgetAlert(variables.category, parseFloat(variables.amount.toString()), budgets ?? [], transactionList, startDay)
+        const alert = getBudgetAlert(
+          variables.category,
+          parseFloat(variables.amount.toString()),
+          budgets ?? [],
+          transactionList,
+          startDay,
+        );
         if (alert.level === "over") {
-          toast.error(alert.message, { duration: 6000 })
+          toast.error(alert.message, { duration: 6000 });
         } else if (alert.level === "near") {
-          toast.warning(alert.message, { duration: 5000 })
+          toast.warning(alert.message, { duration: 5000 });
         }
       }
-      
-      resetForm()
+
+      resetForm();
     },
     onError: (err) => toast.error(err.message || "Failed to add transaction"),
-  })
+  });
 
   const updateMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -264,75 +221,90 @@ export default function TransactionsPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
-      })
+      });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Failed to update transaction" }))
-        throw new Error(err.error || "Failed to update transaction")
+        const err = await res
+          .json()
+          .catch(() => ({ error: "Failed to update transaction" }));
+        throw new Error(err.error || "Failed to update transaction");
       }
-      return res.json()
+      return res.json();
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["transactions"] })
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
-      queryClient.invalidateQueries({ queryKey: ["budgets"] })
-      toast.success("Transaction updated")
-      
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["budgets"] });
+      toast.success("Transaction updated");
+
       // Check budget alert for expense transactions
       if (variables.type === "EXPENSE") {
         // When editing, subtract the old amount from the total since it's still in cached data
-        const oldAmount = editingTransaction?.amount ? parseFloat(editingTransaction.amount.toString()) : 0
-        const netAdditional = parseFloat(variables.amount.toString()) - oldAmount
-        const alert = getBudgetAlert(variables.category, netAdditional, budgets ?? [], transactionList, startDay)
+        const oldAmount = editingTransaction?.amount
+          ? parseFloat(editingTransaction.amount.toString())
+          : 0;
+        const netAdditional =
+          parseFloat(variables.amount.toString()) - oldAmount;
+        const alert = getBudgetAlert(
+          variables.category,
+          netAdditional,
+          budgets ?? [],
+          transactionList,
+          startDay,
+        );
         if (alert.level === "over") {
-          toast.error(alert.message, { duration: 6000 })
+          toast.error(alert.message, { duration: 6000 });
         } else if (alert.level === "near") {
-          toast.warning(alert.message, { duration: 5000 })
+          toast.warning(alert.message, { duration: 5000 });
         }
       }
-      
-      resetForm()
+
+      resetForm();
     },
-    onError: (err) => toast.error(err.message || "Failed to update transaction"),
-  })
+    onError: (err) =>
+      toast.error(err.message || "Failed to update transaction"),
+  });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/transactions/${id}`, { method: "DELETE" })
+      const res = await fetch(`/api/transactions/${id}`, { method: "DELETE" });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Failed to delete transaction" }))
-        throw new Error(err.error || "Failed to delete transaction")
+        const err = await res
+          .json()
+          .catch(() => ({ error: "Failed to delete transaction" }));
+        throw new Error(err.error || "Failed to delete transaction");
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["transactions"] })
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] })
-      toast.success("Transaction deleted")
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      toast.success("Transaction deleted");
     },
-    onError: (err) => toast.error(err.message || "Failed to delete transaction"),
-  })
+    onError: (err) =>
+      toast.error(err.message || "Failed to delete transaction"),
+  });
 
   function resetForm() {
-    setEditingTransaction(null)
+    setEditingTransaction(null);
     reset({
       type: "EXPENSE",
       category: "",
       amount: "",
       description: "",
       date: new Date().toISOString().split("T")[0],
-    })
-    setIsDialogOpen(false)
+    });
+    setIsDialogOpen(false);
   }
 
-  function openEdit(tx: Transaction) {
-    setEditingTransaction(tx)
+  function openEdit(tx: TransactionInterface) {
+    setEditingTransaction(tx);
     reset({
       type: tx.type as "INCOME" | "EXPENSE",
       category: tx.category,
       amount: tx.amount.toString(),
       description: tx.description,
       date: new Date(tx.date).toISOString().split("T")[0],
-    })
-    setIsDialogOpen(true)
+    });
+    setIsDialogOpen(true);
   }
 
   function onFormSubmit(data: TransactionFormData) {
@@ -342,118 +314,119 @@ export default function TransactionsPage() {
       amount: parseFloat(data.amount),
       description: data.description,
       date: new Date(data.date).toISOString(),
-    }
+    };
 
     if (editingTransaction) {
-      updateMutation.mutate({ id: editingTransaction.id, ...payload })
+      updateMutation.mutate({ id: editingTransaction.id, ...payload });
     } else {
-      createMutation.mutate(payload)
+      createMutation.mutate(payload);
     }
   }
 
   // Build ruleType map: category name → ruleType
   const ruleTypeMap = useMemo(() => {
-    const map = new Map<string, string | null>()
+    const map = new Map<string, string | null>();
     for (const cat of customCategories ?? []) {
-      map.set(cat.name, cat.ruleType)
+      map.set(cat.name, cat.ruleType);
     }
-    return map
-  }, [customCategories])
+    return map;
+  }, [customCategories]);
 
-  // Group by type, then by ruleType, then by date
-  // Note: filtering is now handled server-side via ?search= and ?type= params
+  // Transactions are displayed chronologically; rule type is metadata on each row.
+  const sortedTransactions = useMemo(
+    () =>
+      [...transactionList].sort(
+        (a, b) => +new Date(b.date) - +new Date(a.date),
+      ),
+    [transactionList],
+  );
+
+  function getRuleType(category: string) {
+    const value = ruleTypeMap.get(category);
+    return value && RULE_TYPES.includes(value as any) ? value : "OTHER";
+  }
+
   const groupedByType = useMemo(() => {
-    function groupTransactions(txs: Transaction[]) {
-      const groups: Record<string, { dateMap: Map<string, Transaction[]>; total: number }> = {
-        NEED: { dateMap: new Map(), total: 0 },
-        WANT: { dateMap: new Map(), total: 0 },
-        SAVINGS: { dateMap: new Map(), total: 0 },
-        OTHER: { dateMap: new Map(), total: 0 },
-      }
-
-      for (const tx of txs) {
-        const ruleType = ruleTypeMap.get(tx.category)
-        const groupKey = ruleType && RULE_TYPES.includes(ruleType as any) ? ruleType : "OTHER"
-        const group = groups[groupKey]
-
-        const d = new Date(tx.date)
-        const dateKey = d.toLocaleDateString("en-US", {
-          weekday: "long",
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        })
-        if (!group.dateMap.has(dateKey)) group.dateMap.set(dateKey, [])
-        group.dateMap.get(dateKey)!.push(tx)
-        group.total += tx.amount
-      }
-
-      return groups
-    }
-
-    const income: Transaction[] = []
-    const expenses: Transaction[] = []
-    for (const tx of transactionList) {
-      if (tx.type === "INCOME") income.push(tx)
-      else expenses.push(tx)
-    }
-
+    const makeGroup = (txs: TransactionInterface[]) => ({
+      NEED: { dateMap: new Map<string, TransactionInterface[]>(), total: 0 },
+      WANT: { dateMap: new Map<string, TransactionInterface[]>(), total: 0 },
+      SAVINGS: { dateMap: new Map<string, TransactionInterface[]>(), total: 0 },
+      OTHER: {
+        dateMap: new Map([["", txs]]),
+        total: txs.reduce((sum, tx) => sum + tx.amount, 0),
+      },
+    });
+    const income = sortedTransactions.filter((tx) => tx.type === "INCOME");
+    const expenses = sortedTransactions.filter((tx) => tx.type !== "INCOME");
     return {
-      income: groupTransactions(income),
-      expenses: groupTransactions(expenses),
-      incomeTotal: income.reduce((s, t) => s + t.amount, 0),
-      expenseTotal: expenses.reduce((s, t) => s + t.amount, 0),
-    }
-  }, [transactionList, ruleTypeMap])
+      income: makeGroup(sortedTransactions),
+      expenses: makeGroup([]),
+      incomeTotal: income.reduce((sum, tx) => sum + tx.amount, 0),
+      expenseTotal: expenses.reduce((sum, tx) => sum + tx.amount, 0),
+    };
+  }, [sortedTransactions]);
 
-  const totalIncome = useMemo(() =>
-    transactionList
-      .filter((tx) => tx.type === "INCOME")
-      .reduce((sum, tx) => sum + tx.amount, 0),
-    [transactionList]
-  )
+  const totalIncome = useMemo(
+    () =>
+      transactionList
+        .filter((tx) => tx.type === "INCOME")
+        .reduce((sum, tx) => sum + tx.amount, 0),
+    [transactionList],
+  );
 
-  const totalExpenses = useMemo(() =>
-    transactionList
-      .filter((tx) => tx.type === "EXPENSE")
-      .reduce((sum, tx) => sum + tx.amount, 0),
-    [transactionList]
-  )
+  const totalExpenses = useMemo(
+    () =>
+      transactionList
+        .filter((tx) => tx.type === "EXPENSE")
+        .reduce((sum, tx) => sum + tx.amount, 0),
+    [transactionList],
+  );
 
   const categories = useMemo(() => {
     const userCats = (customCategories ?? [])
       .filter((c) => c.type === formType)
-      .map((c) => c.name)
-    const predefined = formType === "INCOME" ? PREDEFINED_INCOME : PREDEFINED_EXPENSE
-    return [...predefined, ...userCats.filter((c) => !(predefined as readonly string[]).includes(c))]
-  }, [customCategories, formType])
+      .map((c) => c.name);
+    const predefined =
+      formType === "INCOME" ? PREDEFINED_INCOME : PREDEFINED_EXPENSE;
+    return [
+      ...predefined,
+      ...userCats.filter((c) => !(predefined as readonly string[]).includes(c)),
+    ];
+  }, [customCategories, formType]);
 
   function renderRuleTypeGroup(
-    groups: Record<string, { dateMap: Map<string, Transaction[]>; total: number }>,
-    accentColor: "emerald" | "red"
+    groups: Record<
+      string,
+      { dateMap: Map<string, TransactionInterface[]>; total: number }
+    >,
+    accentColor: "emerald" | "red",
   ) {
     const RULE_TYPE_ICONS: Record<string, ReactNode> = {
       NEED: <Home className="h-3.5 w-3.5" />,
       WANT: <Sparkles className="h-3.5 w-3.5" />,
       SAVINGS: <PiggyBank className="h-3.5 w-3.5" />,
       OTHER: <Filter className="h-3.5 w-3.5" />,
-    }
+    };
 
-    const amountSign = accentColor === "emerald" ? "+" : "-"
+    const amountSign = accentColor === "emerald" ? "+" : "-";
 
     return (
       <div className="space-y-4">
-        {[...RULE_TYPE_ORDER, "OTHER"].map((ruleType) => {
-          const group = groups[ruleType]
-          if (group.dateMap.size === 0) return null
-          const isOther = ruleType === "OTHER"
-          const config = isOther ? OTHER_CONFIG : RULE_TYPE_CONFIGS[ruleType]
-          const icon = isOther ? RULE_TYPE_ICONS.OTHER : RULE_TYPE_ICONS[ruleType]
-          const colorName = isOther ? "gray" : ruleType.toLowerCase()
-          const textColor = config.color
-          const borderColor = `border-${colorName}-500/10`
-          const bgColor = `bg-${colorName}-500/[0.02]`
-          const hoverBg = `hover:bg-${colorName}-500/[0.05]`
+        {["OTHER"].map((ruleType) => {
+          const group = groups[ruleType];
+          if (group.dateMap.size === 0) return null;
+          const isOther = ruleType === "OTHER";
+          const config = isOther
+            ? { ...OTHER_CONFIG, label: "Transactions" }
+            : RULE_TYPE_CONFIGS[ruleType];
+          const icon = isOther
+            ? RULE_TYPE_ICONS.OTHER
+            : RULE_TYPE_ICONS[ruleType];
+          const colorName = isOther ? "gray" : ruleType.toLowerCase();
+          const textColor = config.color;
+          const borderColor = `border-${colorName}-500/10`;
+          const bgColor = `bg-${colorName}-500/[0.02]`;
+          const hoverBg = `hover:bg-${colorName}-500/[0.05]`;
 
           return (
             <div key={ruleType} className="ml-2">
@@ -463,15 +436,18 @@ export default function TransactionsPage() {
                   <span className={textColor}>{config.label}</span>
                 </h4>
                 <span className={`text-xs font-medium ${textColor}`}>
-                  {amountSign}{formatIDR(group.total)}
+                  {amountSign}
+                  {formatIDR(group.total)}
                 </span>
               </div>
               <div className="space-y-3">
                 {Array.from(group.dateMap.entries()).map(([dateLabel, txs]) => (
                   <div key={dateLabel}>
-                    <h5 className="text-[11px] font-medium text-muted-foreground mb-1.5 px-1">
-                      {dateLabel}
-                    </h5>
+                    {dateLabel && (
+                      <h5 className="text-[11px] font-medium text-muted-foreground mb-1.5 px-1">
+                        {dateLabel}
+                      </h5>
+                    )}
                     <div className="space-y-1">
                       {txs.map((tx) => (
                         <div
@@ -479,24 +455,53 @@ export default function TransactionsPage() {
                           className={`flex items-center justify-between rounded-lg border ${borderColor} ${bgColor} ${hoverBg} p-3 transition-colors group`}
                         >
                           <div className="flex items-center gap-3 min-w-0 flex-1">
-                            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${bgColor} ${textColor}`}>
+                            <div
+                              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${bgColor} ${textColor}`}
+                            >
                               {icon}
                             </div>
                             <div className="min-w-0">
-                              <p className="text-sm font-medium truncate">{tx.description}</p>
+                              <p className="text-sm font-medium truncate">
+                                {tx.description}
+                              </p>
                               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                 <span>{tx.category.replace("_", " ")}</span>
                                 <span>&bull;</span>
                                 <span>{formatDateTime(tx.date)}</span>
+                                <span>&bull;</span>
+                                <span
+                                  className={
+                                    getRuleType(tx.category) === "OTHER"
+                                      ? OTHER_CONFIG.color
+                                      : RULE_TYPE_CONFIGS[
+                                          getRuleType(tx.category)
+                                        ].color
+                                  }
+                                >
+                                  {getRuleType(tx.category) === "OTHER"
+                                    ? OTHER_CONFIG.label
+                                    : RULE_TYPE_CONFIGS[
+                                        getRuleType(tx.category)
+                                      ].label}
+                                </span>
                               </div>
                             </div>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
-                            <div className={`text-sm font-semibold ${accentColor === "emerald" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                              {amountSign}{formatIDR(tx.amount)}
+                            <div
+                              className={`text-sm font-semibold ${accentColor === "emerald" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
+                            >
+                              {amountSign}
+                              {formatIDR(tx.amount)}
                             </div>
                             <div className="flex gap-0.5 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                              <Button variant="ghost" size="icon-sm" onClick={() => openEdit(tx)} className="min-w-9 min-h-9" aria-label="Edit transaction">
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => openEdit(tx)}
+                                className="min-w-9 min-h-9"
+                                aria-label="Edit transaction"
+                              >
                                 <Edit2 className="h-3.5 w-3.5" />
                               </Button>
                               <Button
@@ -504,7 +509,7 @@ export default function TransactionsPage() {
                                 size="icon-sm"
                                 onClick={() => {
                                   if (confirm("Delete this transaction?")) {
-                                    deleteMutation.mutate(tx.id)
+                                    deleteMutation.mutate(tx.id);
                                   }
                                 }}
                                 className="min-w-9 min-h-9"
@@ -521,10 +526,10 @@ export default function TransactionsPage() {
                 ))}
               </div>
             </div>
-          )
+          );
         })}
       </div>
-    )
+    );
   }
 
   return (
@@ -546,36 +551,38 @@ export default function TransactionsPage() {
               id="csv-import"
               className="hidden"
               onChange={async (e) => {
-                const file = e.target.files?.[0]
-                if (!file) return
+                const file = e.target.files?.[0];
+                if (!file) return;
 
-                const formData = new FormData()
-                formData.append("file", file)
+                const formData = new FormData();
+                formData.append("file", file);
 
-                toast.loading("Importing transactions...")
+                toast.loading("Importing transactions...");
                 try {
                   const res = await fetch("/api/transactions/import", {
                     method: "POST",
                     body: formData,
-                  })
-                  const result = await res.json()
-                  toast.dismiss()
+                  });
+                  const result = await res.json();
+                  toast.dismiss();
 
                   if (!res.ok) {
-                    toast.error(result.error || "Import failed")
+                    toast.error(result.error || "Import failed");
                     if (result.importErrors?.length > 0) {
-                      console.error("Import errors:", result.importErrors)
+                      console.error("Import errors:", result.importErrors);
                     }
                   } else {
-                    toast.success(result.message)
-                    queryClient.invalidateQueries({ queryKey: ["transactions"] })
-                    queryClient.invalidateQueries({ queryKey: ["dashboard"] })
+                    toast.success(result.message);
+                    queryClient.invalidateQueries({
+                      queryKey: ["transactions"],
+                    });
+                    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
                   }
                 } catch {
-                  toast.dismiss()
-                  toast.error("Failed to import CSV")
+                  toast.dismiss();
+                  toast.error("Failed to import CSV");
                 }
-                e.target.value = ""
+                e.target.value = "";
               }}
             />
             <Button
@@ -595,18 +602,18 @@ export default function TransactionsPage() {
             size="sm"
             onClick={async () => {
               try {
-                const res = await fetch("/api/transactions/export")
-                if (!res.ok) throw new Error("Export failed")
-                const blob = await res.blob()
-                const url = URL.createObjectURL(blob)
-                const a = document.createElement("a")
-                a.href = url
-                a.download = `transactions-${new Date().toISOString().split("T")[0]}.csv`
-                a.click()
-                URL.revokeObjectURL(url)
-                toast.success("Transactions exported")
+                const res = await fetch("/api/transactions/export");
+                if (!res.ok) throw new Error("Export failed");
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `transactions-${new Date().toISOString().split("T")[0]}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+                toast.success("Transactions exported");
               } catch {
-                toast.error("Failed to export transactions")
+                toast.error("Failed to export transactions");
               }
             }}
             className="w-full sm:w-auto"
@@ -618,7 +625,11 @@ export default function TransactionsPage() {
 
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" onClick={() => resetForm()} className="w-full sm:w-auto">
+            <Button
+              size="sm"
+              onClick={() => resetForm()}
+              className="w-full sm:w-auto"
+            >
               <Plus className="h-4 w-4 mr-1" />
               Add Transaction
             </Button>
@@ -643,7 +654,10 @@ export default function TransactionsPage() {
                           type="button"
                           variant={field.value === t ? "default" : "outline"}
                           size="sm"
-                          onClick={() => { field.onChange(t); setValue("category", "") }}
+                          onClick={() => {
+                            field.onChange(t);
+                            setValue("category", "");
+                          }}
                           className="flex-1"
                         >
                           {t === "INCOME" ? (
@@ -654,7 +668,8 @@ export default function TransactionsPage() {
                           {t.charAt(0) + t.slice(1).toLowerCase()}
                         </Button>
                       ))}
-                    </div>                    )}
+                    </div>
+                  )}
                 />
                 <FormError errors={errors} name="type" />
               </div>
@@ -665,7 +680,11 @@ export default function TransactionsPage() {
                   name="category"
                   control={control}
                   render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange} required>
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      required
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
@@ -743,7 +762,9 @@ export default function TransactionsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Expenses
+            </CardTitle>
             <TrendingDown className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
@@ -757,7 +778,9 @@ export default function TransactionsPage() {
             <CardTitle className="text-sm font-medium">Net Cash Flow</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${totalIncome - totalExpenses >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+            <div
+              className={`text-2xl font-bold ${totalIncome - totalExpenses >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
+            >
               {formatIDR(totalIncome - totalExpenses)}
             </div>
           </CardContent>
@@ -773,8 +796,8 @@ export default function TransactionsPage() {
             className="pl-9"
             value={searchInput}
             onChange={(e) => {
-              setSearchInput(e.target.value)
-              debouncedSetSearch(e.target.value)
+              setSearchInput(e.target.value);
+              debouncedSetSearch(e.target.value);
             }}
           />
         </div>
@@ -795,7 +818,9 @@ export default function TransactionsPage() {
       <Card>
         <CardContent className="p-4 space-y-2">
           {isLoading ? (
-            Array.from({ length: 5 }).map((_, i) => <TransactionSkeleton key={i} />)
+            Array.from({ length: 5 }).map((_, i) => (
+              <TransactionSkeleton key={i} />
+            ))
           ) : transactionList.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-sm text-muted-foreground">
@@ -807,15 +832,21 @@ export default function TransactionsPage() {
           ) : (
             <div className="space-y-6">
               {/* Income Section */}
-              {groupedByType.incomeTotal > 0 && (
+              {transactionList.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                       <TrendingUp className="h-4 w-4" />
-                      Income
+                      Transactions
                     </h3>
-                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                      +{formatIDR(groupedByType.incomeTotal)}
+                    <span className="text-sm font-bold">
+                      <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+                        +{formatIDR(groupedByType.incomeTotal)}
+                      </span>{" "}
+                      /{" "}
+                      <span className="text-sm font-bold text-red-600 dark:text-red-400">
+                        -{formatIDR(groupedByType.expenseTotal)}
+                      </span>
                     </span>
                   </div>
                   {renderRuleTypeGroup(groupedByType.income, "emerald")}
@@ -823,7 +854,7 @@ export default function TransactionsPage() {
               )}
 
               {/* Expense Section */}
-              {groupedByType.expenseTotal > 0 && (
+              {false && groupedByType.expenseTotal > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold flex items-center gap-2 text-red-600 dark:text-red-400">
@@ -844,8 +875,12 @@ export default function TransactionsPage() {
 
       {/* Pagination */}
       {pagination && (
-        <Pagination pagination={pagination} page={page} onPageChange={setPage} />
+        <Pagination
+          pagination={pagination}
+          page={page}
+          onPageChange={setPage}
+        />
       )}
     </div>
-  )
+  );
 }

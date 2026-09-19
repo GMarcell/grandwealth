@@ -1,0 +1,29 @@
+export const TRANSACTION_TYPES = ["INCOME", "EXPENSE"] as const;
+export const PREDEFINED_INCOME = [
+  "SALARY",
+  "FREELANCE",
+  "BUSINESS",
+  "INVESTMENT",
+  "DIVIDEND",
+  "INTEREST",
+  "RENTAL",
+  "GIFT",
+  "REFUND",
+  "OTHER_INCOME",
+] as const;
+
+export const PREDEFINED_EXPENSE = [
+  "FOOD",
+  "TRANSPORTATION",
+  "HOUSING",
+  "UTILITIES",
+  "HEALTHCARE",
+  "EDUCATION",
+  "ENTERTAINMENT",
+  "SHOPPING",
+  "TRAVEL",
+  "INSURANCE",
+  "TAX",
+  "SUBSCRIPTION",
+  "OTHER_EXPENSE",
+] as const;
