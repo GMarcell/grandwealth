@@ -83,6 +83,25 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
 
   const overBudgetCount = budgetSummary?.overBudget ?? 0;
 
+  // Pending Pro trial requests — the admin panel's notification badge.
+  // Keyed as a child of ["admin-trial-requests"] so the admin page's
+  // invalidations refresh it without sharing the same cache entry.
+  const { data: pendingTrialRequests } = useQuery<{
+    pagination: { total: number };
+  }>({
+    queryKey: ["admin-trial-requests", "pending-count"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/trial-requests?status=PENDING&pageSize=1");
+      if (!res.ok) throw new Error("Failed to fetch trial requests");
+      return res.json();
+    },
+    enabled: isAdmin,
+    refetchInterval: 300_000,
+    staleTime: 120_000,
+  });
+
+  const pendingTrialCount = pendingTrialRequests?.pagination.total ?? 0;
+
   const renderNavItems = (onClick?: () => void) =>
     items.map((item) => {
       const isActive = pathname.startsWith(item.href);
@@ -106,6 +125,16 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
               className="h-5 min-w-5 px-1 text-[10px] flex items-center justify-center"
             >
               {overBudgetCount}
+            </Badge>
+          )}
+          {item.href === "/admin" && pendingTrialCount > 0 && (
+            <Badge
+              className="h-5 min-w-5 px-1 text-[10px] flex items-center justify-center"
+              title={`${pendingTrialCount} pending trial request${
+                pendingTrialCount === 1 ? "" : "s"
+              }`}
+            >
+              {pendingTrialCount}
             </Badge>
           )}
         </Link>

@@ -48,7 +48,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Housekeeping: end any lapsed 14-day trials before computing who to
+    // Housekeeping: end any lapsed trials before computing who to
     // analyze.
     await expireLapsedTrials()
 

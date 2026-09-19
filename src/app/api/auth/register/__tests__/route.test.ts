@@ -99,33 +99,30 @@ describe("POST /api/auth/register — email normalization", () => {
   })
 })
 
-describe("POST /api/auth/register — Pro trial grant", () => {
+describe("POST /api/auth/register — plan", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setupMocks()
     delete process.env.ADMIN_EMAILS
   })
 
-  it("grants new users an active 14-day Pro trial", async () => {
+  it("leaves new users on the schema defaults (Free, no trial)", async () => {
+    // Pro — including the free trial — is admin-managed: the user requests a
+    // trial from Settings and an admin approves it.
     const res = await POST(
       makeRequest({ email: "user@example.com", password: "secure123" })
     )
 
     expect(res.status).toBe(200)
     const data = mockCreate.mock.calls[0][0].data
-    expect(data).toMatchObject({
-      email: "user@example.com",
-      plan: "PRO",
-      subscriptionStatus: "ACTIVE",
-      isTrial: true,
-    })
-    const trialEnd = data.currentPeriodEnd as Date
-    const expectedEnd = Date.now() + 14 * 24 * 60 * 60 * 1000
-    expect(trialEnd.getTime()).toBeGreaterThan(expectedEnd - 60_000)
-    expect(trialEnd.getTime()).toBeLessThan(expectedEnd + 60_000)
+    expect(data).toMatchObject({ email: "user@example.com" })
+    expect(data.plan).toBeUndefined()
+    expect(data.subscriptionStatus).toBeUndefined()
+    expect(data.currentPeriodEnd).toBeUndefined()
+    expect(data.isTrial).toBeUndefined()
   })
 
-  it("does not grant a trial to bootstrap admins", async () => {
+  it("still promotes bootstrap admins", async () => {
     process.env.ADMIN_EMAILS = "boss@example.com"
 
     const res = await POST(

@@ -5,6 +5,7 @@ import {
   isProOnlyPath,
   planLabel,
   subscriptionStatusLabel,
+  proTrialPeriodEnd,
   PRO_PRICE_IDR,
   PRO_TRIAL_DAYS,
 } from "../subscription"
@@ -91,8 +92,31 @@ describe("labels & constants", () => {
     expect(PRO_PRICE_IDR).toBeGreaterThan(0)
   })
 
-  it("grants a 14-day trial", () => {
-    expect(PRO_TRIAL_DAYS).toBe(14)
+  it("grants a 30-day trial", () => {
+    expect(PRO_TRIAL_DAYS).toBe(30)
+  })
+})
+
+describe("proTrialPeriodEnd", () => {
+  it("runs for PRO_TRIAL_DAYS from the given start", () => {
+    const start = new Date("2026-09-20T10:00:00.000Z")
+    expect(proTrialPeriodEnd(start).toISOString()).toBe(
+      "2026-10-20T10:00:00.000Z"
+    )
+  })
+
+  it("defaults to now", () => {
+    const before = Date.now()
+    const end = proTrialPeriodEnd().getTime()
+    const expected = before + PRO_TRIAL_DAYS * 24 * 60 * 60 * 1000
+    expect(end).toBeGreaterThanOrEqual(expected)
+    expect(end).toBeLessThanOrEqual(Date.now() + PRO_TRIAL_DAYS * 24 * 60 * 60 * 1000)
+  })
+
+  it("crosses a year boundary correctly", () => {
+    expect(proTrialPeriodEnd(new Date("2026-12-15T00:00:00.000Z")).toISOString()).toBe(
+      "2027-01-14T00:00:00.000Z"
+    )
   })
 })
 

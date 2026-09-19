@@ -17,6 +17,10 @@ import {
   Ban,
   CheckCircle2,
   Pencil,
+  KeyRound,
+  Check,
+  X,
+  Clock,
   type LucideIcon,
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
@@ -40,7 +44,8 @@ import {
 } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
 import { formatDate, formatCompactIDR } from "@/lib/utils"
-import { subscriptionStatusLabel } from "@/lib/subscription"
+import { proTrialPeriodEnd, subscriptionStatusLabel } from "@/lib/subscription"
+import { DEFAULT_PASSWORD } from "@/lib/password"
 
 type Plan = "FREE" | "PRO"
 type Role = "USER" | "ADMIN"
@@ -81,6 +86,24 @@ interface Pagination {
   hasMore: boolean
 }
 
+interface AdminTrialRequest {
+  id: string
+  status: "PENDING" | "APPROVED" | "DECLINED"
+  message: string | null
+  decisionNote: string | null
+  createdAt: string
+  decidedAt: string | null
+  user: {
+    id: string
+    name: string | null
+    email: string
+    plan: Plan
+    currentPeriodEnd: string | null
+    isTrial: boolean
+    suspended: boolean
+  }
+}
+
 const STATUS_OPTIONS: SubscriptionStatus[] = ["ACTIVE", "PAST_DUE", "CANCELED", "EXPIRED"]
 
 function toDateInputValue(iso: string | null): string {
@@ -107,9 +130,14 @@ export default function AdminPage() {
   const [editIsTrial, setEditIsTrial] = useState(false)
   const [isSavingPlan, setIsSavingPlan] = useState(false)
 
+  // Reset-password dialog state
+  const [resettingUser, setResettingUser] = useState<AdminUser | null>(null)
+
   function invalidateAll() {
     queryClient.invalidateQueries({ queryKey: ["admin-overview"] })
     queryClient.invalidateQueries({ queryKey: ["admin-users"] })
+    // Prefix-matches the pending-count query used by the sidebar badge too.
+    queryClient.invalidateQueries({ queryKey: ["admin-trial-requests"] })
   }
 
   const { data: overview } = useQuery<Overview>({
@@ -138,6 +166,43 @@ export default function AdminPage() {
       if (!res.ok) throw new Error("Failed to load users")
       return res.json()
     },
+  })
+
+  const { data: trialRequestsData } = useQuery<{
+    data: AdminTrialRequest[]
+    pagination: Pagination
+  }>({
+    queryKey: ["admin-trial-requests"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/trial-requests?status=PENDING&pageSize=20")
+      if (!res.ok) throw new Error("Failed to load trial requests")
+      return res.json()
+    },
+  })
+
+  const decideTrialMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: "APPROVED" | "DECLINED" }) => {
+      const res = await fetch(`/api/admin/trial-requests/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed to update trial request" }))
+        throw new Error(err.error || "Failed to update trial request")
+      }
+      return res.json()
+    },
+    onSuccess: (_data, variables) => {
+      invalidateAll()
+      toast.success(
+        variables.status === "APPROVED"
+          ? "Trial approved — the user has 30 days of Pro"
+          : "Trial request declined"
+      )
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Failed to update trial request"),
   })
 
   const patchMutation = useMutation({
@@ -174,6 +239,24 @@ export default function AdminPage() {
       toast.success("User deleted")
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to delete user"),
+  })
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/admin/users/${id}/reset-password`, {
+        method: "POST",
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Failed to reset password" }))
+        throw new Error(err.error || "Failed to reset password")
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      toast.success(`Password reset to the default (${DEFAULT_PASSWORD})`)
+      setResettingUser(null)
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to reset password"),
   })
 
   function openEdit(user: AdminUser) {
@@ -243,6 +326,7 @@ export default function AdminPage() {
 
   const users = usersData?.data ?? []
   const pagination = usersData?.pagination
+  const pendingTrialRequests = trialRequestsData?.data ?? []
 
   return (
     <div className="space-y-6">
@@ -274,6 +358,85 @@ export default function AdminPage() {
           </Card>
         ))}
       </div>
+
+      {/* Trial requests */}
+      <Card className={pendingTrialRequests.length > 0 ? "border-primary/40" : undefined}>
+        <CardContent className="pt-6 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="flex items-center gap-2 text-sm font-semibold">
+                <Gift className="h-4 w-4" />
+                Trial requests
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Users asking for the free 30-day Pro trial. Approving grants Pro
+                immediately; the account returns to Free when the trial ends.
+              </p>
+            </div>
+            {pendingTrialRequests.length > 0 && (
+              <Badge className="gap-1">
+                <Clock className="h-3 w-3" />
+                {pendingTrialRequests.length} pending
+              </Badge>
+            )}
+          </div>
+
+          {pendingTrialRequests.length === 0 ? (
+            <p className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
+              No pending trial requests.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {pendingTrialRequests.map((request) => (
+                <li
+                  key={request.id}
+                  className="flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0 space-y-1">
+                    <p className="truncate text-sm font-medium">
+                      {request.user.name || "Unnamed"}
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">
+                        {request.user.email}
+                      </span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Requested {formatDate(request.createdAt)}
+                    </p>
+                    {request.message && (
+                      <p className="text-sm text-muted-foreground italic">
+                        “{request.message}”
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <Button
+                      size="sm"
+                      disabled={decideTrialMutation.isPending}
+                      onClick={() =>
+                        decideTrialMutation.mutate({ id: request.id, status: "APPROVED" })
+                      }
+                    >
+                      <Check className="h-4 w-4 mr-1" />
+                      Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={decideTrialMutation.isPending}
+                      onClick={() =>
+                        decideTrialMutation.mutate({ id: request.id, status: "DECLINED" })
+                      }
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      Decline
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Users table */}
       <Card>
@@ -461,6 +624,15 @@ export default function AdminPage() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
+                          title="Reset password"
+                          onClick={() => setResettingUser(user)}
+                        >
+                          <KeyRound className="h-4 w-4" />
+                          <span className="sr-only">Reset password for {user.email}</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
                           className="text-red-600 hover:text-red-600"
                           title="Delete user"
                           disabled={deleteMutation.isPending}
@@ -515,6 +687,56 @@ export default function AdminPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Reset password dialog */}
+      <Dialog
+        open={!!resettingUser}
+        onOpenChange={(open) => !open && setResettingUser(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5" />
+              Reset password
+            </DialogTitle>
+            <DialogDescription>
+              {resettingUser
+                ? `${resettingUser.name || "User"} · ${resettingUser.email}`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              The password will be reset to the default below. Share it with the
+              user, and ask them to change it from Settings after signing in.
+            </p>
+            <div className="rounded-lg bg-muted p-3">
+              <p className="text-xs text-muted-foreground">New password</p>
+              <p className="font-mono text-sm font-medium">{DEFAULT_PASSWORD}</p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setResettingUser(null)}
+                disabled={resetPasswordMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() =>
+                  resettingUser && resetPasswordMutation.mutate(resettingUser.id)
+                }
+                disabled={resetPasswordMutation.isPending}
+              >
+                {resetPasswordMutation.isPending && (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                )}
+                Reset Password
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit plan dialog */}
       <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
@@ -588,7 +810,14 @@ export default function AdminPage() {
                       <Switch
                         id="edit-trial"
                         checked={editIsTrial}
-                        onCheckedChange={setEditIsTrial}
+                        onCheckedChange={(checked) => {
+                          setEditIsTrial(checked)
+                          // Default a trial grant to the standard trial length
+                          // (30 days) so the admin only has to confirm.
+                          if (checked && !editPeriodEnd) {
+                            setEditPeriodEnd(toDateInputValue(proTrialPeriodEnd().toISOString()))
+                          }
+                        }}
                       />
                     </div>
                   </>

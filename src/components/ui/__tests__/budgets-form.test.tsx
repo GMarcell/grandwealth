@@ -11,7 +11,6 @@ const testFormSchema = z.object({
   amount: z.string()
     .min(1, "Amount is required")
     .refine((v) => !isNaN(Number(v)) && Number(v) > 0, "Amount must be a positive number"),
-  rolloverEnabled: z.boolean(),
   rolloverCap: z.string().optional(),
 })
 
@@ -31,7 +30,6 @@ function TestForm({ onSubmit = vi.fn() }: TestFormProps) {
     defaultValues: {
       categoryName: "",
       amount: "",
-      rolloverEnabled: true,
       rolloverCap: "",
     },
   })
@@ -53,8 +51,6 @@ function TestForm({ onSubmit = vi.fn() }: TestFormProps) {
         <input id="amount" type="number" {...register("amount")} />
         <FormError errors={errors} name="amount" />
       </div>
-
-      <input type="hidden" {...register("rolloverEnabled")} value="true" />
 
       <button type="submit">Add Budget</button>
     </form>
@@ -126,7 +122,6 @@ describe("Budget form validation integration", () => {
     expect(calledWith).toMatchObject({
       categoryName: "FOOD",
       amount: "1000000",
-      rolloverEnabled: true,
     })
   })
 

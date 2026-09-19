@@ -8,8 +8,17 @@ import type { Plan, Role, SubscriptionStatus } from "@prisma/client"
  */
 export const PRO_PRICE_IDR = 39_000
 
-/** Length of the free Pro trial granted to new registrations, in days. */
-export const PRO_TRIAL_DAYS = 14
+/** Length of the Pro trial an administrator grants, in days. */
+export const PRO_TRIAL_DAYS = 30
+
+/**
+ * When a trial started at `from` ends. Used when an admin approves a trial
+ * request; the account drops back to FREE at this instant (see
+ * `expireLapsedTrials`).
+ */
+export function proTrialPeriodEnd(from: Date = new Date()): Date {
+  return new Date(from.getTime() + PRO_TRIAL_DAYS * 24 * 60 * 60 * 1000)
+}
 
 /** The minimal user shape required to decide plan entitlements. */
 export interface EntitlementUser {

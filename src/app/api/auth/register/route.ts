@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma"
 import { registerSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 import { isBootstrapAdminEmail } from "@/lib/admin-bootstrap"
-import { PRO_TRIAL_DAYS } from "@/lib/subscription"
 
 export async function POST(req: Request) {
   // Rate limit: 5 registration attempts per 10 minutes per IP
@@ -36,8 +35,9 @@ export async function POST(req: Request) {
     const hashedPassword = await hash(password, 12)
 
     // Emails listed in ADMIN_EMAILS register as admins (bootstrap). Everyone
-    // else gets the USER role plus a free 14-day Pro trial so they can
-    // experience the paid modules before subscribing (admin-managed).
+    // else starts on the FREE plan — Pro, including the free trial, is
+    // admin-managed: the user requests a trial from Settings and an
+    // administrator approves it (see /api/user/trial-request).
     const role = isBootstrapAdminEmail(email) ? "ADMIN" : undefined
 
     await prisma.user.create({
@@ -45,16 +45,7 @@ export async function POST(req: Request) {
         name: name || null,
         email,
         password: hashedPassword,
-        ...(role
-          ? { role }
-          : {
-              plan: "PRO",
-              subscriptionStatus: "ACTIVE",
-              currentPeriodEnd: new Date(
-                Date.now() + PRO_TRIAL_DAYS * 24 * 60 * 60 * 1000
-              ),
-              isTrial: true,
-            }),
+        ...(role ? { role } : {}),
       },
     })
 

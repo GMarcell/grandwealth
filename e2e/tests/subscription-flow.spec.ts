@@ -5,9 +5,11 @@ import { hash } from "bcryptjs"
 /**
  * End-to-end coverage of the subscription model:
  *
- *  1. Registration grants a fresh user an active 14-day Pro trial (they can
- *     open Pro-only modules and Settings shows the trial).
- *  2. A Free user (no trial) is paywalled on Pro modules (/upgrade).
+ *  1. Registration lands on the Free plan (Pro is admin-managed, so a fresh
+ *     account is paywalled on Pro modules).
+ *  2. The Free user requests a 30-day Pro trial from Settings, and an admin
+ *     approves it from /admin → the user gains access and Settings shows the
+ *     trial end date.
  *  3. An admin grants Pro from /admin → the user regains access.
  *  4. An admin converts a trial grant to a paid subscription and revokes it.
  *
@@ -22,6 +24,10 @@ const users = {
   trial: {
     name: "E2E Trial User",
     email: `e2e-trial-${RUN_ID}@test.grandwealth.app`,
+  },
+  trialAdmin: {
+    name: "E2E Trial Admin",
+    email: `e2e-trial-admin-${RUN_ID}@test.grandwealth.app`,
   },
   free: {
     name: "E2E Free User",
@@ -76,13 +82,19 @@ async function loginContext(browser: Browser, email: string): Promise<{ context:
 const heading = (page: Page, label: string) =>
   page.locator("h1").filter({ hasText: label })
 
-test.describe("Registration → 14-day Pro trial", () => {
+test.describe("Registration → trial request → admin approval", () => {
   test.describe.serial(() => {
-    test("registers a new user who can open a Pro-only module", async ({ browser }) => {
+    test.beforeAll(async () => {
+      // The administrator who reviews the trial request.
+      await createUser(users.trialAdmin, { role: "ADMIN" })
+    })
+
+    test("registers a new user who starts on the Free plan", async ({ browser }) => {
       const context = await browser.newContext()
       const page = await context.newPage()
       try {
-        // Register through the UI (the trial is granted server-side).
+        // Register through the UI. Pro — including the trial — is admin
+        // managed, so no plan is granted server-side.
         await page.goto("/register", { waitUntil: "networkidle" })
         await page.getByLabel("Name").fill(users.trial.name)
         await page.getByLabel("Email").fill(users.trial.email)
@@ -96,29 +108,72 @@ test.describe("Registration → 14-day Pro trial", () => {
         await page.getByRole("button", { name: "Sign In" }).click()
         await page.waitForURL("**/dashboard", { timeout: 15_000 })
 
-        // The trial grants Pro: /budgets must load, not redirect to /upgrade.
+        // Free account: /budgets must redirect to the paywall.
         await page.goto("/budgets")
-        await expect(heading(page, "Budgets")).toBeVisible({ timeout: 10_000 })
-        expect(page.url()).not.toContain("/upgrade")
+        await page.waitForURL("**/upgrade", { timeout: 10_000 })
+        await expect(page.getByText("Upgrade to Pro")).toBeVisible()
       } finally {
         await context.close()
       }
     })
 
-    test("Settings shows the trial state for the trial user", async ({ browser }) => {
+    test("the Free user requests a Pro trial from Settings", async ({ browser }) => {
       const { context, page } = await loginContext(browser, users.trial.email)
       try {
+        await page.goto("/settings")
+        await expect(page.getByText("Pro Trial")).toBeVisible({ timeout: 10_000 })
+
+        await page
+          .getByLabel(/Why would you like Pro\?/)
+          .fill("E2E: I want to try budgeting")
+        await page.getByRole("button", { name: "Request Pro Trial" }).click()
+
+        // The card flips to the awaiting-review state.
+        await expect(page.getByText("Awaiting review")).toBeVisible({ timeout: 10_000 })
+      } finally {
+        await context.close()
+      }
+    })
+
+    test("the admin approves the request from /admin", async ({ browser }) => {
+      const { context, page } = await loginContext(browser, users.trialAdmin.email)
+      try {
+        await page.goto("/admin")
+        await expect(heading(page, "Admin")).toBeVisible({ timeout: 10_000 })
+
+        // Approve the request (Trial requests card sits above the user table).
+        const request = page.locator("li").filter({ hasText: users.trial.email })
+        await expect(request).toBeVisible({ timeout: 10_000 })
+        await request.getByRole("button", { name: "Approve" }).click()
+        await expect(page.getByText(/Trial approved/)).toBeVisible({ timeout: 10_000 })
+      } finally {
+        await context.close()
+      }
+    })
+
+    test("the approved user can open Pro modules and sees the trial", async ({ browser }) => {
+      const { context, page } = await loginContext(browser, users.trial.email)
+      try {
+        await page.goto("/budgets")
+        await expect(heading(page, "Budgets")).toBeVisible({ timeout: 10_000 })
+        expect(page.url()).not.toContain("/upgrade")
+
         await page.goto("/settings")
         await expect(page.getByText("Plan & Subscription")).toBeVisible({ timeout: 10_000 })
         // Active Pro badge, Trial badge, and the trial copy + end-date label.
         await expect(page.getByText("Pro", { exact: true })).toBeVisible()
         await expect(page.getByText("Trial", { exact: true })).toBeVisible()
         await expect(page.getByText("Trial ends")).toBeVisible()
-        await expect(page.getByText(/enjoying a free trial of Pro/)).toBeVisible()
+        await expect(page.getByText("Trial active")).toBeVisible()
       } finally {
         await context.close()
       }
     })
+  })
+
+  test.afterAll(async () => {
+    // The Prisma client is disconnected by the next block's afterAll.
+    await prisma.user.deleteMany({ where: { email: { in: allEmails } } })
   })
 })
 
@@ -128,7 +183,7 @@ test.describe("Admin-managed subscription (Free → paywall → Pro)", () => {
       // Free user (defaults) + admin who will grant Pro.
       await createUser(users.free)
       await createUser(users.admin, { role: "ADMIN" })
-      // A user currently on their automatic trial, for the trial→paid conversion.
+      // A user currently on an admin-approved trial, for the trial→paid conversion.
       await createUser(users.convert, {
         plan: "PRO",
         subscriptionStatus: "ACTIVE",

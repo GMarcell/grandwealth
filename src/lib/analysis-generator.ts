@@ -59,7 +59,12 @@ export async function generateAnalysisForUserAndMonth(
   // Fetch user
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, budgetStartDay: true },
+    select: {
+      id: true,
+      name: true,
+      budgetStartDay: true,
+      carryOverEnabled: true,
+    },
   })
 
   if (!user) throw new Error("User not found")
@@ -121,7 +126,7 @@ export async function generateAnalysisForUserAndMonth(
     budgeted: number
     spent: number
     remaining: number
-    rolloverEnabled: boolean
+    carryOverEnabled: boolean
   }> = []
 
   for (const budget of budgets) {
@@ -132,7 +137,7 @@ export async function generateAnalysisForUserAndMonth(
       budgeted: budget.amount,
       spent,
       remaining: budget.amount - spent,
-      rolloverEnabled: budget.rolloverEnabled,
+      carryOverEnabled: user.carryOverEnabled ?? true,
     })
   }
 

@@ -2,7 +2,16 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { requireProAccess } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
-import { getBudgetMonthKey, getBudgetMonthRange, getBudgetMonthLabel } from "@/lib/budget-months"
+import {
+  getBudgetMonthRange,
+  getBudgetMonthLabel,
+  getCurrentBudgetMonthKey,
+  getPreviousBudgetMonthKey,
+} from "@/lib/budget-months"
+import {
+  buildSpentByMonthCategory,
+  computeCarryOverChain,
+} from "@/lib/budget-carry-over"
 
 export async function GET() {
   const session = await auth()
@@ -19,19 +28,21 @@ export async function GET() {
     // Get user's budget start day setting
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { budgetStartDay: true },
+      select: { budgetStartDay: true, carryOverEnabled: true },
     })
     const startDay = user?.budgetStartDay ?? 1
+    // Global switch — carry-over is applied for every category when on.
+    const carryOverEnabled = user?.carryOverEnabled ?? true
 
-    // Get last 13 budget months (12 months + 1 extra for proper rollover calc)
-    const months: string[] = []
-    const now = new Date()
-    for (let i = 12; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, startDay)
-      months.push(getBudgetMonthKey(d, startDay))
+    // Last 13 budget months, oldest → newest, ending with the CURRENT budget
+    // month (never a not-yet-started one). Consecutive keys are unique, so no
+    // dedupe is required.
+    const uniqueMonths: string[] = []
+    let cursor = getCurrentBudgetMonthKey(startDay)
+    for (let i = 0; i < 13; i++) {
+      uniqueMonths.unshift(cursor)
+      cursor = getPreviousBudgetMonthKey(cursor, startDay)
     }
-    // Deduplicate months (they can repeat with certain startDay values)
-    const uniqueMonths = [...new Set(months)]
 
     const budgets = await prisma.budget.findMany({
       where: {
@@ -41,9 +52,12 @@ export async function GET() {
       orderBy: [{ categoryName: "asc" }, { month: "asc" }],
     })
 
-    // Get all transactions across the full range
-    const firstMonthKey = uniqueMonths[uniqueMonths.length - 1]
-    const lastMonthKey = uniqueMonths[0]
+    // Get all transactions across the full range. `uniqueMonths` is oldest →
+    // newest, so the window runs from the START of the oldest month to the END
+    // of the newest. (These indexes were previously reversed, which produced a
+    // start > end window and counted zero spend.)
+    const firstMonthKey = uniqueMonths[0]
+    const lastMonthKey = uniqueMonths[uniqueMonths.length - 1]
     const { start: startDate } = getBudgetMonthRange(firstMonthKey, startDay)
     const { end: endDate } = getBudgetMonthRange(lastMonthKey, startDay)
 
@@ -56,85 +70,50 @@ export async function GET() {
       orderBy: { date: "asc" },
     })
 
-    // Index transactions by budget month + category
-    const expenseByMonthCategory = new Map<string, Map<string, number>>()
-    for (const tx of transactions) {
-      const monthKey = getBudgetMonthKey(tx.date, startDay)
-      if (!expenseByMonthCategory.has(monthKey)) {
-        expenseByMonthCategory.set(monthKey, new Map())
-      }
-      const catMap = expenseByMonthCategory.get(monthKey)!
-      const current = catMap.get(tx.category) || 0
-      catMap.set(tx.category, current + tx.amount)
-    }
+    // Expense totals bucketed by budget month + category (shared helper).
+    const spentByMonthCategory = buildSpentByMonthCategory(transactions, startDay)
+
+    // Compounded carry-over for the whole chain (shared helper) so this table,
+    // the budgets page, and the dashboard all agree.
+    const carryOverChain = computeCarryOverChain({
+      months: uniqueMonths,
+      budgets,
+      spentByMonthCategory,
+      carryOverEnabled,
+    })
 
     // Get unique category names that have budgets
     const categoryNames = [...new Set(budgets.map((b) => b.categoryName))].sort()
 
-    // Compute rollover history for each category
+    // Build the month-over-month rows for each category
     const categories = categoryNames.map((categoryName) => {
-      const monthEntries: Array<{
-        month: string
-        monthLabel: string
-        budgetAmount: number
-        spent: number
-        rolloverReceived: number
-        unused: number
-        rolloverEnabled: boolean
-        rolloverCap: number | null
-        effectiveBudget: number
-      }> = []
+      const monthEntries = uniqueMonths
+        .map((month) => {
+          const entry = carryOverChain.get(month)?.get(categoryName)
+          if (!entry) return null
 
-      let previousUnused = 0
+          const rolloverCap =
+            budgets.find(
+              (b) => b.categoryName === categoryName && b.month === month,
+            )?.rolloverCap ?? null
 
-      for (const month of uniqueMonths) {
-        const budget = budgets.find(
-          (b) => b.categoryName === categoryName && b.month === month
-        )
-
-        if (!budget) {
-          // No budget for this month, rollover resets
-          previousUnused = 0
-          continue
-        }
-
-        const spent = expenseByMonthCategory.get(month)?.get(categoryName) || 0
-        const rolloverEnabled = budget.rolloverEnabled
-        const rolloverCap = budget.rolloverCap
-
-        // Calculate rollover received (previous month's unused, respecting toggle and cap)
-        let rolloverReceived = 0
-        if (rolloverEnabled && previousUnused > 0) {
-          const rawRollover = previousUnused
-          rolloverReceived = rolloverCap != null ? Math.min(rawRollover, rolloverCap) : rawRollover
-        }
-
-        const effectiveBudget = budget.amount + rolloverReceived
-        const unused = Math.max(0, effectiveBudget - spent)
-
-        monthEntries.push({
-          month,
-          monthLabel: getBudgetMonthLabel(month, startDay),
-          budgetAmount: budget.amount,
-          spent,
-          rolloverReceived,
-          unused,
-          rolloverEnabled,
-          rolloverCap,
-          effectiveBudget,
+          return {
+            month,
+            monthLabel: getBudgetMonthLabel(month, startDay),
+            budgetAmount: entry.amount,
+            spent: entry.spent,
+            rolloverReceived: entry.rollover,
+            unused: entry.unused,
+            carryOverEnabled,
+            rolloverCap,
+            effectiveBudget: entry.effectiveAmount,
+          }
         })
-
-        // Carry forward unused amount for next month's rollover
-        previousUnused = rolloverEnabled ? unused : 0
-      }
-
-      // Filter to only show months that have data (remove trailing empty months)
-      const firstBudgetIndex = monthEntries.findIndex((e) => e.budgetAmount > 0)
-      const filtered = firstBudgetIndex >= 0 ? monthEntries.slice(firstBudgetIndex) : []
+        .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
 
       return {
         categoryName: categoryName.replace("_", " "),
-        months: filtered,
+        months: monthEntries,
       }
     })
 

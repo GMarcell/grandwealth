@@ -219,7 +219,6 @@ async function main() {
           categoryName: category,
           amount: month <= 1 ? amount : Math.round(amount * (0.9 + Math.random() * 0.2)),
           month: monthKey,
-          rolloverEnabled: Math.random() > 0.3,
           rolloverCap: Math.random() > 0.7 ? amount * 0.5 : null,
           userId: user.id,
         },

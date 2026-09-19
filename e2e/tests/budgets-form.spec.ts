@@ -107,7 +107,7 @@ test.describe("Budgets Page — Form Validation", () => {
     await expect(page.getByText("Amount must be a positive number")).toBeVisible({ timeout: 5000 })
   })
 
-  test("rollover toggle and cap are visible by default", async ({ page }) => {
+  test("shows the rollover cap but no per-category toggle", async ({ page }) => {
     const addButton = page.locator("button").filter({ hasText: "Add Budget" }).first()
     test.skip(await addButton.isDisabled(), "No categories available to add budget")
     await addButton.click()
@@ -115,10 +115,11 @@ test.describe("Budgets Page — Form Validation", () => {
     const dialog = page.getByRole("dialog")
     await expect(dialog).toBeVisible()
 
-    // Rollover label should be visible
-    await expect(dialog.getByText("Rollover unused budget")).toBeVisible()
+    // Carry-over is now a single global setting on the Settings page, so the
+    // per-category toggle is gone.
+    await expect(dialog.getByText("Rollover unused budget")).toHaveCount(0)
 
-    // Rollover cap input should be visible (since rollover is enabled by default)
+    // The optional cap stays, and is visible while global carry-over is on.
     await expect(dialog.getByText("Max Rollover (Rp)")).toBeVisible()
   })
 

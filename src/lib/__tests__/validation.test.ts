@@ -312,12 +312,11 @@ describe("createBudgetSchema", () => {
     expect(result.success).toBe(true)
   })
 
-  it("accepts a budget with rollover options", () => {
+  it("accepts a budget with a rollover cap", () => {
     const result = createBudgetSchema.safeParse({
       categoryName: "Food",
       amount: 1000000,
       month: "2026-07",
-      rolloverEnabled: false,
       rolloverCap: 500000,
     })
     expect(result.success).toBe(true)
@@ -374,10 +373,10 @@ describe("createBudgetSchema", () => {
 // ─── updateBudgetSchema ──────────────────────
 
 describe("updateBudgetSchema", () => {
-  it("accepts updating amount and rollover", () => {
+  it("accepts updating amount and rollover cap", () => {
     const result = updateBudgetSchema.safeParse({
       amount: 2000000,
-      rolloverEnabled: true,
+      rolloverCap: 250000,
     })
     expect(result.success).toBe(true)
   })

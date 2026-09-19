@@ -425,7 +425,11 @@ export default function TransactionsPage() {
       SAVINGS: { dateMap: new Map<string, TransactionInterface[]>(), total: 0 },
       OTHER: {
         dateMap: new Map([["", txs]]),
-        total: txs.reduce((sum, tx) => sum + tx.amount, 0),
+        // Net cash flow: income adds, expenses subtract.
+        total: txs.reduce(
+          (sum, tx) => sum + (tx.type === "INCOME" ? tx.amount : -tx.amount),
+          0,
+        ),
       },
     });
     return {
@@ -472,7 +476,6 @@ export default function TransactionsPage() {
       string,
       { dateMap: Map<string, TransactionInterface[]>; total: number }
     >,
-    accentColor: "emerald" | "red",
   ) {
     const RULE_TYPE_ICONS: Record<string, ReactNode> = {
       NEED: <Home className="h-3.5 w-3.5" />,
@@ -481,7 +484,6 @@ export default function TransactionsPage() {
       OTHER: <Filter className="h-3.5 w-3.5" />,
     };
 
-    const amountSign = accentColor === "emerald" ? "+" : "-";
 
     return (
       <div className="space-y-4">
@@ -508,9 +510,15 @@ export default function TransactionsPage() {
                   <span className={textColor}>{icon}</span>
                   <span className={textColor}>{config.label}</span>
                 </h4>
-                <span className={`text-xs font-medium ${textColor}`}>
-                  {amountSign}
-                  {formatIDR(group.total)}
+                <span
+                  className={`text-xs font-medium ${
+                    group.total < 0
+                      ? "text-red-600 dark:text-red-400"
+                      : "text-emerald-600 dark:text-emerald-400"
+                  }`}
+                >
+                  {group.total < 0 ? "-" : "+"}
+                  {formatIDR(Math.abs(group.total))}
                 </span>
               </div>
               <div className="space-y-3">
@@ -522,7 +530,15 @@ export default function TransactionsPage() {
                       </h5>
                     )}
                     <div className="space-y-1">
-                      {txs.map((tx) => (
+                      {txs.map((tx) => {
+                        // Income adds to the balance (+), expenses subtract (-).
+                        const isIncome = tx.type === "INCOME";
+                        const itemSign = isIncome ? "+" : "-";
+                        const itemAmountColor = isIncome
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-red-600 dark:text-red-400";
+
+                        return (
                         <div
                           key={tx.id}
                           className={`flex items-center justify-between rounded-lg border ${borderColor} ${bgColor} ${hoverBg} p-3 transition-colors group`}
@@ -562,9 +578,9 @@ export default function TransactionsPage() {
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
                             <div
-                              className={`text-sm font-semibold ${accentColor === "emerald" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
+                              className={`text-sm font-semibold ${itemAmountColor}`}
                             >
-                              {amountSign}
+                              {itemSign}
                               {formatIDR(tx.amount)}
                             </div>
                             <div className="flex gap-0.5 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
@@ -593,7 +609,8 @@ export default function TransactionsPage() {
                             </div>
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
@@ -956,7 +973,7 @@ export default function TransactionsPage() {
                       </span>
                     </span>
                   </div>
-                  {renderRuleTypeGroup(groupedByType.income, "emerald")}
+                  {renderRuleTypeGroup(groupedByType.income)}
                 </div>
               )}
 
@@ -972,7 +989,7 @@ export default function TransactionsPage() {
                       -{formatIDR(totalExpenses)}
                     </span>
                   </div>
-                  {renderRuleTypeGroup(groupedByType.expenses, "red")}
+                  {renderRuleTypeGroup(groupedByType.expenses)}
                 </div>
               )}
             </div>

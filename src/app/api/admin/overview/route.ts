@@ -33,7 +33,7 @@ export async function GET() {
       proUsers,
       // Paying Pro subscribers (manual/admin grants) — what MRR is based on.
       proActive,
-      // Active Pro access from the automatic 14-day trial.
+      // Active Pro access from an admin-approved trial.
       onTrial,
       proLapsed,
       suspended,

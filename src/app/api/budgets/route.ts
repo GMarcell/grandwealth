@@ -43,7 +43,7 @@ export async function POST(req: Request) {
     const parsed = await safeParseBody(req, createBudgetSchema)
     if ("error" in parsed) return parsed.error
 
-    const { categoryName, amount, month, rolloverEnabled, rolloverCap } = parsed.data
+    const { categoryName, amount, month, rolloverCap } = parsed.data
 
     // Check if budget already exists for this category/month
     const existing = await prisma.budget.findUnique({
@@ -55,7 +55,6 @@ export async function POST(req: Request) {
         where: { id: existing.id },
         data: {
           amount,
-          ...(rolloverEnabled !== undefined ? { rolloverEnabled } : {}),
           ...(rolloverCap !== undefined ? { rolloverCap } : {}),
         },
       })
@@ -64,7 +63,6 @@ export async function POST(req: Request) {
         categoryName: updated.categoryName,
         amount: updated.amount,
         month: updated.month,
-        rolloverEnabled: updated.rolloverEnabled,
         rolloverCap: updated.rolloverCap,
       })
     }
@@ -74,7 +72,6 @@ export async function POST(req: Request) {
         categoryName,
         amount,
         month,
-        rolloverEnabled: rolloverEnabled ?? true,
         rolloverCap: rolloverCap ?? null,
         userId: session.user.id,
       },
@@ -86,7 +83,6 @@ export async function POST(req: Request) {
         categoryName: budget.categoryName,
         amount: budget.amount,
         month: budget.month,
-        rolloverEnabled: budget.rolloverEnabled,
         rolloverCap: budget.rolloverCap,
       },
       { status: 201 }

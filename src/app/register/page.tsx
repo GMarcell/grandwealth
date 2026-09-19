@@ -21,7 +21,7 @@ export default function RegisterPage() {
           </div>
           <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
           <CardDescription>
-            Start tracking your wealth journey — includes a 14-day free Pro trial
+            Start tracking your wealth journey — request a free 30-day Pro trial anytime
           </CardDescription>
         </CardHeader>
         <CardContent>

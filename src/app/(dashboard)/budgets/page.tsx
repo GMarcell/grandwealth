@@ -18,7 +18,6 @@ import {
   CheckCircle2,
   Wand2,
 } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,13 +42,14 @@ import {
 import { formatIDR, formatCompactIDR } from "@/lib/utils";
 import { CHART_COLORS } from "@/lib/chart-colors";
 import {
-  getBudgetMonthKey,
   getCurrentBudgetMonthKey,
-  getPreviousBudgetMonthKey,
-  getBudgetMonthRange,
   getBudgetMonthLabel,
   generateBudgetMonths,
 } from "@/lib/budget-months";
+import {
+  buildSpentByMonthCategory,
+  computeCarryOverChain,
+} from "@/lib/budget-carry-over";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
 
@@ -92,7 +92,6 @@ interface Budget {
   categoryName: string;
   amount: number;
   month: string;
-  rolloverEnabled: boolean;
   rolloverCap: number | null;
 }
 
@@ -122,21 +121,20 @@ export default function BudgetsPage() {
     handleSubmit: formSubmit,
     control,
     reset,
-    watch,
     formState: { errors },
   } = useForm<BudgetFormData>({
     resolver: zodResolver(budgetFormSchema),
     defaultValues: {
       categoryName: "",
       amount: "",
-      rolloverEnabled: true,
       rolloverCap: "",
     },
   });
 
-  const formRolloverEnabled = watch("rolloverEnabled");
-
-  const { data: budgetSettings } = useQuery<{ budgetStartDay: number }>({
+  const { data: budgetSettings } = useQuery<{
+    budgetStartDay: number
+    carryOverEnabled: boolean
+  }>({
     queryKey: ["budget-settings"],
     queryFn: async () => {
       const res = await fetch("/api/user/budget-settings");
@@ -146,6 +144,8 @@ export default function BudgetsPage() {
   });
 
   const startDay = budgetSettings?.budgetStartDay ?? 1;
+  // Global carry-over setting controls rollover for every category.
+  const carryOverEnabled = budgetSettings?.carryOverEnabled ?? true;
 
   const currentMonthKey = useMemo(() => getCurrentBudgetMonthKey(startDay), [startDay]);
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey);
@@ -253,7 +253,6 @@ export default function BudgetsPage() {
     reset({
       categoryName: "",
       amount: "",
-      rolloverEnabled: true,
       rolloverCap: "",
     });
     setIsDialogOpen(false);
@@ -264,7 +263,6 @@ export default function BudgetsPage() {
     reset({
       categoryName: budget.categoryName,
       amount: budget.amount.toString(),
-      rolloverEnabled: budget.rolloverEnabled,
       rolloverCap: budget.rolloverCap != null ? budget.rolloverCap.toString() : "",
     });
     setIsDialogOpen(true);
@@ -275,7 +273,6 @@ export default function BudgetsPage() {
       categoryName: data.categoryName,
       amount: parseFloat(data.amount),
       month: selectedMonth,
-      rolloverEnabled: data.rolloverEnabled,
       rolloverCap: data.rolloverCap ? parseFloat(data.rolloverCap) : null,
     });
   }
@@ -314,7 +311,6 @@ export default function BudgetsPage() {
       categoryName,
       amount,
       month: selectedMonth,
-      rolloverEnabled: existing?.rolloverEnabled ?? true,
       rolloverCap: existing?.rolloverCap ?? null,
     });
   }
@@ -327,67 +323,41 @@ export default function BudgetsPage() {
       .join(" ");
   }
 
-  // Previous month for rollover calculation
-  const prevMonthKey = getPreviousBudgetMonthKey(selectedMonth, startDay);
-
-  // Expense totals by category for the selected month using budget month range
-  const expenseByCategory = useMemo(() => {
-    const map = new Map<string, number>();
-    const { start, end } = getBudgetMonthRange(selectedMonth, startDay);
-
-    for (const tx of transactions ?? []) {
-      if (tx.type !== "EXPENSE") continue;
-      const txDate = new Date(tx.date);
-      if (txDate >= start && txDate <= end) {
-        const current = map.get(tx.category) || 0;
-        map.set(tx.category, current + tx.amount);
-      }
-    }
-    return map;
-  }, [transactions, selectedMonth, startDay]);
-
-  // Previous month expense totals for rollover calculation
-  const prevExpenseByCategory = useMemo(() => {
-    const map = new Map<string, number>();
-    const { start, end } = getBudgetMonthRange(prevMonthKey, startDay);
-
-    for (const tx of transactions ?? []) {
-      if (tx.type !== "EXPENSE") continue;
-      const txDate = new Date(tx.date);
-      if (txDate >= start && txDate <= end) {
-        const current = map.get(tx.category) || 0;
-        map.set(tx.category, current + tx.amount);
-      }
-    }
-    return map;
-  }, [transactions, prevMonthKey, startDay]);
-
-  // Previous month budgets
-  const prevMonthBudgets = useMemo(
-    () => (budgets ?? []).filter((b) => b.month === prevMonthKey),
-    [budgets, prevMonthKey],
+  // Expense totals grouped by budget month + category.
+  const spentByMonthCategory = useMemo(
+    () => buildSpentByMonthCategory(transactions ?? [], startDay),
+    [transactions, startDay],
   );
 
-  // Combine budgets with actual spending and rollover
+  // Every budget month from the earliest one up to the selected month. The
+  // whole chain is needed so carry-over can COMPOUND month over month.
+  const chainMonths = useMemo(() => {
+    const months = new Set((budgets ?? []).map((b) => b.month));
+    months.add(selectedMonth);
+    return [...months].filter((m) => m <= selectedMonth).sort();
+  }, [budgets, selectedMonth]);
+
+  // Compounded carry-over for every month/category in the chain.
+  const carryOverChain = useMemo(
+    () =>
+      computeCarryOverChain({
+        months: chainMonths,
+        budgets: budgets ?? [],
+        spentByMonthCategory,
+        carryOverEnabled,
+      }),
+    [chainMonths, budgets, spentByMonthCategory, carryOverEnabled],
+  );
+
+  // Combine the selected month's budgets with spending and carry-over.
   const budgetWithSpending = useMemo(() => {
+    const entries = carryOverChain.get(selectedMonth);
+
     return monthBudgets.map((b) => {
-      // Calculate rollover from previous month (respecting toggle and cap)
-      const prevBudget = prevMonthBudgets.find(
-        (pb) => pb.categoryName === b.categoryName,
-      );
-      const prevSpent = prevExpenseByCategory.get(b.categoryName) || 0;
-
-      let rollover = 0;
-      if (b.rolloverEnabled && prevBudget) {
-        const rawRollover = Math.max(0, prevBudget.amount - prevSpent);
-        rollover =
-          b.rolloverCap != null
-            ? Math.min(rawRollover, b.rolloverCap)
-            : rawRollover;
-      }
-
-      const effectiveAmount = b.amount + rollover;
-      const spent = expenseByCategory.get(b.categoryName) || 0;
+      const entry = entries?.get(b.categoryName);
+      const rollover = entry?.rollover ?? 0;
+      const effectiveAmount = entry?.effectiveAmount ?? b.amount;
+      const spent = entry?.spent ?? 0;
       const remaining = effectiveAmount - spent;
 
       return {
@@ -397,7 +367,9 @@ export default function BudgetsPage() {
         remaining,
         rollover,
         effectiveAmount,
-        rolloverEnabled: b.rolloverEnabled,
+        // Reflect the global carry-over switch so the badges match what's
+        // actually applied.
+        carryOverEnabled,
         rolloverCap: b.rolloverCap,
         percentUsed:
           effectiveAmount > 0
@@ -405,12 +377,7 @@ export default function BudgetsPage() {
             : 0,
       };
     });
-  }, [
-    monthBudgets,
-    prevMonthBudgets,
-    expenseByCategory,
-    prevExpenseByCategory,
-  ]);
+  }, [monthBudgets, carryOverChain, selectedMonth, carryOverEnabled]);
 
   const totalBudgeted = monthBudgets.reduce((s, b) => s + b.amount, 0);
   const totalRollover = budgetWithSpending.reduce((s, b) => s + b.rollover, 0);
@@ -546,31 +513,9 @@ export default function BudgetsPage() {
                   <FormError errors={errors} name="amount" />
                 </div>
 
-                {/* Rollover toggle */}
-                <Controller
-                  name="rolloverEnabled"
-                  control={control}
-                  render={({ field }) => (
-                    <div className="flex items-center justify-between rounded-lg border p-3">
-                      <div className="space-y-0.5">
-                        <Label htmlFor="rollover" className="text-sm font-medium">
-                          Rollover unused budget
-                        </Label>
-                        <p className="text-xs text-muted-foreground">
-                          Carry unused amount to next month
-                        </p>
-                      </div>
-                      <Switch
-                        id="rollover"
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </div>
-                  )}
-                />
-
-                {/* Rollover cap */}
-                {formRolloverEnabled && (
+                {/* Rollover cap — carry-over itself is toggled globally in
+                    Settings ("Carry over unused budget"). */}
+                {carryOverEnabled && (
                   <div className="space-y-2">
                     <Label htmlFor="rolloverCap">
                       Max Rollover (Rp){" "}
@@ -713,7 +658,10 @@ export default function BudgetsPage() {
               </div>
               <div className="mt-2 flex items-center justify-between gap-2">
                 <span className="truncate text-[11px] text-muted-foreground">
-                  Spent: {formatIDR(expenseByCategory.get(category) ?? 0)}
+                  Spent:{" "}
+                  {formatIDR(
+                    spentByMonthCategory.get(selectedMonth)?.get(category) ?? 0,
+                  )}
                 </span>
                 <Button size="sm" variant="outline" onClick={() => saveQuickBudget(category)} disabled={createMutation.isPending}>
                   Save
@@ -804,7 +752,7 @@ export default function BudgetsPage() {
                                   <span className="text-emerald-600 dark:text-emerald-400 font-medium">
                                     +{formatCompactIDR(entry.rolloverReceived)}
                                   </span>
-                                ) : !entry.rolloverEnabled ? (
+                                ) : !entry.carryOverEnabled ? (
                                   <span className="text-muted-foreground">
                                     Off
                                   </span>
@@ -876,12 +824,12 @@ export default function BudgetsPage() {
                           +{formatCompactIDR(b.rollover)} rollover
                         </Badge>
                       )}
-                      {!b.rolloverEnabled && (
+                      {!b.carryOverEnabled && (
                         <Badge variant="secondary" className="text-[10px] leading-none">
                           No rollover
                         </Badge>
                       )}
-                      {b.rolloverEnabled && b.rolloverCap != null && (
+                      {b.carryOverEnabled && b.rolloverCap != null && (
                         <Badge variant="secondary" className="text-[10px] leading-none">
                           Cap: {formatCompactIDR(b.rolloverCap)}
                         </Badge>

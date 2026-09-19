@@ -534,6 +534,7 @@ User (1) ──── (N) Session (NextAuth)
 | email | String (unique) | Login identifier |
 | password | String? | bcrypt hashed |
 | budgetStartDay | Int (default: 1) | 1-28 |
+| carryOverEnabled | Boolean (default: true) | Global switch: roll unused budget into the next month (budget-only; never affects net wealth) |
 
 **Transaction**
 | Field | Type | Notes |
@@ -579,8 +580,7 @@ User (1) ──── (N) Session (NextAuth)
 | categoryName | String | Expense category |
 | amount | Float | Budget limit |
 | month | String | Format: "YYYY-MM" |
-| rolloverEnabled | Boolean (default: true) | |
-| rolloverCap | Float? | Maximum rollover |
+| rolloverCap | Float? | Optional maximum carry-over |
 | userId | String | FK → User |
 
 **MonthlyAnalysis**

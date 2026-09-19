@@ -2,11 +2,15 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import {
+  generateBudgetMonths,
   getBudgetMonthKey,
   getBudgetMonthLabel,
   getBudgetMonthRange,
-  getPreviousBudgetMonthKey,
 } from "@/lib/budget-months"
+import {
+  buildSpentByMonthCategory,
+  computeCarryOverChain,
+} from "@/lib/budget-carry-over"
 import { computeGoldPortfolio } from "@/lib/gold"
 import { fetchGoldPriceIdr } from "@/lib/prices"
 
@@ -22,18 +26,17 @@ export async function GET() {
     // Get user's budget start day setting
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { budgetStartDay: true },
+      select: { budgetStartDay: true, carryOverEnabled: true },
     })
     const startDay = user?.budgetStartDay ?? 1
+    const carryOverEnabled = user?.carryOverEnabled ?? true
 
     const currentMonthKey = getBudgetMonthKey(new Date(), startDay)
-    // The previous budget month cannot be derived by subtracting one calendar
-    // month from `startDay` — on any day before `startDay` that collapses to
-    // the CURRENT budget month (e.g. startDay=28, today=Sep 4 → both keys are
-    // "2026-08"), double-counting this period's budget and spend as rollover.
-    const prevMonthKey = getPreviousBudgetMonthKey(currentMonthKey, startDay)
     const { start: monthStart, end: monthEnd } = getBudgetMonthRange(currentMonthKey, startDay)
-    const { start: prevMonthStart, end: prevMonthEnd } = getBudgetMonthRange(prevMonthKey, startDay)
+
+    // Budget months for the carry-over chain, oldest → newest, ending at the
+    // current budget month. Carry-over compounds across this whole window.
+    const chainMonths = [...generateBudgetMonths(13, startDay)].reverse()
 
     // Calculate date range for fetching data (last 13 months is sufficient)
     const thirteenMonthsAgo = new Date()
@@ -60,8 +63,7 @@ export async function GET() {
       allTimeCashByType,
       goldDeposits,
       stocks,
-      budgets,
-      prevBudgets,
+      allBudgets,
       latestAnalysis,
       categories,
       bankSavings,
@@ -96,11 +98,10 @@ export async function GET() {
         where: { userId },
         orderBy: { date: "desc" },
       }),
+      // All budgets across the carry-over chain (the last 13 budget months)
+      // so rollover can compound month over month.
       prisma.budget.findMany({
-        where: { userId, month: currentMonthKey },
-      }),
-      prisma.budget.findMany({
-        where: { userId, month: prevMonthKey },
+        where: { userId, month: { in: chainMonths } },
       }),
       prisma.monthlyAnalysis.findFirst({
         where: { userId },
@@ -130,6 +131,8 @@ export async function GET() {
         orderBy: { startDate: "desc" },
       }),
     ])
+
+    const budgets = allBudgets.filter((b) => b.month === currentMonthKey)
 
     // Calculate totals (full window — see the transaction query above)
     const totalIncome = transactions
@@ -222,52 +225,29 @@ export async function GET() {
         expenses: data.expenses,
       }))
 
-    // Budget calculations using budget month ranges
-    const monthExpenses = transactions.filter((tx) => {
-      const d = new Date(tx.date)
-      return tx.type === "EXPENSE" && d >= monthStart && d <= monthEnd
+    // Compounded carry-over across the whole chain. The global switch gates it
+    // for every category; a per-budget cap still applies when set. Carry-over
+    // is purely a budgeting figure — it is never added as income or a
+    // transaction, so net wealth (allTimeNetCashflow + assets) is unaffected.
+    const carryOverChain = computeCarryOverChain({
+      months: chainMonths,
+      budgets: allBudgets,
+      spentByMonthCategory: buildSpentByMonthCategory(transactions, startDay),
+      carryOverEnabled,
     })
+    const currentEntries = carryOverChain.get(currentMonthKey)
 
-    const expenseByCategory = new Map<string, number>()
-    for (const tx of monthExpenses) {
-      const current = expenseByCategory.get(tx.category) || 0
-      expenseByCategory.set(tx.category, current + tx.amount)
-    }
-
-    // Previous month expense totals for rollover
-    const prevMonthExpenses = transactions.filter((tx) => {
-      const d = new Date(tx.date)
-      return tx.type === "EXPENSE" && d >= prevMonthStart && d <= prevMonthEnd
-    })
-
-    const prevExpenseByCategory = new Map<string, number>()
-    for (const tx of prevMonthExpenses) {
-      const current = prevExpenseByCategory.get(tx.category) || 0
-      prevExpenseByCategory.set(tx.category, current + tx.amount)
-    }
-
-    // Calculate effective budgets with rollover
     const totalBudgetAmount = budgets.reduce((sum, b) => sum + b.amount, 0)
-    const totalRollover = budgets.reduce((sum, b) => {
-      const prevBudget = prevBudgets.find((pb) => pb.categoryName === b.categoryName)
-      if (!prevBudget) return sum
-      const prevSpent = prevExpenseByCategory.get(b.categoryName) || 0
-      return sum + Math.max(0, prevBudget.amount - prevSpent)
-    }, 0)
+    const totalRollover = budgets.reduce(
+      (sum, b) => sum + (currentEntries?.get(b.categoryName)?.rollover ?? 0),
+      0,
+    )
 
     const budgetWithEffective = budgets.map((b) => {
-      const prevBudget = prevBudgets.find((pb) => pb.categoryName === b.categoryName)
-      const prevSpent = prevExpenseByCategory.get(b.categoryName) || 0
-
-      // Calculate rollover: only if enabled, then cap it
-      let rollover = 0
-      if (b.rolloverEnabled && prevBudget) {
-        const rawRollover = Math.max(0, prevBudget.amount - prevSpent)
-        rollover = b.rolloverCap != null ? Math.min(rawRollover, b.rolloverCap) : rawRollover
-      }
-
-      const effectiveAmount = b.amount + rollover
-      const spent = expenseByCategory.get(b.categoryName) || 0
+      const entry = currentEntries?.get(b.categoryName)
+      const rollover = entry?.rollover ?? 0
+      const effectiveAmount = entry?.effectiveAmount ?? b.amount
+      const spent = entry?.spent ?? 0
       return { ...b, rollover, effectiveAmount, spent }
     })
 

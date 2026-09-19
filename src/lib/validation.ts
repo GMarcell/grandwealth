@@ -35,7 +35,6 @@ export const createBudgetSchema = z.object({
   categoryName: z.string().min(1, "Category is required").max(100),
   amount: z.number().positive("Budget amount must be greater than 0").finite(),
   month: z.string().regex(/^\d{4}-\d{2}$/, "Month must be in YYYY-MM format"),
-  rolloverEnabled: z.boolean().optional(),
   rolloverCap: z.number().nonnegative("Rollover cap must be >= 0").finite().nullable().optional(),
 })
 
@@ -169,6 +168,33 @@ export const adminUsersQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).optional(),
 })
 
+// ─── Trial Requests ───────────────────────────────
+export const trialRequestSchema = z.object({
+  // Optional "why I'd like Pro" note shown to the reviewing admin.
+  message: z.string().trim().max(500).optional(),
+})
+
+export const adminTrialRequestDecisionSchema = z.object({
+  status: z.enum(["APPROVED", "DECLINED"], {
+    message: "Status must be APPROVED or DECLINED",
+  }),
+  note: z.string().trim().max(500).optional(),
+})
+
+export const adminTrialRequestsQuerySchema = z.object({
+  status: z.enum(["PENDING", "APPROVED", "DECLINED"]).optional(),
+  page: z.coerce.number().int().positive().optional(),
+  pageSize: z.coerce.number().int().min(1).max(100).optional(),
+})
+
+// ─── Password Change (self-service) ───────────────
+export const changePasswordSchema = z.object({
+  // Not required for accounts that don't have a password yet (OAuth-only
+  // sign-ups) — there this acts as a first-time "set a password".
+  currentPassword: z.string().max(128).optional(),
+  newPassword: z.string().min(6, "Password must be at least 6 characters").max(128),
+})
+
 // ─── Password Reset ───────────────────────────────
 export const forgotPasswordSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -193,7 +219,6 @@ export const budgetFormSchema = z.object({
   amount: z.string()
     .min(1, "Amount is required")
     .refine((v) => !isNaN(Number(v)) && Number(v) > 0, "Amount must be a positive number"),
-  rolloverEnabled: z.boolean(),
   rolloverCap: z.string().optional(),
 })
 

@@ -44,7 +44,7 @@ export async function GET(request: Request) {
   try {
     const now = new Date()
 
-    // Housekeeping: end any lapsed 14-day trials before computing who to
+    // Housekeeping: end any lapsed trials before computing who to
     // refresh prices for.
     await expireLapsedTrials(now)
 

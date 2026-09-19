@@ -25,6 +25,12 @@ enum SubscriptionStatus {
   EXPIRED
 }
 
+enum TrialRequestStatus {
+  PENDING
+  APPROVED
+  DECLINED
+}
+
 model User {
   id            String        @id @default(cuid())
   name          String?
@@ -40,13 +46,18 @@ model User {
   // later without another migration.
   subscriptionStatus SubscriptionStatus?
   currentPeriodEnd   DateTime?
-  // True while Pro access comes from the automatic trial granted at
-  // registration. Cleared when an admin grants Pro manually or when the
-  // trial lapses (the account is swept back to FREE) — paid subscriptions
-  // are never trials. Trials don't count toward MRR.
+  // True while Pro access comes from a trial granted by an administrator
+  // (after the user requested one from Settings). Cleared when an admin
+  // grants Pro manually or when the trial lapses (the account is swept back
+  // to FREE) — paid subscriptions are never trials. Trials don't count
+  // toward MRR.
   isTrial       Boolean       @default(false)
   suspended     Boolean       @default(false)
   budgetStartDay Int           @default(1)
+  // Global switch: when true, a budget's unused amount automatically carries
+  // over to the next month. Purely a budgeting concept — it never creates
+  // income or transactions, so it does not affect net wealth.
+  carryOverEnabled Boolean     @default(true)
   transactions         Transaction[]
   goldDeposits         GoldDeposit[]
   stocks               Stock[]
@@ -60,8 +71,33 @@ model User {
   dividends             Dividend[]
   accounts              Account[]
   sessions              Session[]
+  trialRequests         TrialRequest[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+}
+
+/// A user's request to be put on the Pro trial.
+///
+/// Trials are admin-managed: the user asks for one from Settings, an
+/// administrator approves it (which grants PRO for `PRO_TRIAL_DAYS`), and the
+/// account drops back to FREE automatically when that period ends — see
+/// `expireLapsedTrials` in src/lib/trial.ts. At most one trial is granted per
+/// account, tracked by the APPROVED row.
+model TrialRequest {
+  id           String             @id @default(cuid())
+  status       TrialRequestStatus @default(PENDING)
+  message      String?            // optional note from the user
+  decisionNote String?            // optional note from the admin
+  userId       String
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Id (not a relation) of the admin who decided the request — audit only.
+  decidedById  String?
+  decidedAt    DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([status, createdAt])
+  @@index([userId])
 }
 
 model Account {
@@ -145,8 +181,7 @@ model Budget {
   categoryName    String
   amount          Float
   month           String   // format: "YYYY-MM"
-  rolloverEnabled Boolean  @default(true)
-  rolloverCap     Float?   // maximum rollover allowed, null means no cap
+  rolloverCap     Float?   // maximum carry-over allowed, null means no cap
   userId          String
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt       DateTime @default(now())

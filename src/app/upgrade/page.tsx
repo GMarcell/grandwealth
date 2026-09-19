@@ -84,12 +84,14 @@ export default function UpgradePage() {
       <Card>
         <CardContent className="pt-6 space-y-3">
           <p className="text-center text-sm text-muted-foreground">
-            Subscriptions are activated by an administrator. To subscribe, reach
-            out to your account administrator or{" "}
+            Subscriptions and trials are activated by an administrator. Request
+            a free 30-day Pro trial from{" "}
             <Link href="/settings" className="font-medium text-primary hover:underline">
-              visit Settings
-            </Link>{" "}
-            to see your current plan.
+              Settings → Pro Trial
+            </Link>
+            {" "}
+            — you&apos;ll be notified once it&apos;s approved. To subscribe
+            outright, reach out to your account administrator.
           </p>
           <p className="text-center">
             <Link href="/dashboard" className="text-sm font-medium text-primary hover:underline">

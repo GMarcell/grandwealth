@@ -64,6 +64,8 @@ interface GoldFixture {
 interface DashboardMockOptions {
   /** Budget start day returned by /api/user lookup. Default 1 (calendar). */
   budgetStartDay?: number
+  /** Global carry-over switch on the user. Default true. */
+  carryOverEnabled?: boolean
   /** Transactions returned by the 13-month window query. */
   windowTransactions?: Array<{
     id: string
@@ -85,14 +87,19 @@ interface DashboardMockOptions {
 
 function setupMocks(options: DashboardMockOptions = {}) {
   mockAuth.mockResolvedValue({ user: { id: "user-1" } })
-  mockFindUser.mockResolvedValue({ budgetStartDay: options.budgetStartDay ?? 1 })
+  mockFindUser.mockResolvedValue({
+    budgetStartDay: options.budgetStartDay ?? 1,
+    carryOverEnabled: options.carryOverEnabled ?? true,
+  })
   mockFindTransactions.mockResolvedValue(options.windowTransactions ?? [])
   mockGroupByTransactions.mockResolvedValue(options.allTimeCash ?? [])
   mockFindGold.mockResolvedValue(options.goldDeposits ?? [])
   mockFindStocks.mockResolvedValue([])
-  mockFindBudgets
-    .mockResolvedValueOnce(options.budgets ?? [])
-    .mockResolvedValueOnce(options.prevBudgets ?? [])
+  // The route fetches all budgets across the carry-over chain in one query.
+  mockFindBudgets.mockResolvedValue([
+    ...(options.budgets ?? []),
+    ...(options.prevBudgets ?? []),
+  ])
   mockFindAnalysis.mockResolvedValue(null)
   mockFindCategories.mockResolvedValue([])
   mockFindSavings.mockResolvedValue([])
@@ -121,7 +128,6 @@ const budget = (categoryName: string, amount: number, month: string) => ({
   categoryName,
   amount,
   month,
-  rolloverEnabled: false,
   rolloverCap: null,
   userId: "user-1",
 })
@@ -300,7 +306,7 @@ describe("GET /api/dashboard — budget month rollover with non-1st start day", 
         // Current budget month (Aug 28 – Sep 27): Sep 3
         tx("cur-spend", "EXPENSE", "FOOD", 30_000, new Date(2026, 8, 3, 12, 0, 0)),
       ],
-      budgets: [{ ...budget("FOOD", 50_000, "2026-08"), rolloverEnabled: true }],
+      budgets: [budget("FOOD", 50_000, "2026-08")],
       prevBudgets: [budget("FOOD", 50_000, "2026-07")],
     })
 
@@ -308,12 +314,12 @@ describe("GET /api/dashboard — budget month rollover with non-1st start day", 
     expect(res.status).toBe(200)
     const body = await res.json()
 
-    // The prev-budget query must target the true previous budget month.
+    // The chain query must include the true previous budget month.
     const budgetCalls = mockFindBudgets.mock.calls
-    expect(budgetCalls).toHaveLength(2)
-    expect(budgetCalls[1][0]).toMatchObject({
-      where: { userId: "user-1", month: "2026-07" },
-    })
+    expect(budgetCalls).toHaveLength(1)
+    const monthsFilter = budgetCalls[0][0].where.month.in
+    expect(monthsFilter).toContain("2026-07") // true previous budget month
+    expect(monthsFilter).toContain("2026-08") // current budget month
 
     // Rollover = 50k prev budget − 40k prev spend = 10k; effective = 60k.
     // (The old code read prev spend as the current period's 30k → 20k rollover.)
@@ -321,6 +327,56 @@ describe("GET /api/dashboard — budget month rollover with non-1st start day", 
     expect(body.budgetSummary.totalEffective).toBe(60_000)
     expect(body.budgetSummary.totalSpent).toBe(30_000)
     expect(body.budgetSummary.remaining).toBe(30_000)
+  })
+
+  it("skips rollover entirely when the global carry-over switch is off", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 8, 4, 12, 0, 0)) // Sep 4 — before the 28th
+
+    setupMocks({
+      budgetStartDay: 28,
+      carryOverEnabled: false,
+      windowTransactions: [
+        // Previous budget month (Jul 28 – Aug 27) under-spent by 40k.
+        tx("prev-spend", "EXPENSE", "FOOD", 10_000, new Date(2026, 6, 29, 12, 0, 0)),
+      ],
+      budgets: [budget("FOOD", 50_000, "2026-08")],
+      prevBudgets: [budget("FOOD", 50_000, "2026-07")],
+    })
+
+    const res = await GET()
+    const body = await res.json()
+
+    expect(body.budgetSummary.totalRollover).toBe(0)
+    expect(body.budgetSummary.totalEffective).toBe(50_000)
+  })
+
+  it("compounds carry-over across multiple months", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 8, 4, 12, 0, 0)) // Sep 4, startDay=1
+
+    setupMocks({
+      budgetStartDay: 1,
+      windowTransactions: [
+        // Only August is spent against (20k).
+        tx("aug-spend", "EXPENSE", "FOOD", 20_000, new Date(2026, 7, 10, 12, 0, 0)),
+      ],
+      budgets: [
+        budget("FOOD", 100_000, "2026-06"),
+        budget("FOOD", 100_000, "2026-07"),
+        budget("FOOD", 100_000, "2026-08"),
+        budget("FOOD", 100_000, "2026-09"),
+      ],
+    })
+
+    const res = await GET()
+    const body = await res.json()
+
+    // Jun: 100k unused → Jul effective 200k, no spend → 200k unused
+    // Aug: effective 300k, spend 20k → 280k unused
+    // Sep: effective 100k + 280k = 380k
+    expect(body.budgetSummary.totalRollover).toBe(280_000)
+    expect(body.budgetSummary.totalEffective).toBe(380_000)
   })
 
   it("buckets the Monthly Cash Flow chart by budget month", async () => {
