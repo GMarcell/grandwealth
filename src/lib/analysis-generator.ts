@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { computeGoldPortfolio } from "@/lib/gold"
+import { getBudgetMonthRange } from "@/lib/budget-months"
 import Groq from "groq-sdk"
 
 const groq = new Groq({
@@ -55,20 +56,18 @@ export async function generateAnalysisForUserAndMonth(
     throw new Error("GROQ_API_KEY not configured")
   }
 
-  const [yearStr, monthStr] = monthKey.split("-")
-  const year = parseInt(yearStr, 10)
-  const month = parseInt(monthStr, 10) - 1 // JS months are 0-indexed
-
-  const monthStart = new Date(year, month, 1)
-  const monthEnd = new Date(year, month + 1, 0, 23, 59, 59, 999)
-
   // Fetch user
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, budgetStartDay: true },
   })
 
   if (!user) throw new Error("User not found")
+
+  const { start: monthStart, end: monthEnd } = getBudgetMonthRange(
+    monthKey,
+    user.budgetStartDay
+  )
 
   // ── Fetch user's monthly data ──
 
@@ -246,7 +245,9 @@ BERIKAN LANGKAH-LANGKAH HEMAT YANG SPESIFIK DAN BISA DILAKUKAN. Hitung potensi p
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: userPrompt },
     ],
-    model: "llama-3.3-70b-versatile",
+    // Groq deprecated llama-3.3-70b-versatile for non-enterprise access.
+    // Allow deployments to override this as Groq's model catalog changes.
+    model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
     temperature: 0.7,
     max_tokens: 2048,
   })

@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import { useQuery } from "@tanstack/react-query"
-import { useMemo } from "react"
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import {
   Plus,
   TrendingUp,
@@ -18,97 +18,118 @@ import {
   Sparkles,
   Percent,
   Home,
-} from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Badge } from "@/components/ui/badge"
-import { formatCompactIDR, formatIDR } from "@/lib/utils"
-import dynamic from "next/dynamic"
-import Link from "next/link"
+} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { formatCompactIDR, formatIDR } from "@/lib/utils";
+import dynamic from "next/dynamic";
+import Link from "next/link";
 
 // Dynamic import recharts (heavy charting library)
 const MonthlyCashFlowChart = dynamic(
-  () => import("@/components/charts/dashboard-charts").then((m) => m.MonthlyCashFlowChart),
+  () =>
+    import("@/components/charts/dashboard-charts").then(
+      (m) => m.MonthlyCashFlowChart,
+    ),
   {
     ssr: false,
-    loading: () => <div className="h-72 bg-muted/30 rounded-lg animate-pulse" />,
+    loading: () => (
+      <div className="h-72 bg-muted/30 rounded-lg animate-pulse" />
+    ),
   },
-)
+);
 
 const WealthBreakdownChart = dynamic(
-  () => import("@/components/charts/dashboard-charts").then((m) => m.WealthBreakdownChart),
+  () =>
+    import("@/components/charts/dashboard-charts").then(
+      (m) => m.WealthBreakdownChart,
+    ),
   {
     ssr: false,
-    loading: () => <div className="h-72 bg-muted/30 rounded-lg animate-pulse" />,
+    loading: () => (
+      <div className="h-72 bg-muted/30 rounded-lg animate-pulse" />
+    ),
   },
-)
+);
 
 const NetWorthChart = dynamic(
-  () => import("@/components/charts/dashboard-charts").then((m) => m.NetWorthChart),
+  () =>
+    import("@/components/charts/dashboard-charts").then((m) => m.NetWorthChart),
   {
     ssr: false,
-    loading: () => <div className="h-72 bg-muted/30 rounded-lg animate-pulse" />,
+    loading: () => (
+      <div className="h-72 bg-muted/30 rounded-lg animate-pulse" />
+    ),
   },
-)
+);
 
 interface DashboardData {
-  totalIncome: number
-  totalExpenses: number
-  netCashflow: number
-  totalGoldValue: number
-  totalGoldWeight: number
-  totalStockValue: number
-  stockCount: number
-  totalSavings: number
-  savingsAccountCount: number
-  totalWealth: number
-  totalDebt: number
-  loanCount: number
+  totalIncome: number;
+  totalExpenses: number;
+  netCashflow: number;
+  totalGoldValue: number;
+  totalGoldWeight: number;
+  totalStockValue: number;
+  stockCount: number;
+  totalSavings: number;
+  savingsAccountCount: number;
+  totalWealth: number;
+  totalDebt: number;
+  loanCount: number;
   recentTransactions: Array<{
-    id: string
-    type: string
-    category: string
-    amount: number
-    description: string
-    date: string
-  }>
+    id: string;
+    type: string;
+    category: string;
+    amount: number;
+    description: string;
+    date: string;
+  }>;
   monthlyData: Array<{
-    month: string
-    income: number
-    expenses: number
-  }>
+    month: string;
+    income: number;
+    expenses: number;
+  }>;
   budgetSummary: {
-    totalBudgeted: number
-    totalEffective: number
-    totalRollover: number
-    totalSpent: number
-    remaining: number
-    budgetCount: number
-    overBudget: number
-    overBudgetEntries: Array<{ categoryName: string; overspent: number; percentUsed: number }>
-    nearLimitEntries: Array<{ categoryName: string; remaining: number; percentUsed: number }>
-  }
+    totalBudgeted: number;
+    totalEffective: number;
+    totalRollover: number;
+    totalSpent: number;
+    remaining: number;
+    budgetCount: number;
+    overBudget: number;
+    overBudgetEntries: Array<{
+      categoryName: string;
+      overspent: number;
+      percentUsed: number;
+    }>;
+    nearLimitEntries: Array<{
+      categoryName: string;
+      remaining: number;
+      percentUsed: number;
+    }>;
+  };
   latestAnalysis: {
-    id: string
-    month: string
-    summary: string
-    totalIncome: number
-    totalExpenses: number
-    netSavings: number
-    savingsRate: number
-    overBudgetCount: number
-    createdAt: string
-  } | null
+    id: string;
+    month: string;
+    summary: string;
+    totalIncome: number;
+    totalExpenses: number;
+    netSavings: number;
+    savingsRate: number;
+    overBudgetCount: number;
+    createdAt: string;
+  } | null;
   budget5050: {
-    totalIncome: number
-    needs: { total: number; target: number; percent: number }
-    wants: { total: number; target: number; percent: number }
-    savings: { total: number; target: number; percent: number }
-    uncategorized: { total: number; percent: number }
-    categorizedCount: number
-    isHealthy: boolean
-  } | null
+    totalIncome: number;
+    needs: { total: number; target: number; percent: number };
+    wants: { total: number; target: number; percent: number };
+    savings: { total: number; target: number; percent: number };
+    uncategorized: { total: number; percent: number };
+    categorizedCount: number;
+    isHealthy: boolean;
+  } | null;
 }
 
 function StatCardSkeleton() {
@@ -122,7 +143,7 @@ function StatCardSkeleton() {
         <Skeleton className="h-3 w-20" />
       </CardContent>
     </Card>
-  )
+  );
 }
 
 export function DashboardContent() {
@@ -134,20 +155,20 @@ export function DashboardContent() {
       return res.json();
     },
     refetchInterval: 60_000,
-  })
+  });
 
   const { data: netWorthData } = useQuery<{
     history: Array<{
-      month: string
-      label: string
-      cash: number
-      gold: number
-      stocks: number
-      savings: number
-      debt: number
-      assets: number
-      total: number
-    }>
+      month: string;
+      label: string;
+      cash: number;
+      gold: number;
+      stocks: number;
+      savings: number;
+      debt: number;
+      assets: number;
+      total: number;
+    }>;
   }>({
     queryKey: ["net-worth"],
     queryFn: async () => {
@@ -155,53 +176,73 @@ export function DashboardContent() {
       if (!res.ok) throw new Error("Failed to fetch net worth history");
       return res.json();
     },
-  })
+  });
 
-  const netPositive = useMemo(() => (data?.netCashflow ?? 0) >= 0, [data?.netCashflow])
+  const netPositive = useMemo(
+    () => (data?.netCashflow ?? 0) >= 0,
+    [data?.netCashflow],
+  );
 
-  const pieData = useMemo(() =>
+  const pieData = useMemo(
+    () =>
+      [
+        { name: "Cash Flow", value: Math.max(0, data?.netCashflow ?? 0) },
+        { name: "Gold", value: data?.totalGoldValue ?? 0 },
+        { name: "Stocks", value: data?.totalStockValue ?? 0 },
+        { name: "Savings", value: Math.max(0, data?.totalSavings ?? 0) },
+      ].filter((d) => d.value > 0),
     [
-      { name: "Cash Flow", value: Math.max(0, data?.netCashflow ?? 0) },
-      { name: "Gold", value: data?.totalGoldValue ?? 0 },
-      { name: "Stocks", value: data?.totalStockValue ?? 0 },
-      { name: "Savings", value: Math.max(0, data?.totalSavings ?? 0) },
-    ].filter((d) => d.value > 0),
-    [data?.netCashflow, data?.totalGoldValue, data?.totalStockValue, data?.totalSavings]
-  )
+      data?.netCashflow,
+      data?.totalGoldValue,
+      data?.totalStockValue,
+      data?.totalSavings,
+    ],
+  );
 
   if (isLoading) {
     return (
       <>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}
+          {Array.from({ length: 4 }).map((_, i) => (
+            <StatCardSkeleton key={i} />
+          ))}
         </div>
         <Skeleton className="h-80 w-full" />
       </>
-    )
+    );
   }
 
   return (
     <>
       {/* Refresh button — positioned inline with the server-rendered header on desktop */}
-      <div className="flex items-center gap-2 w-full sm:absolute sm:right-0 sm:top-0 sm:justify-end sm:w-auto -mt-4 sm:mt-0">
-        <Button variant="outline" size="sm" onClick={() => refetch()} className="flex-1 sm:flex-initial">
+      <div className="flex w-full items-center justify-end gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => refetch()}
+          className="w-auto"
+        >
           <RefreshCw className="h-4 w-4 mr-1" />
           Refresh
         </Button>
       </div>
 
       {/* Total Wealth Hero */}
-      <Card className="bg-gradient-to-br from-primary/5 via-primary/5 to-transparent border-primary/10">
+      <Card className="bg-linear-to-br from-primary/5 via-primary/5 to-transparent border-primary/10">
         <CardContent className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-muted-foreground mb-1">Total Net Wealth</p>
+              <p className="text-sm font-medium text-muted-foreground mb-1">
+                Total Net Wealth
+              </p>
               <p className="text-4xl font-bold tracking-tight">
                 {formatCompactIDR(data?.totalWealth ?? 0)}
               </p>
               <p className="text-xs text-muted-foreground mt-2">
                 All-time net cash flow + gold + stocks + bank savings
-                {data && data.totalDebt > 0 ? ` - ${formatCompactIDR(data.totalDebt)} debt` : ""}
+                {data && data.totalDebt > 0
+                  ? ` - ${formatCompactIDR(data.totalDebt)} debt`
+                  : ""}
               </p>
             </div>
             <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
@@ -245,8 +286,11 @@ export function DashboardContent() {
             <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${netPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-              {netPositive ? "+" : ""}{formatCompactIDR(data?.netCashflow ?? 0)}
+            <div
+              className={`text-2xl font-bold ${netPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
+            >
+              {netPositive ? "+" : ""}
+              {formatCompactIDR(data?.netCashflow ?? 0)}
             </div>
             <Badge variant={netPositive ? "profit" : "loss"} className="mt-1">
               {netPositive ? "Surplus" : "Deficit"}
@@ -261,14 +305,30 @@ export function DashboardContent() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatCompactIDR((data?.totalGoldValue ?? 0) + (data?.totalStockValue ?? 0) + (data?.totalSavings ?? 0))}
+              {formatCompactIDR(
+                (data?.totalGoldValue ?? 0) +
+                  (data?.totalStockValue ?? 0) +
+                  (data?.totalSavings ?? 0),
+              )}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {(data?.totalGoldWeight ?? 0).toFixed(2)}g gold &bull; {data?.stockCount ?? 0} stocks
-              {data?.savingsAccountCount != null && data.savingsAccountCount > 0 && (
-                <> &bull; {data.savingsAccountCount} {data.savingsAccountCount === 1 ? "account" : "accounts"}</>
-              )}
-              {data?.loanCount ? <> &bull; {data.loanCount} {data.loanCount === 1 ? "loan" : "loans"}</> : null}
+              {(data?.totalGoldWeight ?? 0).toFixed(2)}g gold &bull;{" "}
+              {data?.stockCount ?? 0} stocks
+              {data?.savingsAccountCount != null &&
+                data.savingsAccountCount > 0 && (
+                  <>
+                    {" "}
+                    &bull; {data.savingsAccountCount}{" "}
+                    {data.savingsAccountCount === 1 ? "account" : "accounts"}
+                  </>
+                )}
+              {data?.loanCount ? (
+                <>
+                  {" "}
+                  &bull; {data.loanCount}{" "}
+                  {data.loanCount === 1 ? "loan" : "loans"}
+                </>
+              ) : null}
             </p>
             {data && data.totalDebt > 0 && (
               <Badge variant="loss" className="mt-2">
@@ -300,7 +360,12 @@ export function DashboardContent() {
                 </Badge>
               )}
             </div>
-            <Button variant="link" size="sm" className="text-xs h-auto p-0" asChild>
+            <Button
+              variant="link"
+              size="sm"
+              className="text-xs h-auto p-0"
+              asChild
+            >
               <Link href="/settings">Configure</Link>
             </Button>
           </CardHeader>
@@ -315,13 +380,16 @@ export function DashboardContent() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-muted-foreground">
-                        {formatCompactIDR(data.budget5050.needs.total)} / {formatCompactIDR(data.budget5050.needs.target)}
+                        {formatCompactIDR(data.budget5050.needs.total)} /{" "}
+                        {formatCompactIDR(data.budget5050.needs.target)}
                       </span>
-                      <span className={`font-semibold min-w-[3rem] text-right ${
-                        data.budget5050.needs.percent <= 50
-                          ? "text-emerald-600 dark:text-emerald-400"
-                          : "text-red-600 dark:text-red-400"
-                      }`}>
+                      <span
+                        className={`font-semibold min-w-[3rem] text-right ${
+                          data.budget5050.needs.percent <= 50
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-red-600 dark:text-red-400"
+                        }`}
+                      >
                         {data.budget5050.needs.percent.toFixed(1)}%
                       </span>
                     </div>
@@ -333,14 +401,20 @@ export function DashboardContent() {
                           ? "bg-blue-500"
                           : "bg-red-500"
                       }`}
-                      style={{ width: `${Math.min(data.budget5050.needs.percent, 100)}%` }}
+                      style={{
+                        width: `${Math.min(data.budget5050.needs.percent, 100)}%`,
+                      }}
                     />
                   </div>
                   <div className="flex justify-between text-[10px] text-muted-foreground">
                     <span>Target: 50%</span>
                     {data.budget5050.needs.percent > 50 && (
                       <span className="text-red-500">
-                        {formatCompactIDR(data.budget5050.needs.total - data.budget5050.needs.target)} over
+                        {formatCompactIDR(
+                          data.budget5050.needs.total -
+                            data.budget5050.needs.target,
+                        )}{" "}
+                        over
                       </span>
                     )}
                   </div>
@@ -354,13 +428,16 @@ export function DashboardContent() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-muted-foreground">
-                        {formatCompactIDR(data.budget5050.wants.total)} / {formatCompactIDR(data.budget5050.wants.target)}
+                        {formatCompactIDR(data.budget5050.wants.total)} /{" "}
+                        {formatCompactIDR(data.budget5050.wants.target)}
                       </span>
-                      <span className={`font-semibold min-w-[3rem] text-right ${
-                        data.budget5050.wants.percent <= 30
-                          ? "text-emerald-600 dark:text-emerald-400"
-                          : "text-red-600 dark:text-red-400"
-                      }`}>
+                      <span
+                        className={`font-semibold min-w-[3rem] text-right ${
+                          data.budget5050.wants.percent <= 30
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-red-600 dark:text-red-400"
+                        }`}
+                      >
                         {data.budget5050.wants.percent.toFixed(1)}%
                       </span>
                     </div>
@@ -372,14 +449,20 @@ export function DashboardContent() {
                           ? "bg-amber-500"
                           : "bg-red-500"
                       }`}
-                      style={{ width: `${Math.min(data.budget5050.wants.percent, 100)}%` }}
+                      style={{
+                        width: `${Math.min(data.budget5050.wants.percent, 100)}%`,
+                      }}
                     />
                   </div>
                   <div className="flex justify-between text-[10px] text-muted-foreground">
                     <span>Target: 30%</span>
                     {data.budget5050.wants.percent > 30 && (
                       <span className="text-red-500">
-                        {formatCompactIDR(data.budget5050.wants.total - data.budget5050.wants.target)} over
+                        {formatCompactIDR(
+                          data.budget5050.wants.total -
+                            data.budget5050.wants.target,
+                        )}{" "}
+                        over
                       </span>
                     )}
                   </div>
@@ -393,13 +476,16 @@ export function DashboardContent() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-muted-foreground">
-                        {formatCompactIDR(data.budget5050.savings.total)} / {formatCompactIDR(data.budget5050.savings.target)}
+                        {formatCompactIDR(data.budget5050.savings.total)} /{" "}
+                        {formatCompactIDR(data.budget5050.savings.target)}
                       </span>
-                      <span className={`font-semibold min-w-[3rem] text-right ${
-                        data.budget5050.savings.percent >= 20
-                          ? "text-emerald-600 dark:text-emerald-400"
-                          : "text-red-600 dark:text-red-400"
-                      }`}>
+                      <span
+                        className={`font-semibold min-w-[3rem] text-right ${
+                          data.budget5050.savings.percent >= 20
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-red-600 dark:text-red-400"
+                        }`}
+                      >
                         {data.budget5050.savings.percent.toFixed(1)}%
                       </span>
                     </div>
@@ -411,14 +497,20 @@ export function DashboardContent() {
                           ? "bg-emerald-500"
                           : "bg-red-500"
                       }`}
-                      style={{ width: `${Math.min(data.budget5050.savings.percent, 100)}%` }}
+                      style={{
+                        width: `${Math.min(data.budget5050.savings.percent, 100)}%`,
+                      }}
                     />
                   </div>
                   <div className="flex justify-between text-[10px] text-muted-foreground">
                     <span>Target: 20%</span>
                     {data.budget5050.savings.percent < 20 && (
                       <span className="text-red-500">
-                        {formatCompactIDR(data.budget5050.savings.target - data.budget5050.savings.total)} short
+                        {formatCompactIDR(
+                          data.budget5050.savings.target -
+                            data.budget5050.savings.total,
+                        )}{" "}
+                        short
                       </span>
                     )}
                   </div>
@@ -430,10 +522,12 @@ export function DashboardContent() {
                   <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
                   <div>
                     <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
-                      {formatCompactIDR(data.budget5050.uncategorized.total)} uncategorized
+                      {formatCompactIDR(data.budget5050.uncategorized.total)}{" "}
+                      uncategorized
                     </p>
                     <p className="text-[10px] text-amber-700 dark:text-amber-400">
-                      Assign rule types to all expense categories in Settings for an accurate breakdown.
+                      Assign rule types to all expense categories in Settings
+                      for an accurate breakdown.
                     </p>
                   </div>
                 </div>
@@ -446,7 +540,7 @@ export function DashboardContent() {
       {/* AI Analysis Widget */}
       {data?.latestAnalysis && (
         <Link href="/analysis">
-          <Card className="border-purple-200 dark:border-purple-800 hover:border-purple-300 dark:hover:border-purple-700 transition-all cursor-pointer group">
+          <Card className="border-purple-200 dark:border-purple-800 hover:border-purple-300 dark:hover:border-purple-700 transition-all cursor-pointer group mb-5">
             <CardContent className="p-5">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2">
@@ -459,7 +553,10 @@ export function DashboardContent() {
                       <Sparkles className="h-3.5 w-3.5 text-purple-500" />
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {data.latestAnalysis.month} &bull; Generated {new Date(data.latestAnalysis.createdAt).toLocaleDateString("en-US")}
+                      {data.latestAnalysis.month} &bull; Generated{" "}
+                      {new Date(
+                        data.latestAnalysis.createdAt,
+                      ).toLocaleDateString("en-US")}
                     </p>
                   </div>
                 </div>
@@ -484,11 +581,13 @@ export function DashboardContent() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Net Savings</p>
-                  <p className={`text-sm font-semibold ${
-                    data.latestAnalysis.netSavings >= 0
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : "text-red-600 dark:text-red-400"
-                  }`}>
+                  <p
+                    className={`text-sm font-semibold ${
+                      data.latestAnalysis.netSavings >= 0
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-red-600 dark:text-red-400"
+                    }`}
+                  >
                     {formatCompactIDR(data.latestAnalysis.netSavings)}
                   </p>
                 </div>
@@ -497,13 +596,15 @@ export function DashboardContent() {
                     <Percent className="h-3 w-3" />
                     Savings Rate
                   </p>
-                  <p className={`text-sm font-semibold ${
-                    data.latestAnalysis.savingsRate >= 20
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : data.latestAnalysis.savingsRate >= 10
-                      ? "text-amber-600 dark:text-amber-400"
-                      : "text-red-600 dark:text-red-400"
-                  }`}>
+                  <p
+                    className={`text-sm font-semibold ${
+                      data.latestAnalysis.savingsRate >= 20
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : data.latestAnalysis.savingsRate >= 10
+                          ? "text-amber-600 dark:text-amber-400"
+                          : "text-red-600 dark:text-red-400"
+                    }`}
+                  >
                     {data.latestAnalysis.savingsRate.toFixed(1)}%
                   </p>
                 </div>
@@ -511,7 +612,10 @@ export function DashboardContent() {
                   <div>
                     <p className="text-xs text-muted-foreground">Over Budget</p>
                     <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">
-                      {data.latestAnalysis.overBudgetCount} {data.latestAnalysis.overBudgetCount === 1 ? "category" : "categories"}
+                      {data.latestAnalysis.overBudgetCount}{" "}
+                      {data.latestAnalysis.overBudgetCount === 1
+                        ? "category"
+                        : "categories"}
                     </p>
                   </div>
                 )}
@@ -564,31 +668,43 @@ export function DashboardContent() {
                 <span className="text-muted-foreground">Budget vs Spent</span>
                 <span className="font-medium">
                   {formatCompactIDR(data.budgetSummary.totalSpent)} /{" "}
-                  {formatCompactIDR(data.budgetSummary.totalEffective || data.budgetSummary.totalBudgeted)}
+                  {formatCompactIDR(
+                    data.budgetSummary.totalEffective ||
+                      data.budgetSummary.totalBudgeted,
+                  )}
                 </span>
               </div>
               {data.budgetSummary.totalRollover > 0 && (
                 <div className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
                   <CheckCircle2 className="h-3 w-3" />
-                  <span>+{formatCompactIDR(data.budgetSummary.totalRollover)} rollover from last month</span>
+                  <span>
+                    +{formatCompactIDR(data.budgetSummary.totalRollover)}{" "}
+                    rollover from last month
+                  </span>
                 </div>
               )}
               <div className="h-2.5 w-full rounded-full bg-muted overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${
-                    (data.budgetSummary.totalEffective || data.budgetSummary.totalBudgeted) > 0 &&
-                    data.budgetSummary.totalSpent / (data.budgetSummary.totalEffective || data.budgetSummary.totalBudgeted) > 0.8
+                    (data.budgetSummary.totalEffective ||
+                      data.budgetSummary.totalBudgeted) > 0 &&
+                    data.budgetSummary.totalSpent /
+                      (data.budgetSummary.totalEffective ||
+                        data.budgetSummary.totalBudgeted) >
+                      0.8
                       ? "bg-amber-500"
                       : "bg-emerald-500"
                   }`}
                   style={{
                     width: `${
-                      (data.budgetSummary.totalEffective || data.budgetSummary.totalBudgeted) > 0
+                      (data.budgetSummary.totalEffective ||
+                        data.budgetSummary.totalBudgeted) > 0
                         ? Math.min(
                             (data.budgetSummary.totalSpent /
-                              (data.budgetSummary.totalEffective || data.budgetSummary.totalBudgeted)) *
+                              (data.budgetSummary.totalEffective ||
+                                data.budgetSummary.totalBudgeted)) *
                               100,
-                            100
+                            100,
                           )
                         : 0
                     }%`,
@@ -613,7 +729,8 @@ export function DashboardContent() {
                         {entry.categoryName.replace("_", " ")}
                       </span>
                       <span className="text-xs text-red-600 dark:text-red-400 font-medium">
-                        {formatCompactIDR(entry.overspent)} over ({entry.percentUsed}%)
+                        {formatCompactIDR(entry.overspent)} over (
+                        {entry.percentUsed}%)
                       </span>
                     </div>
                   ))}
@@ -637,7 +754,8 @@ export function DashboardContent() {
                         {entry.categoryName.replace("_", " ")}
                       </span>
                       <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
-                        {formatCompactIDR(entry.remaining)} left ({entry.percentUsed}%)
+                        {formatCompactIDR(entry.remaining)} left (
+                        {entry.percentUsed}%)
                       </span>
                     </div>
                   ))}
@@ -668,32 +786,52 @@ export function DashboardContent() {
           <CardContent className="space-y-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <Link href="/transactions" className="block">
-                <Button variant="outline" className="w-full justify-start" size="sm">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  size="sm"
+                >
                   <ArrowLeftRight className="h-4 w-4 mr-2 shrink-0" />
                   <span className="truncate">Add Transaction</span>
                 </Button>
               </Link>
               <Link href="/budgets" className="block">
-                <Button variant="outline" className="w-full justify-start" size="sm">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  size="sm"
+                >
                   <PiggyBank className="h-4 w-4 mr-2 shrink-0" />
                   <span className="truncate">Set Budgets</span>
                 </Button>
               </Link>
               <Link href="/gold" className="block">
-                <Button variant="outline" className="w-full justify-start" size="sm">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  size="sm"
+                >
                   <CircleDollarSign className="h-4 w-4 mr-2 shrink-0" />
                   <span className="truncate">Record Gold</span>
                 </Button>
               </Link>
               <Link href="/stocks" className="block">
-                <Button variant="outline" className="w-full justify-start" size="sm">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  size="sm"
+                >
                   <TrendingUp className="h-4 w-4 mr-2 shrink-0" />
                   <span className="truncate">Add Stock</span>
                 </Button>
               </Link>
             </div>
             <Link href="/savings" className="block">
-              <Button variant="outline" className="w-full justify-start" size="sm">
+              <Button
+                variant="outline"
+                className="w-full justify-start"
+                size="sm"
+              >
                 <Landmark className="h-4 w-4 mr-2 shrink-0" />
                 <span className="truncate">Record Savings</span>
               </Button>
@@ -707,18 +845,21 @@ export function DashboardContent() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {data?.recentTransactions && data.recentTransactions.length > 0 ? (
+              {data?.recentTransactions &&
+              data.recentTransactions.length > 0 ? (
                 data.recentTransactions.map((tx) => (
                   <div
                     key={tx.id}
                     className="flex items-center justify-between rounded-lg border p-3"
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`flex h-9 w-9 items-center justify-center rounded-full ${
-                        tx.type === "INCOME"
-                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                          : "bg-red-500/10 text-red-600 dark:text-red-400"
-                      }`}>
+                      <div
+                        className={`flex h-9 w-9 items-center justify-center rounded-full ${
+                          tx.type === "INCOME"
+                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            : "bg-red-500/10 text-red-600 dark:text-red-400"
+                        }`}
+                      >
                         {tx.type === "INCOME" ? (
                           <TrendingUp className="h-4 w-4" />
                         ) : (
@@ -728,16 +869,20 @@ export function DashboardContent() {
                       <div>
                         <p className="text-sm font-medium">{tx.description}</p>
                         <p className="text-xs text-muted-foreground">
-                          {tx.category.replace("_", " ")} &bull; {new Date(tx.date).toLocaleDateString("en-US")}
+                          {tx.category.replace("_", " ")} &bull;{" "}
+                          {new Date(tx.date).toLocaleDateString("en-US")}
                         </p>
                       </div>
                     </div>
-                    <div className={`text-sm font-semibold ${
-                      tx.type === "INCOME"
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-red-600 dark:text-red-400"
-                    }`}>
-                      {tx.type === "INCOME" ? "+" : "-"}{formatIDR(tx.amount)}
+                    <div
+                      className={`text-sm font-semibold ${
+                        tx.type === "INCOME"
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : "text-red-600 dark:text-red-400"
+                      }`}
+                    >
+                      {tx.type === "INCOME" ? "+" : "-"}
+                      {formatIDR(tx.amount)}
                     </div>
                   </div>
                 ))
@@ -759,5 +904,5 @@ export function DashboardContent() {
         </Card>
       </div>
     </>
-  )
+  );
 }

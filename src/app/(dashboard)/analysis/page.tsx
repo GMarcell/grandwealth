@@ -32,7 +32,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
+import { generateBudgetMonths, getBudgetMonthLabel, getCurrentBudgetMonthKey } from "@/lib/budget-months"
 import { toast } from "sonner"
+import { MarkdownContent } from "@/components/ui/markdown-content"
 import {
   Dialog,
   DialogContent,
@@ -191,9 +193,21 @@ function formatMonthLabel(monthKey: string): string {
 
 export default function AnalysisPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>("latest")
+  const [newAnalysisMonth, setNewAnalysisMonth] = useState("latest")
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
   const abortControllerRef = useRef<AbortController | null>(null)
   const queryClient = useQueryClient()
+
+  const { data: budgetSettings } = useQuery<{ budgetStartDay: number }>({
+    queryKey: ["budget-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/user/budget-settings")
+      if (!res.ok) throw new Error("Failed to fetch budget settings")
+      return res.json()
+    },
+  })
+  const budgetStartDay = budgetSettings?.budgetStartDay ?? 1
+  const budgetMonths = generateBudgetMonths(24, budgetStartDay)
 
   // Fetch list of all analysis months
   const { data: listData, isLoading: listLoading } = useQuery<{
@@ -265,6 +279,14 @@ export default function AnalysisPage() {
     abortControllerRef.current?.abort()
   }
 
+  const generateForSelectedMonth = () => {
+    const month = newAnalysisMonth === "latest"
+      ? getCurrentBudgetMonthKey(budgetStartDay)
+      : newAnalysisMonth
+    setSelectedMonth(month)
+    regenerateMutation.mutate(month)
+  }
+
   const isLoading = listLoading || analysisLoading
 
   if (isLoading) return <AnalysisSkeleton />
@@ -305,6 +327,30 @@ export default function AnalysisPage() {
               ))}
             </SelectContent>
           </Select>
+          <div className="flex items-center gap-2">
+            <Select value={newAnalysisMonth} onValueChange={setNewAnalysisMonth}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Choose budget month" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="latest">Current budget month</SelectItem>
+                {budgetMonths.map((month) => (
+                  <SelectItem key={month} value={month}>
+                    {getBudgetMonthLabel(month, budgetStartDay, true)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              size="sm"
+              className="gap-2 whitespace-nowrap"
+              disabled={regenerateMutation.isPending}
+              onClick={generateForSelectedMonth}
+            >
+              <Sparkles className="h-4 w-4" />
+              Generate
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -312,7 +358,8 @@ export default function AnalysisPage() {
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">
-              No analysis available yet. The monthly analysis is generated at the end of each month.
+              No analysis is available for this month yet. Choose a month above
+              and click Generate to create one.
             </p>
           </CardContent>
         </Card>
@@ -456,46 +503,7 @@ export default function AnalysisPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="prose prose-sm dark:prose-invert max-w-none">
-                {analysis.summary.split("\n").map((line, i) => {
-                  if (line.startsWith("## ")) {
-                    return (
-                      <h2 key={i} className="text-lg font-bold mt-6 mb-2 text-foreground">
-                        {line.replace("## ", "")}
-                      </h2>
-                    )
-                  }
-                  if (line.startsWith("### ")) {
-                    return (
-                      <h3 key={i} className="text-base font-semibold mt-4 mb-1 text-foreground">
-                        {line.replace("### ", "")}
-                      </h3>
-                    )
-                  }
-                  if (line.startsWith("- ") || line.startsWith("* ")) {
-                    return (
-                      <li key={i} className="ml-4 text-sm text-muted-foreground list-disc">
-                        {line.replace(/^[-*] /, "")}
-                      </li>
-                    )
-                  }
-                  if (line.startsWith("**") && line.endsWith("**")) {
-                    return (
-                      <p key={i} className="font-semibold text-foreground mt-3">
-                        {line.replace(/\*\*/g, "")}
-                      </p>
-                    )
-                  }
-                  if (line.trim() === "") {
-                    return <div key={i} className="h-2" />
-                  }
-                  return (
-                    <p key={i} className="text-sm text-muted-foreground leading-relaxed">
-                      {line}
-                    </p>
-                  )
-                })}
-              </div>
+              <MarkdownContent content={analysis.summary} />
             </CardContent>
           </Card>
 

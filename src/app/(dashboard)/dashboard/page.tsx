@@ -22,7 +22,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Data-driven content — client component, loaded after hydration */}
       <DashboardContent />
     </div>
   )
