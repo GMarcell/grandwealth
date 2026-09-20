@@ -33,7 +33,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             variant="ghost"
             size="icon-sm"
             onClick={() => setIsMobileOpen(true)}
-            className="min-w-11 min-h-11"
+            // px, not rem: keeps a 44px tap target even though the rem base
+            // shrinks below the sm: breakpoint.
+            className="min-w-[44px] min-h-[44px]"
             aria-label="Open sidebar menu"
           >
             <Menu className="h-5 w-5" />

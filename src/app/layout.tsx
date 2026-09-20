@@ -96,7 +96,9 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  // Deliberately no maximumScale/userScalable lock: pinching to zoom must stay
+  // available (WCAG 1.4.4). Blocking it also prevented phone users from
+  // zooming back out when the layout felt too large.
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#fbf9f4" },
     { media: "(prefers-color-scheme: dark)", color: "#26231b" },

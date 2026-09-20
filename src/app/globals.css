@@ -158,6 +158,15 @@
   }
 }
 
+/* Denser layout on phones: shrinking the rem base scales text, spacing, and
+   card padding down together, so more content fits on a small screen.
+   Scoped below the sm: breakpoint (640px) so tablets/desktop are untouched. */
+@media (max-width: 639px) {
+  html {
+    font-size: 87.5%; /* 14px instead of the browser default 16px */
+  }
+}
+
 /* Improved touch targets for mobile */
 @media (max-width: 640px) {
   .touch-target {
