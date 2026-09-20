@@ -26,7 +26,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         isMobileOpen={isMobileOpen}
         onMobileClose={() => setIsMobileOpen(false)}
       />
-      <main className="flex-1 bg-background lg:ml-64">
+      {/* min-w-0: without it this flex item refuses to shrink below its
+          content's min-content width, which pushes the whole page wider than
+          the phone screen instead of letting inner content scroll. */}
+      <main className="flex-1 min-w-0 bg-background lg:ml-64">
         {/* Mobile header with hamburger */}
         <div className="sticky top-0 z-30 flex items-center gap-3 border-b bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 px-4 py-3 lg:hidden">
           <Button

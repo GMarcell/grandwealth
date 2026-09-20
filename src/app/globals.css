@@ -129,49 +129,12 @@
   background: var(--muted-foreground);
 }
 
-/* Responsive table utilities */
-@layer utilities {
-  .table-container {
-    @apply overflow-x-auto -mx-3 sm:-mx-0;
-  }
-
-  .table-container > table {
-    @apply min-w-full;
-  }
-
-  .table-container > table th,
-  .table-container > table td {
-    @apply whitespace-nowrap;
-  }
-
-  .table-container > table th:first-child,
-  .table-container > table td:first-child {
-    @apply sticky left-0 z-10;
-  }
-
-  .table-scroll {
-    @apply overflow-x-auto;
-  }
-
-  .card-hover {
-    @apply transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md;
-  }
-}
-
 /* Denser layout on phones: shrinking the rem base scales text, spacing, and
    card padding down together, so more content fits on a small screen.
    Scoped below the sm: breakpoint (640px) so tablets/desktop are untouched. */
 @media (max-width: 639px) {
   html {
     font-size: 87.5%; /* 14px instead of the browser default 16px */
-  }
-}
-
-/* Improved touch targets for mobile */
-@media (max-width: 640px) {
-  .touch-target {
-    min-height: 44px;
-    min-width: 44px;
   }
 }
 
@@ -183,16 +146,4 @@ html {
 /* Prevent layout shift from scrollbar */
 body {
   scrollbar-gutter: stable;
-}
-
-/* Hide scrollbar for horizontal scroll containers */
-@layer utilities {
-  .hide-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-
-  .hide-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
 }

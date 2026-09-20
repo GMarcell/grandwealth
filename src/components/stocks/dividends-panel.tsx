@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { formatIDR, formatDate } from "@/lib/utils"
+import { UpcomingDividends, type ProjectedDividend } from "@/components/stocks/upcoming-dividends"
 import { toast } from "sonner"
 
 interface Dividend {
@@ -90,6 +91,26 @@ export function DividendsPanel() {
     })
     setSubmitError("")
     setIsOpen(false)
+  }
+
+  /**
+   * Open the record dialog prefilled from a projected dividend, so the user
+   * confirms the amount before it becomes an actual record.
+   */
+  function recordProjected(p: ProjectedDividend) {
+    setEditing(null)
+    const cadence =
+      p.frequency !== "UNKNOWN" && p.frequency !== "IRREGULAR"
+        ? ` (${p.frequency.toLowerCase()})`
+        : ""
+    setForm({
+      stockId: p.stockId,
+      amount: p.estimatedNextPayout != null ? String(p.estimatedNextPayout) : "",
+      date: new Date().toISOString().split("T")[0],
+      notes: `Estimated dividend${cadence}`,
+    })
+    setSubmitError("")
+    setIsOpen(true)
   }
 
   function openEdit(d: Dividend) {
@@ -245,6 +266,12 @@ export function DividendsPanel() {
           </Dialog>
         </CardHeader>
         <CardContent>
+          <UpcomingDividends onRecord={recordProjected} />
+
+          <p className="mt-4 mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Recorded payouts
+          </p>
+
           {isLoading ? (
             <div className="flex items-center justify-center py-6">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
