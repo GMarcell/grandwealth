@@ -2,6 +2,12 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { requireProAccess } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
+import {
+  generateBudgetMonths,
+  getBudgetMonthKey,
+  getBudgetMonthLabel,
+  getBudgetMonthRange,
+} from "@/lib/budget-months"
 
 export async function GET(req: Request) {
   const session = await auth()
@@ -19,9 +25,22 @@ export async function GET(req: Request) {
   const userId = session.user.id
 
   try {
-    const now = new Date()
-    const startDate = new Date(now.getFullYear(), now.getMonth() - monthsBack, 1)
-    const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    // Reports must follow the user's budget cycle (the "Budget Month Starts On"
+    // setting) exactly like the dashboard, budgets and analysis do — otherwise
+    // a period like 15 Jul – 14 Aug gets split across two calendar months here.
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { budgetStartDay: true },
+    })
+    const startDay = user?.budgetStartDay ?? 1
+
+    // Budget months, newest first, ending with the current (in-progress) cycle.
+    const budgetMonths = generateBudgetMonths(monthsBack, startDay)
+    const currentMonthKey = budgetMonths[0]
+    const oldestMonthKey = budgetMonths[budgetMonths.length - 1]
+
+    const startDate = getBudgetMonthRange(oldestMonthKey, startDay).start
+    const endDate = getBudgetMonthRange(currentMonthKey, startDay).end
 
     const transactions = await prisma.transaction.findMany({
       where: {
@@ -31,9 +50,9 @@ export async function GET(req: Request) {
       orderBy: { date: "asc" },
     })
 
-    // Spending by category (current month)
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-    const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    // Spending by category (current budget month, not the calendar month)
+    const currentMonthStart = getBudgetMonthRange(currentMonthKey, startDay).start
+    const currentMonthEnd = getBudgetMonthRange(currentMonthKey, startDay).end
 
     const currentExpenses = transactions.filter(
       (tx) => tx.type === "EXPENSE" && tx.date >= currentMonthStart && tx.date <= currentMonthEnd
@@ -52,8 +71,9 @@ export async function GET(req: Request) {
     >()
 
     for (const tx of transactions) {
-      const d = new Date(tx.date)
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+      // Bucket by budget month so a payout dated 10 Aug (with a 15th start day)
+      // stays with the cycle it was budgeted in.
+      const key = getBudgetMonthKey(new Date(tx.date), startDay)
       const existing = monthlyMap.get(key) || { income: 0, expenses: 0, count: 0 }
       if (tx.type === "INCOME") {
         existing.income += tx.amount
@@ -64,24 +84,16 @@ export async function GET(req: Request) {
       monthlyMap.set(key, existing)
     }
 
-    const monthNames = [
-      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-    ]
-
     const monthlyBreakdown = Array.from(monthlyMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, data]) => {
-        const [year, m] = month.split("-")
-        return {
-          month,
-          label: `${monthNames[parseInt(m) - 1]} ${year}`,
-          income: data.income,
-          expenses: data.expenses,
-          net: data.income - data.expenses,
-          transactionCount: data.count,
-        }
-      })
+      .map(([month, data]) => ({
+        month,
+        label: getBudgetMonthLabel(month, startDay),
+        income: data.income,
+        expenses: data.expenses,
+        net: data.income - data.expenses,
+        transactionCount: data.count,
+      }))
 
     // Category breakdown (for the whole period)
     const incomeByCategory = new Map<string, number>()

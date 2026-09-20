@@ -5,7 +5,7 @@ import { CalendarClock, Info, Loader2, RefreshCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { formatDate, formatIDR } from "@/lib/utils"
+import { formatCompactIDR, formatDate, formatIDR } from "@/lib/utils"
 
 export interface ProjectedDividend {
   symbol: string
@@ -26,8 +26,31 @@ export interface ProjectedDividend {
   history: { date: string; amountPerShare: number }[]
 }
 
+interface DividendCalendarPayment {
+  symbol: string
+  name: string
+  lots: number
+  shares: number
+  amount: number
+  estimatedExDate: string
+  estimatedPayDate: string
+}
+
+interface DividendCalendarMonth {
+  month: string
+  total: number
+  payments: DividendCalendarPayment[]
+}
+
+interface DividendCalendar {
+  months: DividendCalendarMonth[]
+  total: number
+  paymentsCount: number
+}
+
 interface UpcomingDividendsResponse {
   data: ProjectedDividend[]
+  calendar: DividendCalendar
   totals: {
     estimatedNextPayout: number
     estimatedAnnualIncome: number
@@ -49,6 +72,15 @@ const FREQUENCY_LABEL: Record<string, string> = {
 /** Format a per-share amount without dropping the decimals small payouts have. */
 function formatPerShare(value: number): string {
   return `Rp${value.toLocaleString("id-ID", { maximumFractionDigits: 2 })}`
+}
+
+/** "2026-11" → "Nov 26". Pinned to UTC so the month never shifts by timezone. */
+function monthLabel(month: string): string {
+  return new Date(`${month}-01T00:00:00Z`).toLocaleDateString("en-US", {
+    month: "short",
+    year: "2-digit",
+    timeZone: "UTC",
+  })
 }
 
 export function UpcomingDividends({
@@ -74,6 +106,10 @@ export function UpcomingDividends({
 
   const projections = data?.data ?? []
   const totals = data?.totals
+  const calendar = data?.calendar
+  const maxMonthTotal = calendar
+    ? Math.max(0, ...calendar.months.map((m) => m.total))
+    : 0
 
   return (
     <div className="rounded-lg border bg-muted/30 p-3 sm:p-4">
@@ -180,11 +216,67 @@ export function UpcomingDividends({
             ))}
           </ul>
 
+          {calendar && calendar.paymentsCount > 0 && (
+            <div className="mt-4 border-t pt-3">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Next 12 months
+                </p>
+                <p className="text-xs font-medium">
+                  ≈ {formatIDR(calendar.total)}
+                </p>
+              </div>
+
+              <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
+                {calendar.months.map((m, index) => {
+                  const heightPercent =
+                    maxMonthTotal > 0 && m.total > 0
+                      ? Math.max(8, (m.total / maxMonthTotal) * 100)
+                      : 0
+                  const tooltip =
+                    m.payments.length > 0
+                      ? m.payments
+                          .map((p) => `${p.symbol} ≈ ${formatIDR(p.amount)} (${formatDate(p.estimatedPayDate)})`)
+                          .join("\n")
+                      : "No payouts expected"
+
+                  return (
+                    <div
+                      key={m.month}
+                      title={`${monthLabel(m.month)}\n${tooltip}`}
+                      className={`rounded-lg border p-1.5 text-center ${
+                        index === 0 ? "ring-1 ring-primary/40" : ""
+                      }`}
+                    >
+                      <p className="text-[10px] text-muted-foreground">
+                        {monthLabel(m.month)}
+                      </p>
+                      <div className="mt-1 flex h-10 items-end justify-center">
+                        <div
+                          className="w-full rounded-sm bg-emerald-500/70"
+                          style={{ height: `${heightPercent}%` }}
+                        />
+                      </div>
+                      <p
+                        className={`mt-1 text-[10px] ${
+                          m.total > 0 ? "font-medium" : "text-muted-foreground"
+                        }`}
+                      >
+                        {m.total > 0 ? formatCompactIDR(m.total) : "—"}
+                      </p>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           <p className="mt-3 flex items-start gap-1.5 text-[11px] text-muted-foreground">
             <Info className="h-3.5 w-3.5 shrink-0 mt-px" />
             <span>
               Estimated from dividend history — dates come from the payer&apos;s recent cadence, not
-              a company announcement. Actual amounts and dates may differ.
+              a company announcement, and payouts are assumed to land about 3 weeks after the
+              ex-dividend date. Actual amounts and dates may differ.
             </span>
           </p>
         </>

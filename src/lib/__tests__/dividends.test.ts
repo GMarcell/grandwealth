@@ -18,12 +18,20 @@ import {
   classifyFrequency,
   estimateNextExDate,
   sumTrailingDividend,
+  countTrailingDividends,
+  buildDividendCalendar,
   buildDividendInfo,
   fetchStockDividendInfo,
   fetchStockDividendInfos,
   clearDividendCache,
+  ESTIMATED_PAYMENT_LAG_DAYS,
   type DividendPayment,
+  type CalendarProjectionInput,
 } from "../dividends"
+
+/** ISO date `days` in the past — keeps window-sensitive tests time-independent. */
+const isoDaysAgo = (days: number) =>
+  new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
 const DAY = 24 * 60 * 60 * 1000
 
@@ -234,6 +242,140 @@ describe("sumTrailingDividend", () => {
   })
 })
 
+// ─── countTrailingDividends ──────────────────────
+
+describe("countTrailingDividends", () => {
+  const now = new Date("2026-09-20T00:00:00Z")
+
+  it("counts only payments inside the trailing window", () => {
+    const result = countTrailingDividends(
+      payments(
+        ["2026-08-31", 25],
+        ["2026-06-17", 20],
+        ["2026-03-30", 281],
+        ["2025-12-03", 55],
+        ["2024-11-21", 50]
+      ),
+      12,
+      now
+    )
+
+    expect(result).toBe(4)
+  })
+
+  it("is zero when nothing was paid recently", () => {
+    expect(countTrailingDividends(payments(["2020-01-01", 100]), 12, now)).toBe(0)
+    expect(countTrailingDividends([], 12, now)).toBe(0)
+  })
+})
+
+// ─── buildDividendCalendar ───────────────────────
+
+describe("buildDividendCalendar", () => {
+  const now = new Date("2026-09-20T00:00:00Z")
+
+  function projection(overrides: Partial<CalendarProjectionInput> = {}): CalendarProjectionInput {
+    return {
+      symbol: "BBCA",
+      name: "Bank Central Asia Tbk.",
+      lots: 10,
+      shares: 1000,
+      amountPerPayment: 100,
+      estimatedNextExDate: "2026-11-18",
+      medianGapDays: 79,
+      ...overrides,
+    }
+  }
+
+  it("returns 12 buckets starting from the current month", () => {
+    const result = buildDividendCalendar([], now)
+
+    expect(result.months).toHaveLength(12)
+    expect(result.months[0].month).toBe("2026-09")
+    expect(result.months[11].month).toBe("2027-08")
+    expect(result.total).toBe(0)
+    expect(result.paymentsCount).toBe(0)
+  })
+
+  it("rolls a quarterly payer forward into the right months", () => {
+    const result = buildDividendCalendar([projection()], now)
+
+    // ex-dates 18 Nov, 5 Feb, 25 Apr, 13 Jul (+21 days to each payout date),
+    // with the following one landing past the end of the window.
+    const paid = result.months.filter((m) => m.payments.length > 0).map((m) => m.month)
+    expect(paid).toEqual(["2026-12", "2027-02", "2027-05", "2027-08"])
+    expect(result.paymentsCount).toBe(4)
+    // 1,000 shares x 100 per payment
+    expect(result.total).toBe(400_000)
+  })
+
+  it("places a payout in the month the cash lands, not the ex-dividend month", () => {
+    const result = buildDividendCalendar([projection()], now)
+    const december = result.months.find((m) => m.month === "2026-12")!
+
+    const payment = december.payments[0]
+    expect(payment).toMatchObject({
+      symbol: "BBCA",
+      shares: 1000,
+      amount: 100_000,
+      // The ex-date is in November, but the payment is expected in December.
+      estimatedExDate: "2026-11-18",
+      estimatedPayDate: "2026-12-09",
+    })
+    expect(
+      (new Date(`${payment.estimatedPayDate}T00:00:00Z`).getTime() -
+        new Date(`${payment.estimatedExDate}T00:00:00Z`).getTime()) /
+        (24 * 60 * 60 * 1000)
+    ).toBe(ESTIMATED_PAYMENT_LAG_DAYS)
+    const november = result.months.find((m) => m.month === "2026-11")!
+    expect(november.payments).toHaveLength(0)
+  })
+
+  it("merges several holdings landing in the same month", () => {
+    const result = buildDividendCalendar(
+      [projection(), projection({ symbol: "ANTM", amountPerPayment: 50, shares: 500 })],
+      now
+    )
+    const december = result.months.find((m) => m.month === "2026-12")!
+
+    expect(december.payments).toHaveLength(2)
+    // 100,000 + (500 x 50)
+    expect(december.total).toBe(125_000)
+  })
+
+  it("skips holdings that cannot be projected", () => {
+    const result = buildDividendCalendar(
+      [
+        projection({ estimatedNextExDate: null }),
+        projection({ amountPerPayment: null }),
+        projection({ medianGapDays: null }),
+        projection({ medianGapDays: 0 }),
+      ],
+      now
+    )
+
+    expect(result.paymentsCount).toBe(0)
+    expect(result.total).toBe(0)
+  })
+
+  it("caps runaway projections from a tiny inferred gap", () => {
+    const result = buildDividendCalendar([projection({ medianGapDays: 1 })], now)
+
+    expect(result.paymentsCount).toBe(24)
+  })
+
+  it("ignores payouts that fall beyond the window", () => {
+    // Ex-date is inside the window but the payout date is past its end.
+    const result = buildDividendCalendar(
+      [projection({ estimatedNextExDate: "2027-08-25", medianGapDays: 365 })],
+      now
+    )
+
+    // 25 Aug 2027 + 21 days = 15 Sep 2027, past the 31 Aug 2027 window end.
+    expect(result.paymentsCount).toBe(0)
+  })
+})
+
 // ─── buildDividendInfo ───────────────────────────
 
 describe("buildDividendInfo", () => {
@@ -303,10 +445,12 @@ describe("fetchStockDividendInfo", () => {
       price: { currency: "IDR" },
       summaryDetail: { dividendYield: 0.0629 },
     })
+    // Dates are relative to now: one inside the trailing 12-month window, one
+    // well outside it, so this doesn't rot as the calendar moves on.
     mockChart.mockResolvedValue(
       makeChart([
-        { date: "2025-06-23", amount: 151.77 },
-        { date: "2026-06-22", amount: 209.99 },
+        { date: isoDaysAgo(455), amount: 151.77 },
+        { date: isoDaysAgo(90), amount: 209.99 },
       ])
     )
 
@@ -317,7 +461,10 @@ describe("fetchStockDividendInfo", () => {
       expect.objectContaining({ modules: expect.any(Array) })
     )
     expect(info!.symbol).toBe("ANTM")
+    expect(info!.lastDividendPerShare).toBe(209.99)
     expect(info!.trailingDividendPerShare).toBe(209.99)
+    expect(info!.trailingPaymentCount).toBe(1)
+    expect(info!.frequency).toBe("ANNUAL")
   })
 
   it("returns null when Yahoo has no data for the symbol", async () => {

@@ -3,7 +3,11 @@ import { auth } from "@/lib/auth"
 import { requireProAccess } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
-import { fetchStockDividendInfos } from "@/lib/dividends"
+import {
+  buildDividendCalendar,
+  fetchStockDividendInfos,
+  type CalendarProjectionInput,
+} from "@/lib/dividends"
 import { SHARES_PER_LOT } from "@/lib/wealth-history"
 
 /**
@@ -94,6 +98,9 @@ export async function GET(req: Request) {
       history: { date: string; amountPerShare: number }[]
     }> = []
 
+    // Inputs for the 12-month cashflow calendar, filled in the same pass.
+    const calendarInputs: CalendarProjectionInput[] = []
+
     let holdingsWithoutData = 0
 
     for (const holding of holdings.values()) {
@@ -104,6 +111,24 @@ export async function GET(req: Request) {
       }
 
       const shares = holding.lots * SHARES_PER_LOT
+
+      // Size a single payment from the trailing average rather than the last
+      // payment: IDX payers often pay one large annual dividend plus small
+      // interims, so the most recent amount alone is a poor predictor.
+      const amountPerPayment =
+        info.trailingDividendPerShare != null && info.trailingPaymentCount > 0
+          ? info.trailingDividendPerShare / info.trailingPaymentCount
+          : info.lastDividendPerShare
+
+      calendarInputs.push({
+        symbol: holding.symbol,
+        name: holding.name,
+        lots: holding.lots,
+        shares,
+        amountPerPayment,
+        estimatedNextExDate: info.estimatedNextExDate,
+        medianGapDays: info.medianGapDays,
+      })
       const estimatedNextPayout =
         info.lastDividendPerShare != null ? Math.round(info.lastDividendPerShare * shares) : null
       const estimatedAnnualIncome =
@@ -146,6 +171,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       data,
+      calendar: buildDividendCalendar(calendarInputs),
       totals: {
         estimatedNextPayout: data.reduce((sum, d) => sum + (d.estimatedNextPayout ?? 0), 0),
         estimatedAnnualIncome: data.reduce(

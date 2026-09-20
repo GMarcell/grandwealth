@@ -47,6 +47,8 @@ export interface StockDividendInfo {
   lastDividendDate: string | null
   /** Actual sum of dividends per share paid over the trailing 12 months. */
   trailingDividendPerShare: number | null
+  /** How many separate dividends were paid in that same trailing window. */
+  trailingPaymentCount: number
   /** Dividend yield as a fraction (0.0629 === 6.29%). */
   dividendYield: number | null
   payoutRatio: number | null
@@ -195,6 +197,16 @@ export function estimateNextExDate(
   return new Date(next).toISOString().slice(0, 10)
 }
 
+/** Payments that fall inside the trailing `months` window, newest first. */
+function paymentsInTrailingWindow(
+  payments: DividendPayment[],
+  months: number,
+  now: Date
+): DividendPayment[] {
+  const cutoff = now.getTime() - months * 30 * MS_PER_DAY
+  return payments.filter((p) => new Date(`${p.date}T00:00:00Z`).getTime() >= cutoff)
+}
+
 /** Sum of dividends per share paid within the trailing `months` window. */
 export function sumTrailingDividend(
   payments: DividendPayment[],
@@ -202,12 +214,150 @@ export function sumTrailingDividend(
   now: Date = new Date()
 ): number | null {
   if (payments.length === 0) return null
-  const cutoff = now.getTime() - months * 30 * MS_PER_DAY
-  const total = payments
-    .filter((p) => new Date(`${p.date}T00:00:00Z`).getTime() >= cutoff)
-    .reduce((sum, p) => sum + p.amountPerShare, 0)
+  const total = paymentsInTrailingWindow(payments, months, now).reduce(
+    (sum, p) => sum + p.amountPerShare,
+    0
+  )
 
   return total > 0 ? Number(total.toFixed(2)) : null
+}
+
+/**
+ * How many dividends were actually paid in the trailing window. Used to average
+ * the per-payment size: payers with a large annual dividend plus small interims
+ * (common on IDX) pay wildly different amounts each time.
+ */
+export function countTrailingDividends(
+  payments: DividendPayment[],
+  months = 12,
+  now: Date = new Date()
+): number {
+  return paymentsInTrailingWindow(payments, months, now).length
+}
+
+// ─── Calendar projection ──────────────────────────
+
+/**
+ * IDX payers typically settle a few weeks after the ex-dividend date, so the
+ * cash lands in the following month often enough that using the ex-date would
+ * misplace the payment on a cashflow calendar.
+ */
+export const ESTIMATED_PAYMENT_LAG_DAYS = 21
+
+/** Safety valve for payers with a suspiciously tiny inferred gap. */
+const MAX_OCCURRENCES_PER_HOLDING = 24
+
+export interface CalendarProjectionInput {
+  symbol: string
+  name: string
+  lots: number
+  shares: number
+  /** Expected size of a single payment, in currency per share. */
+  amountPerPayment: number | null
+  estimatedNextExDate: string | null
+  medianGapDays: number | null
+}
+
+export interface DividendCalendarPayment {
+  symbol: string
+  name: string
+  lots: number
+  shares: number
+  amount: number
+  estimatedExDate: string
+  estimatedPayDate: string
+}
+
+export interface DividendCalendarMonth {
+  /** "YYYY-MM" */
+  month: string
+  total: number
+  payments: DividendCalendarPayment[]
+}
+
+export interface DividendCalendar {
+  /** Always `monthsAhead` entries, starting with the current month. */
+  months: DividendCalendarMonth[]
+  total: number
+  paymentsCount: number
+}
+
+function monthKeyOf(date: Date): string {
+  return date.toISOString().slice(0, 7)
+}
+
+function addDays(iso: string, days: number): string {
+  const base = new Date(`${iso}T00:00:00Z`).getTime()
+  return new Date(base + days * MS_PER_DAY).toISOString().slice(0, 10)
+}
+
+/** First day of the month, in UTC, so bucketing is timezone-stable. */
+function monthStart(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1))
+}
+
+/**
+ * Roll every holding's next ex-date forward along its own cadence and bucket the
+ * expected payouts into the next `monthsAhead` months.
+ *
+ * Holdings whose cadence or amount is unknown are skipped rather than guessed at.
+ */
+export function buildDividendCalendar(
+  projections: CalendarProjectionInput[],
+  now: Date = new Date(),
+  monthsAhead = 12
+): DividendCalendar {
+  const start = monthStart(now)
+  const buckets: DividendCalendarMonth[] = []
+  for (let i = 0; i < monthsAhead; i++) {
+    const month = new Date(start.getTime())
+    month.setUTCMonth(month.getUTCMonth() + i)
+    buckets.push({ month: monthKeyOf(month), total: 0, payments: [] })
+  }
+  const byMonth = new Map(buckets.map((b) => [b.month, b]))
+
+  // End of the window: the first day of the month after the last bucket.
+  const windowEnd = new Date(start.getTime())
+  windowEnd.setUTCMonth(windowEnd.getUTCMonth() + monthsAhead)
+
+  for (const projection of projections) {
+    const { amountPerPayment, estimatedNextExDate, medianGapDays } = projection
+    if (!estimatedNextExDate || amountPerPayment == null || !medianGapDays || medianGapDays <= 0) {
+      continue
+    }
+
+    let exDate = estimatedNextExDate
+    for (let i = 0; i < MAX_OCCURRENCES_PER_HOLDING; i++) {
+      const exTime = new Date(`${exDate}T00:00:00Z`).getTime()
+      if (Number.isNaN(exTime) || exTime >= windowEnd.getTime()) break
+
+      const payDate = addDays(exDate, ESTIMATED_PAYMENT_LAG_DAYS)
+      const bucket = byMonth.get(payDate.slice(0, 7))
+      if (bucket) {
+        const amount = Math.round(amountPerPayment * projection.shares)
+        bucket.payments.push({
+          symbol: projection.symbol,
+          name: projection.name,
+          lots: projection.lots,
+          shares: projection.shares,
+          amount,
+          estimatedExDate: exDate,
+          estimatedPayDate: payDate,
+        })
+        bucket.total += amount
+      }
+
+      exDate = addDays(exDate, medianGapDays)
+    }
+  }
+
+  const paymentsCount = buckets.reduce((sum, b) => sum + b.payments.length, 0)
+
+  return {
+    months: buckets,
+    total: buckets.reduce((sum, b) => sum + b.total, 0),
+    paymentsCount,
+  }
 }
 
 // ─── Fetching ─────────────────────────────────────────────────────
@@ -277,6 +427,7 @@ export function buildDividendInfo(
     lastDividendPerShare,
     lastDividendDate,
     trailingDividendPerShare,
+    trailingPaymentCount: countTrailingDividends(history),
     dividendYield: details?.dividendYield ?? null,
     payoutRatio: details?.payoutRatio ?? null,
     frequency,

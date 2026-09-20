@@ -23,11 +23,13 @@ vi.mock("@/lib/rate-limit", () => ({
   getRateLimitKey: mockGetRateLimitKey,
 }))
 
-// The Yahoo-facing layer is mocked; its own behaviour is covered in
-// src/lib/__tests__/dividends.test.ts.
-vi.mock("@/lib/dividends", () => ({
-  fetchStockDividendInfos: mockFetchStockDividendInfos,
-}))
+// Only the Yahoo-facing call is mocked. The calendar maths stays real so this
+// suite covers how the route feeds it (the maths itself is covered in
+// src/lib/__tests__/dividends.test.ts).
+vi.mock("@/lib/dividends", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/dividends")>()
+  return { ...actual, fetchStockDividendInfos: mockFetchStockDividendInfos }
+})
 
 const { GET } = await import("../route")
 
@@ -72,11 +74,17 @@ function dividendInfo(overrides: Record<string, unknown> = {}) {
     payoutRatio: 0.5,
     frequency: "ANNUAL",
     medianGapDays: 364,
+    trailingPaymentCount: 2,
     estimatedNextExDate: "2027-06-21",
     history: [{ date: "2026-06-22", amountPerShare: 210 }],
     ...overrides,
   }
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000
+const isoInDays = (days: number) => new Date(Date.now() + days * DAY_MS).toISOString().slice(0, 10)
+const monthKeyInDays = (days: number) =>
+  new Date(Date.now() + days * DAY_MS).toISOString().slice(0, 7)
 
 const get = () => GET(new Request("http://localhost/api/dividends/upcoming"))
 
@@ -271,6 +279,77 @@ describe("GET /api/dividends/upcoming — projections", () => {
       "ANTM",
       "TLKM",
     ])
+  })
+
+  it("returns a 12-month calendar starting with the current month", async () => {
+    mockFindStocks.mockResolvedValue([stock()])
+    mockFetchStockDividendInfos.mockResolvedValue(new Map([["ANTM", dividendInfo()]]))
+
+    const res = await get()
+    const body = await res.json()
+
+    expect(body.calendar.months).toHaveLength(12)
+    expect(body.calendar.months[0].month).toBe(new Date().toISOString().slice(0, 7))
+    expect(body.calendar.total).toBe(
+      body.calendar.months.reduce((sum: number, m: { total: number }) => sum + m.total, 0)
+    )
+  })
+
+  it("sizes each calendar payment from the trailing average, not the last payment", async () => {
+    mockFindStocks.mockResolvedValue([stock({ quantity: 10, buyPrice: 2_000_000 })])
+    mockFetchStockDividendInfos.mockResolvedValue(
+      new Map([
+        [
+          "ANTM",
+          dividendInfo({
+            // 200/share across 2 payments => 100/share per payment, vs the
+            // 25/share last interim which would badly understate the year.
+            lastDividendPerShare: 25,
+            trailingDividendPerShare: 200,
+            trailingPaymentCount: 2,
+            medianGapDays: 90,
+            estimatedNextExDate: isoInDays(10),
+          }),
+        ],
+      ])
+    )
+
+    const res = await get()
+    const body = await res.json()
+
+    // ex-date + ~3 weeks lands roughly a month out; 1,000 shares x 100/share.
+    const payDate = isoInDays(31)
+    expect(body.calendar.paymentsCount).toBeGreaterThanOrEqual(4)
+
+    const bucket = body.calendar.months.find(
+      (m: { month: string }) => m.month === monthKeyInDays(31)
+    )
+    const payment = bucket.payments.find(
+      (p: { estimatedPayDate: string }) => p.estimatedPayDate === payDate
+    )
+    expect(payment).toBeDefined()
+    expect(payment.amount).toBe(100_000)
+    expect(payment.estimatedExDate).toBe(isoInDays(10))
+  })
+
+  it("leaves the calendar empty when no holding can be projected", async () => {
+    mockFindStocks.mockResolvedValue([stock()])
+    mockFetchStockDividendInfos.mockResolvedValue(
+      new Map([
+        [
+          "ANTM",
+          dividendInfo({ estimatedNextExDate: null, medianGapDays: null }),
+        ],
+      ])
+    )
+
+    const res = await get()
+    const body = await res.json()
+
+    expect(body.calendar.months).toHaveLength(12)
+    expect(body.calendar.paymentsCount).toBe(0)
+    expect(body.calendar.total).toBe(0)
+    expect(body.data).toHaveLength(1)
   })
 
   it("handles a stock whose per-share amounts are unknown gracefully", async () => {
