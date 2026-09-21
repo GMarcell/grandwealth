@@ -17,12 +17,23 @@ import {
 } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { formatCompactIDR, formatIDR } from "@/lib/utils"
-import { CHART_COLORS_DASHBOARD as COLORS, SEMANTIC_COLOR_INCOME, SEMANTIC_COLOR_EXPENSE } from "@/lib/chart-colors"
+import {
+  CHART_COLORS_DASHBOARD as COLORS,
+  SEMANTIC_COLOR_INCOME,
+  SEMANTIC_COLOR_EXPENSE,
+  SEMANTIC_COLOR_BALANCE,
+} from "@/lib/chart-colors"
 
 interface MonthlyData {
   month: string
   income: number
   expenses: number
+  /** income − expenses for the month. */
+  net?: number
+  /** Balance carried in from the previous month (negative for a deficit). */
+  carryIn?: number
+  /** Running balance carried into the next month. */
+  balance?: number
 }
 
 interface WealthItem {
@@ -31,10 +42,16 @@ interface WealthItem {
 }
 
 export function MonthlyCashFlowChart({ data }: { data: MonthlyData[] }) {
+  const latest = data.length > 0 ? data[data.length - 1] : null
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Monthly Cash Flow</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Income and expenses per month, with the balance carried over from the
+          previous month (surplus or deficit)
+        </p>
       </CardHeader>
       <CardContent>
         <div className="h-72">
@@ -80,9 +97,33 @@ export function MonthlyCashFlowChart({ data }: { data: MonthlyData[] }) {
                 dot={false}
                 name="Expenses"
               />
+              <Line
+                type="monotone"
+                dataKey="balance"
+                stroke={SEMANTIC_COLOR_BALANCE}
+                strokeWidth={2}
+                strokeDasharray="5 3"
+                dot={false}
+                name="Carried balance"
+              />
             </LineChart>
           </ResponsiveContainer>
         </div>
+        {latest && latest.balance != null && (
+          <p className="text-xs text-muted-foreground mt-3">
+            Balance carried into the next month:{" "}
+            <span
+              className={
+                latest.balance >= 0
+                  ? "font-medium text-emerald-600 dark:text-emerald-400"
+                  : "font-medium text-red-600 dark:text-red-400"
+              }
+            >
+              {latest.balance >= 0 ? "+" : "−"}
+              {formatIDR(Math.abs(latest.balance))}
+            </span>
+          </p>
+        )}
       </CardContent>
     </Card>
   )

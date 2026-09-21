@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth"
 import { requireProAccess } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { generateAnalysisForUserAndMonth } from "@/lib/analysis-generator"
+import { getLastCompletedBudgetMonthKey } from "@/lib/budget-months"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 
 export async function GET(req: Request) {
@@ -124,6 +125,27 @@ export async function POST(req: Request) {
   if (!/^\d{4}-\d{2}$/.test(month)) {
     return NextResponse.json(
       { error: "Invalid month format. Use YYYY-MM" },
+      { status: 400 }
+    )
+  }
+
+  // Reject a budget month that is still running. A report for an incomplete
+  // period would be built from partial data, so only completed budget months
+  // may be generated. Budget-month keys sort lexicographically, so a key after
+  // the last completed month's key is still in progress.
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { budgetStartDay: true },
+  })
+  const lastCompletedMonthKey = getLastCompletedBudgetMonthKey(
+    user?.budgetStartDay ?? 1
+  )
+  if (month > lastCompletedMonthKey) {
+    return NextResponse.json(
+      {
+        error:
+          "This budget month is not complete yet. Analysis is only available for completed budget months.",
+      },
       { status: 400 }
     )
   }

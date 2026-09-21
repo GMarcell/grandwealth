@@ -1,7 +1,12 @@
-import { getBudgetMonthKey } from "../budget-months";
 import { formatIDR } from "../utils";
 
 // Helper to check budget alert level.
+//
+// `effectiveBudget` must be the carry-over-ADJUSTED limit for the category in
+// the current budget month (budget amount + rollover received), not the raw
+// budget amount — otherwise the alert disagrees with the budgets page and
+// dashboard when unused budget rolled over. Pass `undefined` when the category
+// has no budget this month.
 //
 // `spentByCategory` must be the total already spent per category for the
 // current budget month across ALL matching transactions — not just the page
@@ -10,22 +15,18 @@ import { formatIDR } from "../utils";
 export function getBudgetAlert(
   category: string,
   newAmount: number,
-  budgets: any[],
+  effectiveBudget: number | undefined,
   spentByCategory: Map<string, number>,
-  startDay: number = 1,
 ): { level: "near" | "over" | null; message: string } {
-  const monthKey = getBudgetMonthKey(new Date(), startDay);
-
-  const budget = budgets?.find(
-    (b: any) => b.categoryName === category && b.month === monthKey,
-  );
-  if (!budget) return { level: null, message: "" };
+  if (effectiveBudget == null || effectiveBudget <= 0) {
+    return { level: null, message: "" };
+  }
 
   // Total spent for this category this budget month INCLUDING the new transaction
   const totalSpent = (spentByCategory.get(category) ?? 0) + newAmount;
 
-  const percentUsed = (totalSpent / budget.amount) * 100;
-  const remaining = budget.amount - totalSpent;
+  const percentUsed = (totalSpent / effectiveBudget) * 100;
+  const remaining = effectiveBudget - totalSpent;
 
   if (percentUsed > 100) {
     return {

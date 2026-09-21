@@ -8,6 +8,7 @@ import {
   TrendingDown,
   ArrowLeftRight,
   CircleDollarSign,
+  Scale,
   Wallet,
   RefreshCw,
   Landmark,
@@ -69,6 +70,8 @@ interface DashboardData {
   totalIncome: number;
   totalExpenses: number;
   netCashflow: number;
+  /** Running balance carried into the next month (all-time net cash flow). */
+  carriedBalance: number;
   totalGoldValue: number;
   totalGoldWeight: number;
   totalStockValue: number;
@@ -90,6 +93,12 @@ interface DashboardData {
     month: string;
     income: number;
     expenses: number;
+    /** income − expenses for the month. */
+    net: number;
+    /** Balance carried in from the previous month (negative for a deficit). */
+    carryIn: number;
+    /** Running balance carried into the next month. */
+    balance: number;
   }>;
   budgetSummary: {
     totalBudgeted: number;
@@ -185,6 +194,11 @@ export function DashboardContent() {
     [data?.netCashflow],
   );
 
+  const carriedPositive = useMemo(
+    () => (data?.carriedBalance ?? 0) >= 0,
+    [data?.carriedBalance],
+  );
+
   const pieData = useMemo(
     () =>
       [
@@ -204,8 +218,8 @@ export function DashboardContent() {
   if (isLoading) {
     return (
       <>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
             <StatCardSkeleton key={i} />
           ))}
         </div>
@@ -254,8 +268,9 @@ export function DashboardContent() {
         </CardContent>
       </Card>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Stat Cards — 5 KPIs. Three per row on laptops/desktops (the sidebar
+          eats ~256px, so five would be cramped); five only on wide 2xl screens. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Income</CardTitle>
@@ -297,6 +312,24 @@ export function DashboardContent() {
             <Badge variant={netPositive ? "profit" : "loss"} className="mt-1">
               {netPositive ? "Surplus" : "Deficit"}
             </Badge>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Carried Balance</CardTitle>
+            <Scale className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div
+              className={`text-2xl font-bold ${carriedPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
+            >
+              {carriedPositive ? "+" : "−"}
+              {formatCompactIDR(Math.abs(data?.carriedBalance ?? 0))}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Carried into the next month
+            </p>
           </CardContent>
         </Card>
 

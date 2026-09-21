@@ -846,3 +846,89 @@ describe("safeParseBody", () => {
     }
   })
 })
+
+// ─── Date fields ─────────────────────────────
+//
+// Every route that stores a date must reject unparseable strings at
+// validation time. Otherwise `new Date("garbage")` produces an `Invalid Date`
+// that Prisma rejects, and the client sees a 500 instead of a 400.
+
+describe("date field validation", () => {
+  const invalid = ["garbage", "2026-13-45", "not a date", "20260921T"]
+
+  it("rejects an unparseable transaction date", () => {
+    for (const date of invalid) {
+      const result = createTransactionSchema.safeParse({
+        type: "EXPENSE",
+        category: "FOOD",
+        amount: 10,
+        description: "Lunch",
+        date,
+      })
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.issues[0].message).toBe("Invalid date")
+      }
+    }
+  })
+
+  it("accepts ISO dates and datetimes for a transaction", () => {
+    for (const date of ["2026-09-21", "2026-09-21T10:30:00.000Z"]) {
+      const result = createTransactionSchema.safeParse({
+        type: "EXPENSE",
+        category: "FOOD",
+        amount: 10,
+        description: "Lunch",
+        date,
+      })
+      expect(result.success).toBe(true)
+    }
+  })
+
+  it("still allows an omitted date", () => {
+    const result = createTransactionSchema.safeParse({
+      type: "EXPENSE",
+      category: "FOOD",
+      amount: 10,
+      description: "Lunch",
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it("rejects bad dates on every dated resource", () => {
+    const cases: Array<[string, () => { success: boolean }]> = [
+      ["transaction (update)", () => updateTransactionSchema.safeParse({ date: "nope" })],
+      ["gold", () => createGoldSchema.safeParse({
+        type: "BUY", weightGram: 1, pricePerGram: 1, date: "nope",
+      })],
+      ["stock", () => createStockSchema.safeParse({
+        symbol: "BBCA", name: "Bank", quantity: 1, buyPrice: 1, date: "nope",
+      })],
+      ["bank saving", () => createBankSavingSchema.safeParse({
+        type: "DEPOSIT", accountName: "BCA", amount: 1, date: "nope",
+      })],
+      ["recurring startDate", () => createRecurringSchema.safeParse({
+        type: "INCOME", category: "SALARY", amount: 1, description: "Pay",
+        frequency: "MONTHLY", startDate: "nope", nextDate: "2026-09-01",
+      })],
+      ["recurring nextDate", () => createRecurringSchema.safeParse({
+        type: "INCOME", category: "SALARY", amount: 1, description: "Pay",
+        frequency: "MONTHLY", startDate: "2026-09-01", nextDate: "nope",
+      })],
+      ["recurring endDate", () => createRecurringSchema.safeParse({
+        type: "INCOME", category: "SALARY", amount: 1, description: "Pay",
+        frequency: "MONTHLY", startDate: "2026-09-01", nextDate: "2026-09-01",
+        endDate: "nope",
+      })],
+    ]
+
+    for (const [label, run] of cases) {
+      expect(run().success, label).toBe(false)
+    }
+  })
+
+  it("keeps optional datetimes nullable on updates", () => {
+    expect(updateBankSavingSchema.safeParse({ date: null }).success).toBe(false)
+    expect(updateBankSavingSchema.safeParse({}).success).toBe(true)
+  })
+})

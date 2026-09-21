@@ -2,11 +2,30 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { parseCsv } from "@/lib/csv"
+import { rateLimit } from "@/lib/rate-limit"
+
+/** Reject uploads larger than this before reading them into memory. */
+const MAX_IMPORT_BYTES = 2 * 1024 * 1024 // 2 MB
+/** Upper bound on imported rows per request (matches the batch writer). */
+const MAX_IMPORT_ROWS = 5_000
 
 export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  // Imports write to the database in bulk, so they get the same kind of
+  // per-user throttle the other write routes use.
+  const limiter = await rateLimit(`transactions-import:${session.user.id}`, {
+    limit: 5,
+    windowMs: 60_000,
+  })
+  if (!limiter.allowed) {
+    return NextResponse.json(
+      { error: "Too many imports. Please wait a minute and try again." },
+      { status: 429 },
+    )
   }
 
   try {
@@ -17,8 +36,35 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 })
     }
 
+    if (file.size > MAX_IMPORT_BYTES) {
+      return NextResponse.json(
+        {
+          error: `CSV is too large. Maximum size is ${MAX_IMPORT_BYTES / 1024 / 1024} MB.`,
+        },
+        { status: 413 },
+      )
+    }
+
     const text = await file.text()
-    const rows = parseCsv(text)
+
+    let rows: string[][]
+    try {
+      rows = parseCsv(text)
+    } catch {
+      // Malformed CSV (e.g. an unclosed quoted field) is a client error, not
+      // an internal failure.
+      return NextResponse.json(
+        { error: "Could not parse the CSV file. Check that quoted fields are properly closed." },
+        { status: 400 },
+      )
+    }
+
+    if (rows.length > MAX_IMPORT_ROWS + 1) {
+      return NextResponse.json(
+        { error: `CSV has too many rows. Maximum is ${MAX_IMPORT_ROWS} transactions per import.` },
+        { status: 413 },
+      )
+    }
 
     if (rows.length < 2) {
       return NextResponse.json({ error: "CSV must have a header row and at least one data row" }, { status: 400 })

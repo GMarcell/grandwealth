@@ -131,7 +131,8 @@ describe("GET /api/transactions — month filter", () => {
     expect(where.userId).toBe("user-1")
     expect(where.date).toEqual({
       gte: new Date(2026, 7, 28), // 28 Aug
-      lte: new Date(2026, 8, 27), // 27 Sep
+      // 27 Sep, end-of-day so transactions dated on the last day count.
+      lte: new Date(2026, 8, 27, 23, 59, 59, 999),
     })
     expect(mockFindUser).toHaveBeenCalledWith({
       where: { id: "user-1" },
@@ -148,7 +149,7 @@ describe("GET /api/transactions — month filter", () => {
 
     expect(mockFindMany.mock.calls[0][0].where.date).toEqual({
       gte: new Date(2026, 7, 1),
-      lte: new Date(2026, 7, 31),
+      lte: new Date(2026, 7, 31, 23, 59, 59, 999),
     })
   })
 

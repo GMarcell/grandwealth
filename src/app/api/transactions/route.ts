@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { createTransactionSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 import { parsePagination, paginatedResponse } from "@/lib/utils"
-import { getBudgetMonthRange } from "@/lib/budget-months"
+import { getBudgetMonthRangeInclusive } from "@/lib/budget-months"
 import { RULE_TYPES } from "@/lib/rule-type"
 import type { Prisma } from "@prisma/client"
 
@@ -48,7 +48,7 @@ export async function GET(req: Request) {
       select: { budgetStartDay: true },
     })
     const startDay = user?.budgetStartDay ?? 1
-    const { start, end } = getBudgetMonthRange(monthFilter, startDay)
+    const { start, end } = getBudgetMonthRangeInclusive(monthFilter, startDay)
     where.date = { gte: start, lte: end }
   }
 

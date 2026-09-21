@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { generateBudgetMonths, getBudgetMonthRange } from "@/lib/budget-months"
 
 // ─── Hoisted mocks (available before module instantiation) ───
 
@@ -219,6 +220,8 @@ describe("GET /api/dashboard — aggregation correctness", () => {
 
     expect(body.netCashflow).toBe(5_000_000) // 13-month window figure
     expect(body.allTimeNetCashflow).toBe(90_000_000) // full history
+    // The carried balance ends at the all-time figure (window net + opening).
+    expect(body.carriedBalance).toBe(90_000_000)
     // No gold/stocks/savings/debt in this fixture → wealth = all-time cash.
     expect(body.totalWealth).toBe(90_000_000)
   })
@@ -404,5 +407,53 @@ describe("GET /api/dashboard — budget month rollover with non-1st start day", 
     expect(sep.expenses).toBe(500_000)
     // Everything lands in the single "Sep 2026" bucket — no separate "Aug 2026".
     expect(body.monthlyData).toHaveLength(1)
+  })
+
+  it("aligns the fetch window and all-time cutoff to the budget cycle", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 8, 20, 12, 0, 0)) // Sep 20 — before the 28th
+
+    setupMocks({ budgetStartDay: 28 })
+
+    await GET()
+
+    // Fetch starts at the START of the oldest budget month in the 13-month chain.
+    const fetchStart = mockFindTransactions.mock.calls[0][0].where.date.gte
+    const oldestKey = [...generateBudgetMonths(13, 28)].reverse()[0]
+    expect(fetchStart).toEqual(getBudgetMonthRange(oldestKey, 28).start)
+
+    // "All-time" cash is capped at the END (last day) of the current budget
+    // month — 28 Aug – 27 Sep — matching /api/net-worth's latest cash point.
+    const cutoff = mockGroupByTransactions.mock.calls[0][0].where.date.lte
+    expect(cutoff.getFullYear()).toBe(2026)
+    expect(cutoff.getMonth()).toBe(8) // September
+    expect(cutoff.getDate()).toBe(27)
+    expect(cutoff.getHours()).toBe(23)
+  })
+
+  it("carries a monthly deficit into the next month's balance", async () => {
+    setupMocks({
+      windowTransactions: [
+        tx("prev-income", "INCOME", "SALARY", 100_000, PREV_MONTH),
+        tx("prev-expense", "EXPENSE", "FOOD", 300_000, PREV_MONTH),
+        tx("curr-income", "INCOME", "SALARY", 100_000, CURRENT_MONTH),
+        tx("curr-expense", "EXPENSE", "FOOD", 50_000, CURRENT_MONTH),
+      ],
+      // 1jt of all-time income sets the opening balance below the window.
+      allTimeCash: [{ type: "INCOME", _sum: { amount: 1_000_000 } }],
+    })
+
+    const res = await GET()
+    const body = await res.json()
+
+    expect(body.monthlyData).toHaveLength(2)
+    const [prev, curr] = body.monthlyData
+
+    // Previous month ran a 200k deficit (expenses > income)...
+    expect(prev.net).toBe(-200_000)
+    // ...which is carried into the current month before its own net.
+    expect(curr.carryIn).toBe(prev.balance)
+    expect(curr.balance).toBe(1_000_000)
+    expect(body.carriedBalance).toBe(1_000_000)
   })
 })

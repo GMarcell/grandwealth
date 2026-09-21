@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi, afterEach } from "vitest"
 import {
   getBudgetMonthKey,
   getCurrentBudgetMonthKey,
@@ -6,6 +6,8 @@ import {
   getBudgetMonthRange,
   generateBudgetMonths,
   getBudgetMonthLabel,
+  getLastCompletedBudgetMonthKey,
+  generateCompletedBudgetMonths,
 } from "../budget-months"
 
 // Helper to create a date with no time component for consistent comparisons
@@ -144,6 +146,46 @@ describe("generateBudgetMonths", () => {
     for (let i = 0; i < months.length - 1; i++) {
       expect(months[i].localeCompare(months[i + 1])).toBeGreaterThan(0)
     }
+  })
+})
+
+describe("getLastCompletedBudgetMonthKey", () => {
+  afterEach(() => vi.useRealTimers())
+
+  it("returns the budget month before the one currently running", () => {
+    vi.useFakeTimers()
+    // 20 Sep sits inside 15 Sep – 14 Oct (key "2026-09").
+    vi.setSystemTime(new Date(2026, 8, 20, 12, 0, 0))
+    // The last fully-ended period is 15 Aug – 14 Sep (key "2026-08").
+    expect(getLastCompletedBudgetMonthKey(15)).toBe("2026-08")
+  })
+
+  it("returns the previous calendar month when startDay is 1", () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 8, 20, 12, 0, 0))
+    expect(getLastCompletedBudgetMonthKey(1)).toBe("2026-08")
+  })
+
+  it("handles a 28th cycle whose running period starts in the previous month", () => {
+    vi.useFakeTimers()
+    // 20 Sep is inside 28 Aug – 27 Sep (key "2026-08"), so the last completed
+    // period is 28 Jul – 27 Aug (key "2026-07").
+    vi.setSystemTime(new Date(2026, 8, 20, 12, 0, 0))
+    expect(getLastCompletedBudgetMonthKey(28)).toBe("2026-07")
+  })
+})
+
+describe("generateCompletedBudgetMonths", () => {
+  afterEach(() => vi.useRealTimers())
+
+  it("starts at the last completed month and never offers the running one", () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 8, 20, 12, 0, 0))
+
+    const months = generateCompletedBudgetMonths(3, 15)
+    expect(months).toEqual(["2026-08", "2026-07", "2026-06"])
+    // The in-progress "2026-09" budget month is not offered.
+    expect(months).not.toContain(getCurrentBudgetMonthKey(15))
   })
 })
 

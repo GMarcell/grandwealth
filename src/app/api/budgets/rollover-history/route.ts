@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth"
 import { requireProAccess } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import {
-  getBudgetMonthRange,
+  getBudgetMonthRangeInclusive,
   getBudgetMonthLabel,
   getCurrentBudgetMonthKey,
   getPreviousBudgetMonthKey,
@@ -58,8 +58,8 @@ export async function GET() {
     // start > end window and counted zero spend.)
     const firstMonthKey = uniqueMonths[0]
     const lastMonthKey = uniqueMonths[uniqueMonths.length - 1]
-    const { start: startDate } = getBudgetMonthRange(firstMonthKey, startDay)
-    const { end: endDate } = getBudgetMonthRange(lastMonthKey, startDay)
+    const { start: startDate } = getBudgetMonthRangeInclusive(firstMonthKey, startDay)
+    const { end: endDate } = getBudgetMonthRangeInclusive(lastMonthKey, startDay)
 
     const transactions = await prisma.transaction.findMany({
       where: {
@@ -113,6 +113,9 @@ export async function GET() {
 
       return {
         categoryName: categoryName.replace("_", " "),
+        // Raw key (not prettified) so clients can match against transaction
+        // categories, which use the underscored form.
+        categoryKey: categoryName,
         months: monthEntries,
       }
     })

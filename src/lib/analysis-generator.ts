@@ -1,6 +1,14 @@
 import { prisma } from "@/lib/prisma"
 import { computeGoldPortfolio } from "@/lib/gold"
-import { getBudgetMonthLabel, getBudgetMonthRange } from "@/lib/budget-months"
+import {
+  getBudgetMonthLabel,
+  getBudgetMonthRangeInclusive,
+  getPreviousBudgetMonthKey,
+} from "@/lib/budget-months"
+import {
+  buildSpentByMonthCategory,
+  computeCarryOverChain,
+} from "@/lib/budget-carry-over"
 import Groq from "groq-sdk"
 
 const groq = new Groq({
@@ -25,7 +33,7 @@ Write a monthly financial analysis report in Markdown format. The report MUST co
 6. **Tabungan & Investasi** (Savings & Investments) — savings rate, stock & gold holdings, how to rebalance for better returns
 7. **Rekomendasi Tabungan** (Savings Recommendations) — 3-4 SPECIFIC, actionable tips
 
-CRITICAL: At least 40% of the report must focus on actionable savings strategies. Use Indonesian language (Bahasa). Format with Markdown headings and bullet points.`
+CRITICAL: At least 40% of the report must focus on actionable savings strategies. Use Indonesian language (Bahasa). Format with Markdown headings and bullet points. Keep the whole report concise (roughly 600-800 words) and ALWAYS deliver every section in full — never stop mid-section or mid-sentence.`
 
 export interface AnalysisResult {
   summary: string
@@ -69,19 +77,43 @@ export async function generateAnalysisForUserAndMonth(
 
   if (!user) throw new Error("User not found")
 
-  const { start: monthStart, end: monthEnd } = getBudgetMonthRange(
+  // Inclusive end-of-day bounds, so transactions dated on the FINAL day of the
+  // period are counted.
+  const { start: monthStart, end: monthEnd } = getBudgetMonthRangeInclusive(
     monthKey,
     user.budgetStartDay
   )
 
+  // Budget-month chain ending at the target month, oldest → newest. Required so
+  // a budget can be adjusted by carry-over from earlier months exactly like the
+  // budgets page and dashboard — over-budget checks must never use the raw
+  // budget amount when rollover is enabled.
+  const chainMonths: string[] = []
+  let cursor = monthKey
+  for (let i = 0; i < 13; i++) {
+    chainMonths.unshift(cursor)
+    cursor = getPreviousBudgetMonthKey(cursor, user.budgetStartDay)
+  }
+
   // ── Fetch user's monthly data ──
 
-  const transactions = await prisma.transaction.findMany({
+  // Fetch the whole carry-over window in one query, then slice the target month
+  // out of it for the report itself.
+  const chainStart = getBudgetMonthRangeInclusive(
+    chainMonths[0],
+    user.budgetStartDay,
+  ).start
+  const chainTransactions = await prisma.transaction.findMany({
     where: {
       userId,
-      date: { gte: monthStart, lte: monthEnd },
+      date: { gte: chainStart, lte: monthEnd },
     },
     orderBy: { date: "asc" },
+  })
+
+  const transactions = chainTransactions.filter((tx) => {
+    const d = new Date(tx.date)
+    return d >= monthStart && d <= monthEnd
   })
 
   const incomeTxs = transactions.filter((tx) => tx.type === "INCOME")
@@ -115,15 +147,30 @@ export async function generateAnalysisForUserAndMonth(
     .map(([category, total]) => ({ category, total }))
     .sort((a, b) => b.total - a.total)
 
-  // Budgets for this month
-  const budgets = await prisma.budget.findMany({
-    where: { userId, month: monthKey },
+  // Budgets across the whole carry-over chain (so earlier months can roll into
+  // the target month), plus the target month's own budgets.
+  const allBudgets = await prisma.budget.findMany({
+    where: { userId, month: { in: chainMonths } },
   })
+  const budgets = allBudgets.filter((b) => b.month === monthKey)
+
+  const carryOverChain = computeCarryOverChain({
+    months: chainMonths,
+    budgets: allBudgets,
+    spentByMonthCategory: buildSpentByMonthCategory(
+      chainTransactions,
+      user.budgetStartDay,
+    ),
+    carryOverEnabled: user.carryOverEnabled ?? true,
+  })
+  const effectiveEntries = carryOverChain.get(monthKey)
 
   let overBudgetCount = 0
   const budgetDetails: Array<{
     category: string
     budgeted: number
+    rollover: number
+    effective: number
     spent: number
     remaining: number
     carryOverEnabled: boolean
@@ -131,12 +178,18 @@ export async function generateAnalysisForUserAndMonth(
 
   for (const budget of budgets) {
     const spent = spendingByCategory.get(budget.categoryName) ?? 0
-    if (spent > budget.amount) overBudgetCount++
+    const entry = effectiveEntries?.get(budget.categoryName)
+    // Carry-over-adjusted limit (budget + rollover), matching the budgets page.
+    const effective = entry?.effectiveAmount ?? budget.amount
+    const rollover = entry?.rollover ?? 0
+    if (spent > effective) overBudgetCount++
     budgetDetails.push({
       category: budget.categoryName,
       budgeted: budget.amount,
+      rollover,
+      effective,
       spent,
-      remaining: budget.amount - spent,
+      remaining: effective - spent,
       carryOverEnabled: user.carryOverEnabled ?? true,
     })
   }
@@ -221,11 +274,11 @@ ${sortedSpending
 Pendapatan per Kategori:
 ${sortedIncome.map((s) => `- ${s.category}: Rp ${s.total.toLocaleString("id-ID")}`).join("\n")}
 
-Anggaran Bulanan:
+Anggaran Bulanan (termasuk rollover dari bulan sebelumnya):
 ${budgetDetails
   .map(
     (b) =>
-      `- ${b.category}: anggaran Rp ${b.budgeted.toLocaleString("id-ID")}, terpakai Rp ${b.spent.toLocaleString("id-ID")}, sisa Rp ${b.remaining.toLocaleString("id-ID")}${b.remaining < 0 ? " (OVER BUDGET!)" : ""}`
+      `- ${b.category}: anggaran Rp ${b.budgeted.toLocaleString("id-ID")}${b.rollover > 0 ? ` + rollover Rp ${b.rollover.toLocaleString("id-ID")} = Rp ${b.effective.toLocaleString("id-ID")}` : ""}, terpakai Rp ${b.spent.toLocaleString("id-ID")}, sisa Rp ${b.remaining.toLocaleString("id-ID")}${b.remaining < 0 ? " (OVER BUDGET!)" : ""}`
   )
   .join("\n") || "Tidak ada anggaran yang ditetapkan."}
 
@@ -245,19 +298,42 @@ ${
 
 BERIKAN LANGKAH-LANGKAH HEMAT YANG SPESIFIK DAN BISA DILAKUKAN. Hitung potensi penghematan dalam Rupiah. Beri saran tabungan yang konkret. Gunakan Bahasa Indonesia dengan format Markdown.`
 
-  const completion = await groq.chat.completions.create({
+  // Groq deprecated llama-3.3-70b-versatile for non-enterprise access.
+  // Allow deployments to override this as Groq's model catalog changes.
+  const model = process.env.GROQ_MODEL || "openai/gpt-oss-120b"
+
+  // gpt-oss is a REASONING model: its reasoning tokens count against the
+  // completion budget, so a small limit truncates the actual report (the
+  // insight ends mid-sentence). The old `max_tokens: 2048` was far too small.
+  // Give it a big budget, keep reasoning light so the report gets the room, and
+  // retry once with a larger ceiling if the model still hits the cap.
+  const isReasoningModel = /gpt-oss|qwen|deepseek/i.test(model)
+  const buildRequest = (maxCompletionTokens: number) => ({
     messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: userPrompt },
+      { role: "system" as const, content: SYSTEM_PROMPT },
+      { role: "user" as const, content: userPrompt },
     ],
-    // Groq deprecated llama-3.3-70b-versatile for non-enterprise access.
-    // Allow deployments to override this as Groq's model catalog changes.
-    model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
+    model,
     temperature: 0.7,
-    max_tokens: 2048,
+    max_completion_tokens: maxCompletionTokens,
+    ...(isReasoningModel ? { reasoning_effort: "low" as const } : {}),
   })
 
-  const summary = completion.choices[0]?.message?.content?.trim() ?? ""
+  let completion = await groq.chat.completions.create(buildRequest(8192))
+  let summary = completion.choices[0]?.message?.content?.trim() ?? ""
+
+  // `finish_reason === "length"` means the output was cut off — retry with more
+  // headroom and keep whichever report is longer (i.e. more complete).
+  if (completion.choices[0]?.finish_reason === "length") {
+    const retry = await groq.chat.completions.create(buildRequest(16_384))
+    const retried = retry.choices[0]?.message?.content?.trim() ?? ""
+    if (retried.length > summary.length) summary = retried
+  }
+
+  // Never store an empty/thinking-only report as if it were a real analysis.
+  if (!summary) {
+    throw new Error("AI returned an empty analysis — please try again")
+  }
 
   // ── Store analysis in database ──
 

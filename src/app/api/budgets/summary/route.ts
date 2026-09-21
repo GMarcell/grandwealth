@@ -2,7 +2,10 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { requireProAccess } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
-import { getBudgetMonthKey, getBudgetMonthRange } from "@/lib/budget-months"
+import {
+  getBudgetMonthKey,
+  getBudgetMonthRangeInclusive,
+} from "@/lib/budget-months"
 
 export async function GET() {
   const session = await auth()
@@ -24,7 +27,10 @@ export async function GET() {
     const startDay = user?.budgetStartDay ?? 1
 
     const currentMonthKey = getBudgetMonthKey(new Date(), startDay)
-    const { start: monthStart, end: monthEnd } = getBudgetMonthRange(currentMonthKey, startDay)
+    const { start: monthStart, end: monthEnd } = getBudgetMonthRangeInclusive(
+      currentMonthKey,
+      startDay,
+    )
 
     // Fetch budgets for current month
     const budgets = await prisma.budget.findMany({

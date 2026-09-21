@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { generateAnalysisForUserAndMonth } from "@/lib/analysis-generator"
+import { getLastCompletedBudgetMonthKey } from "@/lib/budget-months"
 import { expireLapsedTrials } from "@/lib/trial"
 
 /**
  * Cron endpoint to generate a monthly spending & savings analysis for every user
- * using Groq AI. Intended to run at the end of each calendar month.
+ * using Groq AI. It analyses each user's last COMPLETE budget month (per their
+ * own budget start day) so a report never covers a still-running period.
+ * Intended to run at the end of each calendar month.
  *
  * Setup options:
  *   - **Vercel Cron Jobs**: Set CRON_SECRET & GROQ_API_KEY env vars in Vercel dashboard.
@@ -52,10 +55,7 @@ export async function GET(request: Request) {
     // analyze.
     await expireLapsedTrials()
 
-    // Determine the month to analyze (the month that just ended).
-    // The cron runs at 23:30 on the last calendar day of the month.
     const now = new Date()
-    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
 
     // AI analysis is a Pro feature — only generate reports for users with an
     // active subscription (keeps Groq usage/cost aligned with paying users).
@@ -81,6 +81,10 @@ export async function GET(request: Request) {
 
     for (const user of users) {
       try {
+        // Analyze the last COMPLETE budget month for each user (its range
+        // depends on the user's own budget start day), never the in-progress
+        // one whose data is still incomplete.
+        const monthKey = getLastCompletedBudgetMonthKey(user.budgetStartDay ?? 1)
         await generateAnalysisForUserAndMonth(user.id, monthKey)
         analyzedCount++
       } catch (userError) {
@@ -94,7 +98,6 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       message: `Monthly analysis generated for ${analyzedCount} users`,
-      month: monthKey,
       count: analyzedCount,
       total: users.length,
       errors: errors.length > 0 ? errors : undefined,

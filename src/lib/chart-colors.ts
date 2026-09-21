@@ -38,6 +38,9 @@ export const RULE_TYPE_ACCENT_OTHER = "#6b7280"
 export const SEMANTIC_COLOR_INCOME = "#10b981"
 export const SEMANTIC_COLOR_EXPENSE = "#ef4444"
 
+/** Color for the carried month-over-month balance line on the dashboard. */
+export const SEMANTIC_COLOR_BALANCE = "#6366f1"
+
 /** Map of rule type to its accent color. */
 export const RULE_TYPE_ACCENT_COLORS: Record<string, string> = {
   NEED: RULE_TYPE_ACCENT_NEED,

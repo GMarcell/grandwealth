@@ -34,6 +34,34 @@ export function getCurrentBudgetMonthKey(startDay: number): string {
 }
 
 /**
+ * Get the most recent budget month that has fully ENDED — the budget month
+ * immediately before the one currently running. Since today always falls
+ * inside the current budget month, its period is still in progress; the
+ * previous one has definitively finished.
+ *
+ * Monthly AI analysis targets this month so a report always covers a COMPLETE
+ * budget period instead of a partial, still-running one.
+ */
+export function getLastCompletedBudgetMonthKey(startDay: number): string {
+  return getPreviousBudgetMonthKey(getCurrentBudgetMonthKey(startDay), startDay)
+}
+
+/**
+ * Generate the COMPLETED budget month keys, newest → oldest, starting from the
+ * last fully-completed budget month. Unlike `generateBudgetMonths`, the
+ * in-progress budget month is never offered.
+ */
+export function generateCompletedBudgetMonths(count: number, startDay: number): string[] {
+  const months: string[] = []
+  let key = getLastCompletedBudgetMonthKey(startDay)
+  for (let i = 0; i < count; i++) {
+    months.push(key)
+    key = getPreviousBudgetMonthKey(key, startDay)
+  }
+  return months
+}
+
+/**
  * Get the previous budget month key relative to the given month key.
  */
 export function getPreviousBudgetMonthKey(monthKey: string, startDay: number): string {
@@ -63,6 +91,25 @@ export function getBudgetMonthRange(monthKey: string, startDay: number): { start
   const end = new Date(year, month + 1, startDay - 1)
 
   return { start, end }
+}
+
+/**
+ * Like `getBudgetMonthRange`, but the returned `end` is the FINAL instant of
+ * the period (23:59:59.999 on its last day) instead of midnight.
+ *
+ * Use this for inclusive date-range queries. `getBudgetMonthRange().end` is
+ * midnight at the START of the last day, so a `date: { lte: end }` filter
+ * silently drops every transaction recorded later that day — which is exactly
+ * the boundary a budget month shares with the next one.
+ */
+export function getBudgetMonthRangeInclusive(
+  monthKey: string,
+  startDay: number,
+): { start: Date; end: Date } {
+  const { start, end } = getBudgetMonthRange(monthKey, startDay)
+  const inclusiveEnd = new Date(end)
+  inclusiveEnd.setHours(23, 59, 59, 999)
+  return { start, end: inclusiveEnd }
 }
 
 /**

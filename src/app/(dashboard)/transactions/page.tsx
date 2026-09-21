@@ -46,7 +46,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatIDR, formatDateTime, type PaginatedResponse } from "@/lib/utils";
+import { formatIDR, formatDate, type PaginatedResponse } from "@/lib/utils";
 import { Pagination } from "@/components/ui/pagination";
 import { FormError } from "@/components/ui/form-error";
 import {
@@ -235,14 +235,31 @@ export default function TransactionsPage() {
     },
   });
 
-  const { data: budgets } = useQuery<any[]>({
-    queryKey: ["budgets"],
+  // Carry-over-adjusted effective budgets for the current month, computed by
+  // the same endpoint the budgets page uses. The budget alert must compare
+  // spending against the effective limit (budget + rollover) to match it.
+  const { data: rolloverHistory } = useQuery<{
+    categories: Array<{
+      categoryKey: string;
+      months: Array<{ month: string; effectiveBudget: number }>;
+    }>;
+  }>({
+    queryKey: ["rollover-history"],
     queryFn: async () => {
-      const res = await fetch("/api/budgets");
-      if (!res.ok) throw new Error("Failed to fetch budgets");
+      const res = await fetch("/api/budgets/rollover-history");
+      if (!res.ok) throw new Error("Failed to fetch rollover history");
       return res.json();
     },
   });
+
+  const effectiveBudgetByCategory = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const cat of rolloverHistory?.categories ?? []) {
+      const entry = cat.months?.find((m) => m.month === currentMonthKey);
+      if (entry) map.set(cat.categoryKey, entry.effectiveBudget);
+    }
+    return map;
+  }, [rolloverHistory, currentMonthKey]);
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -262,7 +279,7 @@ export default function TransactionsPage() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["budgets"] });
+      queryClient.invalidateQueries({ queryKey: ["rollover-history"] });
       toast.success("Transaction added");
 
       // Check budget alert for expense transactions
@@ -270,9 +287,8 @@ export default function TransactionsPage() {
         const alert = getBudgetAlert(
           variables.category,
           parseFloat(variables.amount.toString()),
-          budgets ?? [],
+          effectiveBudgetByCategory.get(variables.category),
           spentByCategory,
-          startDay,
         );
         if (alert.level === "over") {
           toast.error(alert.message, { duration: 6000 });
@@ -304,7 +320,7 @@ export default function TransactionsPage() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["budgets"] });
+      queryClient.invalidateQueries({ queryKey: ["rollover-history"] });
       toast.success("Transaction updated");
 
       // Check budget alert for expense transactions
@@ -319,9 +335,8 @@ export default function TransactionsPage() {
         const alert = getBudgetAlert(
           variables.category,
           netAdditional,
-          budgets ?? [],
+          effectiveBudgetByCategory.get(variables.category),
           spentByCategory,
-          startDay,
         );
         if (alert.level === "over") {
           toast.error(alert.message, { duration: 6000 });
@@ -537,76 +552,80 @@ export default function TransactionsPage() {
                         const itemAmountColor = isIncome
                           ? "text-emerald-600 dark:text-emerald-400"
                           : "text-red-600 dark:text-red-400";
+                        const ruleType = getRuleType(tx.category);
+                        const ruleConfig =
+                          ruleType === "OTHER"
+                            ? OTHER_CONFIG
+                            : RULE_TYPE_CONFIGS[ruleType];
 
                         return (
                         <div
                           key={tx.id}
-                          className={`flex items-center justify-between rounded-lg border ${borderColor} ${bgColor} ${hoverBg} p-3 transition-colors group`}
+                          className={`flex items-start gap-3 rounded-lg border ${borderColor} ${bgColor} ${hoverBg} p-3 transition-colors group`}
                         >
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
-                            <div
-                              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${bgColor} ${textColor}`}
-                            >
-                              {icon}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium truncate">
+                          <div
+                            className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${bgColor} ${textColor}`}
+                          >
+                            {icon}
+                          </div>
+
+                          {/* Description + amount share the first line; the meta
+                              row wraps underneath instead of overflowing on
+                              narrow (mobile) widths. */}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <p className="min-w-0 truncate text-sm font-medium">
                                 {tx.description}
                               </p>
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <span>{tx.category.replace("_", " ")}</span>
-                                <span>&bull;</span>
-                                <span>{formatDateTime(tx.date)}</span>
-                                <span>&bull;</span>
-                                <span
-                                  className={
-                                    getRuleType(tx.category) === "OTHER"
-                                      ? OTHER_CONFIG.color
-                                      : RULE_TYPE_CONFIGS[
-                                          getRuleType(tx.category)
-                                        ].color
-                                  }
-                                >
-                                  {getRuleType(tx.category) === "OTHER"
-                                    ? OTHER_CONFIG.label
-                                    : RULE_TYPE_CONFIGS[
-                                        getRuleType(tx.category)
-                                      ].label}
-                                </span>
-                              </div>
+                              <span
+                                className={`shrink-0 text-sm font-semibold tabular-nums ${itemAmountColor}`}
+                              >
+                                {itemSign}
+                                {formatIDR(tx.amount)}
+                              </span>
+                            </div>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                              <span className="truncate">
+                                {tx.category.replace("_", " ")}
+                              </span>
+                              <span aria-hidden="true">&bull;</span>
+                              <span className="whitespace-nowrap">
+                                {formatDate(tx.date)}
+                              </span>
+                              <span aria-hidden="true">&bull;</span>
+                              <span
+                                className={`whitespace-nowrap ${ruleConfig.color}`}
+                              >
+                                {ruleConfig.label}
+                              </span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <div
-                              className={`text-sm font-semibold ${itemAmountColor}`}
+
+                          {/* Actions get their own column so they never squeeze
+                              the amount/description on small screens. */}
+                          <div className="flex shrink-0 gap-0.5 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => openEdit(tx)}
+                              className="min-w-9 min-h-9"
+                              aria-label="Edit transaction"
                             >
-                              {itemSign}
-                              {formatIDR(tx.amount)}
-                            </div>
-                            <div className="flex gap-0.5 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                              <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                onClick={() => openEdit(tx)}
-                                className="min-w-9 min-h-9"
-                                aria-label="Edit transaction"
-                              >
-                                <Edit2 className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                onClick={() => {
-                                  if (confirm("Delete this transaction?")) {
-                                    deleteMutation.mutate(tx.id);
-                                  }
-                                }}
-                                className="min-w-9 min-h-9"
-                                aria-label="Delete transaction"
-                              >
-                                <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                              </Button>
-                            </div>
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => {
+                                if (confirm("Delete this transaction?")) {
+                                  deleteMutation.mutate(tx.id);
+                                }
+                              }}
+                              className="min-w-9 min-h-9"
+                              aria-label="Delete transaction"
+                            >
+                              <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                            </Button>
                           </div>
                         </div>
                         );

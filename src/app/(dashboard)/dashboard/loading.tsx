@@ -15,8 +15,8 @@ export default function DashboardPageLoading() {
       <Skeleton className="h-32 w-full rounded-xl" />
 
       {/* Stat cards skeleton */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, i) => (
           <Card key={i}>
             <CardHeader>
               <Skeleton className="h-4 w-24" />

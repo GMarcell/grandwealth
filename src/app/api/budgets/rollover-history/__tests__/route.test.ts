@@ -119,7 +119,9 @@ describe("GET /api/budgets/rollover-history — window & labels", () => {
     // Oldest month start → newest month end. The start must be BEFORE the end.
     const { gte, lte } = mockFindTransactions.mock.calls[0][0].where.date
     expect(gte).toEqual(new Date(2025, 8, 1)) // Sep 1 2025
-    expect(lte).toEqual(new Date(2026, 9, 0)) // Sep 30 2026
+    // Sep 30 2026, end-of-day: the final day of the newest budget month is
+    // inclusive, so a transaction dated on it is not dropped.
+    expect(lte).toEqual(new Date(2026, 9, 0, 23, 59, 59, 999))
     expect(gte.getTime()).toBeLessThan(lte.getTime())
 
     // The current month's spend is actually counted (previously always 0).
@@ -167,9 +169,9 @@ describe("GET /api/budgets/rollover-history — window & labels", () => {
     const res = await GET()
     const body = await res.json()
 
-    // Newest window edge is the end of 28 Aug – 27 Sep.
+    // Newest window edge is the end of 28 Aug – 27 Sep (inclusive of 27 Sep).
     const { lte } = mockFindTransactions.mock.calls[0][0].where.date
-    expect(lte).toEqual(new Date(2026, 8, 27))
+    expect(lte).toEqual(new Date(2026, 8, 27, 23, 59, 59, 999))
 
     const entry = body.categories[0].months[0]
     expect(entry.month).toBe("2026-08")

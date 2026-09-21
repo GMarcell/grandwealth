@@ -6,7 +6,7 @@ import {
   generateBudgetMonths,
   getBudgetMonthKey,
   getBudgetMonthLabel,
-  getBudgetMonthRange,
+  getBudgetMonthRangeInclusive,
 } from "@/lib/budget-months"
 
 export async function GET(req: Request) {
@@ -39,8 +39,8 @@ export async function GET(req: Request) {
     const currentMonthKey = budgetMonths[0]
     const oldestMonthKey = budgetMonths[budgetMonths.length - 1]
 
-    const startDate = getBudgetMonthRange(oldestMonthKey, startDay).start
-    const endDate = getBudgetMonthRange(currentMonthKey, startDay).end
+    const startDate = getBudgetMonthRangeInclusive(oldestMonthKey, startDay).start
+    const endDate = getBudgetMonthRangeInclusive(currentMonthKey, startDay).end
 
     const transactions = await prisma.transaction.findMany({
       where: {
@@ -51,8 +51,8 @@ export async function GET(req: Request) {
     })
 
     // Spending by category (current budget month, not the calendar month)
-    const currentMonthStart = getBudgetMonthRange(currentMonthKey, startDay).start
-    const currentMonthEnd = getBudgetMonthRange(currentMonthKey, startDay).end
+    const currentMonthStart = getBudgetMonthRangeInclusive(currentMonthKey, startDay).start
+    const currentMonthEnd = getBudgetMonthRangeInclusive(currentMonthKey, startDay).end
 
     const currentExpenses = transactions.filter(
       (tx) => tx.type === "EXPENSE" && tx.date >= currentMonthStart && tx.date <= currentMonthEnd

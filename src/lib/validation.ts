@@ -1,5 +1,20 @@
 import { z } from "zod"
 
+// ─── Shared fields ───────────────────────────
+
+/**
+ * A date the server can actually parse.
+ *
+ * Accepts anything `new Date()` understands ("2026-09-21", full ISO
+ * datetimes, …) but rejects unparseable strings. Without this, a bad date
+ * reached handlers as `new Date("garbage")` → `Invalid Date`, which Prisma
+ * rejects deep in the request, surfacing as a confusing 500 instead of a 400.
+ */
+export const dateString = z
+  .string()
+  .min(1, "Date is required")
+  .refine((value) => !Number.isNaN(new Date(value).getTime()), "Invalid date")
+
 // ─── Auth ────────────────────────────────────
 export const registerSchema = z.object({
   name: z.string().min(1, "Name is required").max(100).optional(),
@@ -15,7 +30,7 @@ export const createTransactionSchema = z.object({
   category: z.string().min(1, "Category is required").max(100),
   amount: z.number().positive("Amount must be positive").finite(),
   description: z.string().min(1, "Description is required").max(500),
-  date: z.string().min(1).optional(),
+  date: dateString.optional(),
 })
 
 export const updateTransactionSchema = createTransactionSchema.partial()
@@ -46,7 +61,7 @@ export const createGoldSchema = z.object({
   weightGram: z.number().positive("Weight must be positive").finite(),
   pricePerGram: z.number().positive("Price must be positive").finite(),
   totalAmount: z.number().nonnegative().optional(),
-  date: z.string().min(1).optional(),
+  date: dateString.optional(),
   notes: z.string().max(500).optional(),
 })
 
@@ -59,7 +74,7 @@ export const createStockSchema = z.object({
   name: z.string().min(1, "Name is required").max(200),
   quantity: z.number().int("Quantity must be an integer").positive("Quantity must be positive"),
   buyPrice: z.number().positive("Buy price must be positive").finite(),
-  date: z.string().min(1).optional(),
+  date: dateString.optional(),
   notes: z.string().max(500).optional(),
 })
 
@@ -70,7 +85,7 @@ export const createBankSavingSchema = z.object({
   type: z.enum(["DEPOSIT", "WITHDRAWAL"], { message: "Type must be DEPOSIT or WITHDRAWAL" }),
   accountName: z.string().min(1, "Account name is required").max(100),
   amount: z.number().positive("Amount must be positive").finite(),
-  date: z.string().min(1).optional(),
+  date: dateString.optional(),
   notes: z.string().max(500).optional(),
 })
 
@@ -83,9 +98,9 @@ export const createRecurringSchema = z.object({
   amount: z.number().positive("Amount must be positive").finite(),
   description: z.string().min(1, "Description is required").max(500),
   frequency: z.enum(["WEEKLY", "MONTHLY", "YEARLY"]),
-  startDate: z.string().min(1, "Start date is required"),
-  endDate: z.string().min(1).optional().nullable(),
-  nextDate: z.string().min(1, "Next date is required"),
+  startDate: dateString,
+  endDate: dateString.optional().nullable(),
+  nextDate: dateString,
   active: z.boolean().optional(),
   // Optional savings goal: each time the recurring fires, the amount is also
   // added to the goal's saved amount (e.g. a monthly "savings transfer").
@@ -99,7 +114,7 @@ export const createGoalSchema = z.object({
   name: z.string().min(1, "Goal name is required").max(100),
   targetAmount: z.number().positive("Target amount must be positive").finite(),
   savedAmount: z.number().nonnegative("Saved amount must be >= 0").finite().optional(),
-  targetDate: z.string().min(1).optional().nullable(),
+  targetDate: dateString.optional().nullable(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Color must be a hex color (e.g. #6366f1)").optional(),
 })
 
@@ -118,7 +133,7 @@ export const createLoanSchema = z.object({
   remainingBalance: z.number().nonnegative("Remaining balance must be >= 0").finite(),
   interestRate: z.number().nonnegative("Interest rate must be >= 0").finite().optional().nullable(),
   monthlyPayment: z.number().positive("Monthly payment must be positive").finite().optional().nullable(),
-  startDate: z.string().min(1, "Start date is required"),
+  startDate: dateString,
   notes: z.string().max(500).optional(),
 })
 
@@ -132,7 +147,7 @@ export const payLoanSchema = z.object({
 export const createDividendSchema = z.object({
   stockId: z.string().min(1, "Stock is required"),
   amount: z.number().positive("Dividend amount must be positive").finite(),
-  date: z.string().min(1).optional(),
+  date: dateString.optional(),
   notes: z.string().max(500).optional(),
 })
 
@@ -148,6 +163,8 @@ export const adminUpdateUserSchema = z
       .nullable()
       .optional(),
     // Accept an ISO date string ("2026-10-31" or full datetime) or null/"".
+    // Parsed (and rejected when unparseable) in the handler, which returns a
+    // dedicated 400 for a bad value.
     currentPeriodEnd: z.string().optional().nullable(),
     // Marks a Pro grant as a free trial (excluded from MRR). Defaults to
     // false whenever the plan/subscription fields are edited.

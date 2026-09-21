@@ -4,7 +4,7 @@ import { requireProAccess } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { budgetTemplateSchema, safeParseBody } from "@/lib/validation"
 import { buildBudgetTemplate } from "@/lib/budget-template"
-import { getBudgetMonthRange } from "@/lib/budget-months"
+import { getBudgetMonthRangeInclusive } from "@/lib/budget-months"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 
 /**
@@ -49,7 +49,7 @@ export async function POST(req: Request) {
     ])
 
     const startDay = user?.budgetStartDay ?? 1
-    const { start, end } = getBudgetMonthRange(month, startDay)
+    const { start, end } = getBudgetMonthRangeInclusive(month, startDay)
 
     // Income for the target month.
     const monthTransactions = await prisma.transaction.findMany({
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
     for (let i = 1; i <= 3; i++) {
       const d = new Date(start)
       d.setMonth(d.getMonth() - i)
-      prevMonths.push(getBudgetMonthRange(
+      prevMonths.push(getBudgetMonthRangeInclusive(
         `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
         startDay
       ))

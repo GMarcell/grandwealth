@@ -110,9 +110,16 @@ describe("GET /api/reports — budget month window", () => {
     const { gte, lte } = dateFilter()
     // First of the month, twelve budget months back.
     expect(gte.getDate()).toBe(1)
-    // End of the current calendar month.
-    const expectedEnd = new Date(lte.getFullYear(), lte.getMonth() + 1, 0)
-    expect(lte.getTime()).toBe(expectedEnd.getTime())
+    // End of the current calendar month, inclusive of the final day.
+    const lastDay = new Date(lte.getFullYear(), lte.getMonth() + 1, 0)
+    expect(lte.getTime()).toBe(
+      new Date(
+        lastDay.getFullYear(),
+        lastDay.getMonth(),
+        lastDay.getDate(),
+        23, 59, 59, 999,
+      ).getTime(),
+    )
   })
 
   it("aligns the window to a mid-month start day", async () => {

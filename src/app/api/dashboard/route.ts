@@ -5,12 +5,13 @@ import {
   generateBudgetMonths,
   getBudgetMonthKey,
   getBudgetMonthLabel,
-  getBudgetMonthRange,
+  getBudgetMonthRangeInclusive,
 } from "@/lib/budget-months"
 import {
   buildSpentByMonthCategory,
   computeCarryOverChain,
 } from "@/lib/budget-carry-over"
+import { computeMonthlyBalanceChain } from "@/lib/monthly-balance"
 import { computeGoldPortfolio } from "@/lib/gold"
 import { fetchGoldPriceIdr } from "@/lib/prices"
 
@@ -32,31 +33,24 @@ export async function GET() {
     const carryOverEnabled = user?.carryOverEnabled ?? true
 
     const currentMonthKey = getBudgetMonthKey(new Date(), startDay)
-    const { start: monthStart, end: monthEnd } = getBudgetMonthRange(currentMonthKey, startDay)
+    const { start: monthStart, end: monthEnd } = getBudgetMonthRangeInclusive(
+      currentMonthKey,
+      startDay,
+    )
 
     // Budget months for the carry-over chain, oldest → newest, ending at the
     // current budget month. Carry-over compounds across this whole window.
     const chainMonths = [...generateBudgetMonths(13, startDay)].reverse()
 
-    // Calculate date range for fetching data (last 13 months is sufficient)
-    const thirteenMonthsAgo = new Date()
-    thirteenMonthsAgo.setMonth(thirteenMonthsAgo.getMonth() - 13)
-    thirteenMonthsAgo.setDate(1)
-    thirteenMonthsAgo.setHours(0, 0, 0, 0)
-
-    // Cutoff for the all-time cash aggregate: the end of the current calendar
-    // month, which is exactly how /api/net-worth caps its "latest" cash point
-    // (transactions dated after this are excluded there too).
-    const allTimeNow = new Date()
-    const endOfCurrentMonth = new Date(
-      allTimeNow.getFullYear(),
-      allTimeNow.getMonth() + 1,
-      0,
-      23,
-      59,
-      59,
-      999,
-    )
+    // Both the fetch window and the "all-time" cutoff follow the budget-month
+    // cycle so they line up exactly with /api/net-worth, the budgets page, and
+    // the reports — a mid-month start day (e.g. the 15th) must not be split on
+    // calendar-month boundaries here.
+    //   - fetch from the START of the oldest budget month in the chain
+    //   - cap "all-time" cash at the END (last day) of the current budget month,
+    //     which is how net-worth caps its latest cash point
+    const windowStart = getBudgetMonthRangeInclusive(chainMonths[0], startDay).start
+    const endOfCurrentBudgetMonth = monthEnd
 
     const [
       transactions,
@@ -76,7 +70,7 @@ export async function GET() {
       prisma.transaction.findMany({
         where: {
           userId,
-          date: { gte: thirteenMonthsAgo },
+          date: { gte: windowStart },
         },
         orderBy: { date: "desc" },
       }),
@@ -86,7 +80,7 @@ export async function GET() {
         by: ["type"],
         where: {
           userId,
-          date: { lte: endOfCurrentMonth },
+          date: { lte: endOfCurrentBudgetMonth },
         },
         _sum: { amount: true },
       }),
@@ -217,13 +211,27 @@ export async function GET() {
       monthlyMap.set(key, existing)
     }
 
-    const monthlyData = Array.from(monthlyMap.entries())
+    const monthlyPoints = Array.from(monthlyMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([month, data]) => ({
         month: getBudgetMonthLabel(month, startDay),
         income: data.income,
         expenses: data.expenses,
       }))
+
+    // Overall month-over-month balance carry-over. Seed with the balance the
+    // user held before the displayed window (all-time net cash flow minus the
+    // window's own net) so each month's `balance` is the real carried balance.
+    // A month where expenses exceed income carries a negative balance — a
+    // deficit — into the next month, just like a surplus carries forward.
+    const monthlyData = computeMonthlyBalanceChain(
+      monthlyPoints,
+      allTimeNetCashflow - netCashflow,
+    )
+    const carriedBalance =
+      monthlyData.length > 0
+        ? monthlyData[monthlyData.length - 1].balance
+        : allTimeNetCashflow
 
     // Compounded carry-over across the whole chain. The global switch gates it
     // for every category; a per-budget cap still applies when set. Carry-over
@@ -354,6 +362,7 @@ export async function GET() {
       totalExpenses,
       netCashflow,
       allTimeNetCashflow,
+      carriedBalance,
       totalGoldValue,
       totalGoldWeight,
       totalStockValue,
