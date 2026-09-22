@@ -319,13 +319,15 @@ BERIKAN LANGKAH-LANGKAH HEMAT YANG SPESIFIK DAN BISA DILAKUKAN. Hitung potensi p
     ...(isReasoningModel ? { reasoning_effort: "low" as const } : {}),
   })
 
-  let completion = await groq.chat.completions.create(buildRequest(8192))
+  // Keep enough room for the requested 600–800 word report even when a
+  // reasoning model spends completion tokens on internal reasoning.
+  let completion = await groq.chat.completions.create(buildRequest(16_384))
   let summary = completion.choices[0]?.message?.content?.trim() ?? ""
 
   // `finish_reason === "length"` means the output was cut off — retry with more
   // headroom and keep whichever report is longer (i.e. more complete).
   if (completion.choices[0]?.finish_reason === "length") {
-    const retry = await groq.chat.completions.create(buildRequest(16_384))
+    const retry = await groq.chat.completions.create(buildRequest(32_768))
     const retried = retry.choices[0]?.message?.content?.trim() ?? ""
     if (retried.length > summary.length) summary = retried
   }

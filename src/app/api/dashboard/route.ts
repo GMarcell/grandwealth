@@ -6,6 +6,7 @@ import {
   getBudgetMonthKey,
   getBudgetMonthLabel,
   getBudgetMonthRangeInclusive,
+  getLastCompletedBudgetMonthKey,
 } from "@/lib/budget-months"
 import {
   buildSpentByMonthCategory,
@@ -33,6 +34,10 @@ export async function GET() {
     const carryOverEnabled = user?.carryOverEnabled ?? true
 
     const currentMonthKey = getBudgetMonthKey(new Date(), startDay)
+    // The dashboard must never surface an analysis for the budget month that
+    // is still in progress. A report may exist for it if it was generated
+    // before the completion guard was added or by a manual/older job.
+    const lastCompletedMonthKey = getLastCompletedBudgetMonthKey(startDay)
     const { start: monthStart, end: monthEnd } = getBudgetMonthRangeInclusive(
       currentMonthKey,
       startDay,
@@ -98,7 +103,7 @@ export async function GET() {
         where: { userId, month: { in: chainMonths } },
       }),
       prisma.monthlyAnalysis.findFirst({
-        where: { userId },
+        where: { userId, month: { lte: lastCompletedMonthKey } },
         orderBy: { month: "desc" },
         select: {
           id: true,
