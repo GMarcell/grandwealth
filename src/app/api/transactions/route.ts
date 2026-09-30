@@ -5,6 +5,8 @@ import { createTransactionSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 import { parsePagination, paginatedResponse } from "@/lib/utils"
 import { getBudgetMonthRangeInclusive } from "@/lib/budget-months"
+import { getBudgetMonthKey } from "@/lib/budget-months"
+import { computeMonthlyBalanceChain } from "@/lib/monthly-balance"
 import { RULE_TYPES } from "@/lib/rule-type"
 import type { Prisma } from "@prisma/client"
 
@@ -144,9 +146,57 @@ export async function GET(req: Request) {
       : {}),
   }
 
+  // The transaction totals above respect the active filters. Carry-over is
+  // deliberately calculated from the complete budget-month history so search,
+  // type, and category filters cannot hide a deficit owed from the previous
+  // month.
+  let carryOver = { carryIn: 0, netCashflow: 0, carriedBalance: 0 }
+  if (monthFilter && monthFilter !== "ALL") {
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { budgetStartDay: true, carryDeficitEnabled: true },
+    })
+    const startDay = user?.budgetStartDay ?? 1
+    const { end } = getBudgetMonthRangeInclusive(monthFilter, startDay)
+    const history = await prisma.transaction.findMany({
+      where: { userId: session.user.id, date: { lte: end } },
+      select: { type: true, amount: true, date: true },
+    })
+    const byMonth = new Map<string, { income: number; expenses: number }>()
+    for (const tx of history) {
+      const key = getBudgetMonthKey(tx.date, startDay)
+      const point = byMonth.get(key) ?? { income: 0, expenses: 0 }
+      if (tx.type === "INCOME") point.income += tx.amount
+      else point.expenses += tx.amount
+      byMonth.set(key, point)
+    }
+    // Keep an empty selected month in the chain so the previous month's
+    // deficit is still exposed as this month's carry-in.
+    if (!byMonth.has(monthFilter)) {
+      byMonth.set(monthFilter, { income: 0, expenses: 0 })
+    }
+    const points = [...byMonth.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, point]) => ({ month, ...point }))
+    const selectedIndex = points.findIndex((point) => point.month === monthFilter)
+    if (selectedIndex >= 0) {
+      const chain = computeMonthlyBalanceChain(
+        points.slice(0, selectedIndex + 1),
+        0,
+        user?.carryDeficitEnabled ?? true,
+      )
+      const current = chain[chain.length - 1]
+      carryOver = {
+        carryIn: current.carryIn,
+        netCashflow: current.balance,
+        carriedBalance: current.balance,
+      }
+    }
+  }
+
   return NextResponse.json({
     ...paginatedResponse(mapped, total, pagination),
-    summary,
+    summary: { ...summary, carryOver },
   })
 }
 

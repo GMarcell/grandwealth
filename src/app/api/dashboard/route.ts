@@ -28,10 +28,14 @@ export async function GET() {
     // Get user's budget start day setting
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { budgetStartDay: true, carryOverEnabled: true },
+      select: { budgetStartDay: true, carryOverEnabled: true, carryDeficitEnabled: true },
     })
     const startDay = user?.budgetStartDay ?? 1
     const carryOverEnabled = user?.carryOverEnabled ?? true
+    // Whether a month's deficit (expenses > income) carries into the next
+    // month's balance. When false, only surpluses carry — each month starts
+    // fresh after a deficit.
+    const carryDeficitEnabled = user?.carryDeficitEnabled ?? true
 
     const currentMonthKey = getBudgetMonthKey(new Date(), startDay)
     // The dashboard must never surface an analysis for the budget month that
@@ -232,11 +236,19 @@ export async function GET() {
     const monthlyData = computeMonthlyBalanceChain(
       monthlyPoints,
       allTimeNetCashflow - netCashflow,
+      carryDeficitEnabled,
     )
-    const carriedBalance =
+    // With deficit carry-off the last month's reported balance may be a local
+    // negative that is NOT carried forward, so the "carried into the next
+    // month" figure floors at 0 (a deficit that isn't carried is not owed to
+    // anyone). Deficits still show on the chart via monthlyData[].net/balance.
+    const lastBalance =
       monthlyData.length > 0
         ? monthlyData[monthlyData.length - 1].balance
         : allTimeNetCashflow
+    const carriedBalance = carryDeficitEnabled
+      ? lastBalance
+      : Math.max(0, lastBalance)
 
     // Compounded carry-over across the whole chain. The global switch gates it
     // for every category; a per-budget cap still applies when set. Carry-over

@@ -2,7 +2,11 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 
-const DEFAULTS = { budgetStartDay: 1, carryOverEnabled: true }
+const DEFAULTS = {
+  budgetStartDay: 1,
+  carryOverEnabled: true,
+  carryDeficitEnabled: true,
+}
 
 export async function GET() {
   const session = await auth()
@@ -12,12 +16,13 @@ export async function GET() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { budgetStartDay: true, carryOverEnabled: true },
+    select: { budgetStartDay: true, carryOverEnabled: true, carryDeficitEnabled: true },
   })
 
   return NextResponse.json({
     budgetStartDay: user?.budgetStartDay ?? DEFAULTS.budgetStartDay,
     carryOverEnabled: user?.carryOverEnabled ?? DEFAULTS.carryOverEnabled,
+    carryDeficitEnabled: user?.carryDeficitEnabled ?? DEFAULTS.carryDeficitEnabled,
   })
 }
 
@@ -29,9 +34,13 @@ export async function PATCH(req: Request) {
 
   try {
     const body = await req.json()
-    const { budgetStartDay, carryOverEnabled } = body ?? {}
+    const { budgetStartDay, carryOverEnabled, carryDeficitEnabled } = body ?? {}
 
-    const data: { budgetStartDay?: number; carryOverEnabled?: boolean } = {}
+    const data: {
+      budgetStartDay?: number
+      carryOverEnabled?: boolean
+      carryDeficitEnabled?: boolean
+    } = {}
 
     if (budgetStartDay !== undefined) {
       if (
@@ -58,6 +67,16 @@ export async function PATCH(req: Request) {
       data.carryOverEnabled = carryOverEnabled
     }
 
+    if (carryDeficitEnabled !== undefined) {
+      if (typeof carryDeficitEnabled !== "boolean") {
+        return NextResponse.json(
+          { error: "carryDeficitEnabled must be a boolean" },
+          { status: 400 }
+        )
+      }
+      data.carryDeficitEnabled = carryDeficitEnabled
+    }
+
     if (Object.keys(data).length === 0) {
       return NextResponse.json(
         { error: "No supported settings provided" },
@@ -68,12 +87,13 @@ export async function PATCH(req: Request) {
     const updated = await prisma.user.update({
       where: { id: session.user.id },
       data,
-      select: { budgetStartDay: true, carryOverEnabled: true },
+      select: { budgetStartDay: true, carryOverEnabled: true, carryDeficitEnabled: true },
     })
 
     return NextResponse.json({
       budgetStartDay: updated.budgetStartDay,
       carryOverEnabled: updated.carryOverEnabled,
+      carryDeficitEnabled: updated.carryDeficitEnabled,
     })
   } catch (error) {
     console.error("Update budget settings error:", error)

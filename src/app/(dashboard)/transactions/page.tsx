@@ -474,6 +474,9 @@ export default function TransactionsPage() {
     [summary, transactionList],
   );
 
+  const carryOver = summary?.carryOver;
+  const displayedNetCashflow = carryOver?.netCashflow ?? totalIncome - totalExpenses;
+
   const categories = useMemo(() => {
     const userCats = (customCategories ?? [])
       .filter((c) => c.type === formType)
@@ -856,6 +859,35 @@ export default function TransactionsPage() {
         </Dialog>
       </div>
 
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Carry-over from previous month</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${carryOver?.carryIn && carryOver.carryIn < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+              {carryOver?.carryIn && carryOver.carryIn < 0 ? "−" : "+"}
+              {formatIDR(Math.abs(carryOver?.carryIn ?? 0))}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {carryOver?.carryIn && carryOver.carryIn < 0 ? "Deficit carried into this month" : "Surplus carried into this month"}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Carry-over to next month</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${carryOver?.carriedBalance && carryOver.carriedBalance < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+              {carryOver?.carriedBalance && carryOver.carriedBalance < 0 ? "−" : "+"}
+              {formatIDR(Math.abs(carryOver?.carriedBalance ?? 0))}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">Applied to the next budget month</p>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
@@ -888,10 +920,13 @@ export default function TransactionsPage() {
           </CardHeader>
           <CardContent>
             <div
-              className={`text-2xl font-bold ${totalIncome - totalExpenses >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
+              className={`text-2xl font-bold ${displayedNetCashflow >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
             >
-              {formatIDR(totalIncome - totalExpenses)}
+              {displayedNetCashflow < 0 ? "−" : "+"}{formatIDR(Math.abs(displayedNetCashflow))}
             </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Income − expenses {carryOver?.carryIn ? "+ carry-over" : ""}
+            </p>
           </CardContent>
         </Card>
       </div>

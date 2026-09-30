@@ -92,7 +92,9 @@ test.describe("Unauthenticated — Auth Flow", () => {
 
       await expect(page.getByText("Welcome back")).toBeVisible()
       await expect(page.getByLabel("Email")).toBeVisible()
-      await expect(page.getByLabel("Password")).toBeVisible()
+      // exact: the form also has a "Show password" toggle button whose
+      // aria-label would otherwise substring-match and trip strict mode.
+      await expect(page.getByLabel("Password", { exact: true })).toBeVisible()
       await expect(
         page.getByRole("button", { name: "Sign In" })
       ).toBeVisible()
@@ -101,7 +103,7 @@ test.describe("Unauthenticated — Auth Flow", () => {
     test("shows error for invalid credentials", async ({ page }) => {
       await page.goto("/login")
       await page.getByLabel("Email").fill("nonexistent@test.com")
-      await page.getByLabel("Password").fill("WrongPass1!")
+      await page.getByLabel("Password", { exact: true }).fill("WrongPass1!")
       await page.getByRole("button", { name: "Sign In" }).click()
 
       await expect(
@@ -112,7 +114,7 @@ test.describe("Unauthenticated — Auth Flow", () => {
     test("successful login redirects to /dashboard", async ({ page }) => {
       await page.goto("/login")
       await page.getByLabel("Email").fill(TEST_USER.email)
-      await page.getByLabel("Password").fill(TEST_USER.password)
+      await page.getByLabel("Password", { exact: true }).fill(TEST_USER.password)
       await page.getByRole("button", { name: "Sign In" }).click()
 
       await page.waitForURL("/dashboard", { timeout: 20000 })
@@ -156,21 +158,23 @@ test.describe("Unauthenticated — Auth Flow", () => {
 
   test.describe("callbackUrl flow", () => {
     test("redirects back after login via callbackUrl", async ({ page }) => {
-      // 1. Access a protected route while logged out
-      await page.goto("/budgets")
+      // 1. Access a protected route while logged out. /transactions (unlike
+      // /budgets) is a Free module, so the freshly registered FREE-plan user
+      // isn't bounced to the /upgrade paywall after signing in.
+      await page.goto("/transactions")
       await page.waitForURL(/\/login/, { timeout: 10000 })
 
       // 2. Verify callbackUrl is set
       const url = new URL(page.url())
-      expect(url.searchParams.get("callbackUrl")).toBe("/budgets")
+      expect(url.searchParams.get("callbackUrl")).toBe("/transactions")
 
-      // 3. Log in — should redirect to /budgets (not /dashboard)
+      // 3. Log in — should redirect to /transactions (not /dashboard)
       await page.getByLabel("Email").fill(TEST_USER.email)
-      await page.getByLabel("Password").fill(TEST_USER.password)
+      await page.getByLabel("Password", { exact: true }).fill(TEST_USER.password)
       await page.getByRole("button", { name: "Sign In" }).click()
 
-      await page.waitForURL("/budgets", { timeout: 20000 })
-      await expect(pageHeading(page, "Budgets")).toBeVisible()
+      await page.waitForURL("/transactions", { timeout: 20000 })
+      await expect(pageHeading(page, "Transactions")).toBeVisible()
     })
   })
 })

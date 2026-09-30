@@ -67,6 +67,8 @@ interface DashboardMockOptions {
   budgetStartDay?: number
   /** Global carry-over switch on the user. Default true. */
   carryOverEnabled?: boolean
+  /** Deficit-carry switch on the user. Default true (deficits carry). */
+  carryDeficitEnabled?: boolean
   /** Transactions returned by the 13-month window query. */
   windowTransactions?: Array<{
     id: string
@@ -91,6 +93,7 @@ function setupMocks(options: DashboardMockOptions = {}) {
   mockFindUser.mockResolvedValue({
     budgetStartDay: options.budgetStartDay ?? 1,
     carryOverEnabled: options.carryOverEnabled ?? true,
+    carryDeficitEnabled: options.carryDeficitEnabled ?? true,
   })
   mockFindTransactions.mockResolvedValue(options.windowTransactions ?? [])
   mockGroupByTransactions.mockResolvedValue(options.allTimeCash ?? [])
@@ -455,5 +458,38 @@ describe("GET /api/dashboard — budget month rollover with non-1st start day", 
     expect(curr.carryIn).toBe(prev.balance)
     expect(curr.balance).toBe(1_000_000)
     expect(body.carriedBalance).toBe(1_000_000)
+  })
+
+  it("starts fresh after a deficit when deficit carry is disabled", async () => {
+    setupMocks({
+      carryDeficitEnabled: false,
+      windowTransactions: [
+        tx("prev-income", "INCOME", "SALARY", 100_000, PREV_MONTH),
+        tx("prev-expense", "EXPENSE", "FOOD", 300_000, PREV_MONTH),
+        tx("curr-income", "INCOME", "SALARY", 100_000, CURRENT_MONTH),
+        tx("curr-expense", "EXPENSE", "FOOD", 50_000, CURRENT_MONTH),
+      ],
+      // Opening balance = allTimeNet − windowNet = 0 − (−150k) = 150k, small
+      // enough that the deficit month's running balance goes negative.
+      allTimeCash: [
+        { type: "INCOME", _sum: { amount: 50_000 } },
+        { type: "EXPENSE", _sum: { amount: 50_000 } },
+      ],
+    })
+
+    const res = await GET()
+    const body = await res.json()
+
+    expect(body.monthlyData).toHaveLength(2)
+    const [prev, curr] = body.monthlyData
+
+    // The deficit month still reports its negative month-end balance…
+    expect(prev.net).toBe(-200_000)
+    expect(prev.balance).toBe(-50_000) // 150k opening − 200k deficit
+    // …but the current month starts fresh (no negative carryIn).
+    expect(curr.carryIn).toBe(0)
+    expect(curr.balance).toBe(50_000) // its own +50k net only
+    // The carried-balance figure never goes negative either.
+    expect(body.carriedBalance).toBe(50_000)
   })
 })

@@ -6,10 +6,14 @@
  * (income − expenses) is added to whatever was carried in from the previous
  * month, and the result is carried into the next month.
  *
- * Both directions carry:
+ * Both directions carry by default:
  *   - a month where expenses exceed income produces a NEGATIVE carry-over
  *     (a deficit) that reduces the next month's starting balance, and
  *   - a surplus carries forward the same way.
+ *
+ * `carryDeficitEnabled: false` turns the first rule off (a user setting): only
+ * surpluses carry, so a deficit never reduces the following month — the
+ * carried balance floors at 0 going into the next month.
  *
  * The `openingBalance` is what the first month starts with (e.g. the user's net
  * cash flow before the displayed window). It defaults to 0.
@@ -36,11 +40,12 @@ export interface MonthlyBalanceEntry extends MonthlyBalancePoint {
 /**
  * Compute the carried balance for each month, oldest → newest. A negative
  * result means the running balance is in deficit and carries into the next
- * month.
+ * month (unless `carryDeficitEnabled` is false — see above).
  */
 export function computeMonthlyBalanceChain(
   points: MonthlyBalancePoint[],
   openingBalance = 0,
+  carryDeficitEnabled = true,
 ): MonthlyBalanceEntry[] {
   let carried = openingBalance
 
@@ -48,7 +53,10 @@ export function computeMonthlyBalanceChain(
     const net = point.income - point.expenses
     const carryIn = carried
     const balance = carryIn + net
-    carried = balance
+    // With deficit carry-off, a negative running balance is not handed to the
+    // next month — the next month starts fresh (from 0) instead. The current
+    // month still REPORTS its negative balance so the UI can show it.
+    carried = carryDeficitEnabled ? balance : Math.max(0, balance)
 
     return { ...point, net, carryIn, balance }
   })

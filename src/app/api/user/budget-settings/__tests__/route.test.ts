@@ -41,20 +41,29 @@ describe("GET /api/user/budget-settings", () => {
     expect(res.status).toBe(401)
   })
 
-  it("returns the start day and carry-over setting", async () => {
+  it("returns the start day and both carry-over settings", async () => {
     mockFindUser.mockResolvedValue({
       budgetStartDay: 28,
       carryOverEnabled: false,
+      carryDeficitEnabled: false,
     })
 
     const body = await (await GET()).json()
-    expect(body).toEqual({ budgetStartDay: 28, carryOverEnabled: false })
+    expect(body).toEqual({
+      budgetStartDay: 28,
+      carryOverEnabled: false,
+      carryDeficitEnabled: false,
+    })
   })
 
   it("falls back to defaults when the user row is missing", async () => {
     mockFindUser.mockResolvedValue(null)
     const body = await (await GET()).json()
-    expect(body).toEqual({ budgetStartDay: 1, carryOverEnabled: true })
+    expect(body).toEqual({
+      budgetStartDay: 1,
+      carryOverEnabled: true,
+      carryDeficitEnabled: true,
+    })
   })
 })
 
@@ -65,6 +74,7 @@ describe("PATCH /api/user/budget-settings", () => {
     mockUpdateUser.mockResolvedValue({
       budgetStartDay: 1,
       carryOverEnabled: false,
+      carryDeficitEnabled: false,
     })
   })
 
@@ -75,30 +85,62 @@ describe("PATCH /api/user/budget-settings", () => {
     expect(mockUpdateUser).toHaveBeenCalledWith({
       where: { id: "user-1" },
       data: { carryOverEnabled: false },
-      select: { budgetStartDay: true, carryOverEnabled: true },
+      select: {
+        budgetStartDay: true,
+        carryOverEnabled: true,
+        carryDeficitEnabled: true,
+      },
     })
     expect(await res.json()).toEqual({
       budgetStartDay: 1,
       carryOverEnabled: false,
+      carryDeficitEnabled: false,
     })
   })
 
-  it("can update both settings at once", async () => {
+  it("updates the deficit-carry setting on its own", async () => {
+    const res = await patch({ carryDeficitEnabled: false })
+    expect(res.status).toBe(200)
+
+    expect(mockUpdateUser).toHaveBeenCalledWith({
+      where: { id: "user-1" },
+      data: { carryDeficitEnabled: false },
+      select: {
+        budgetStartDay: true,
+        carryOverEnabled: true,
+        carryDeficitEnabled: true,
+      },
+    })
+  })
+
+  it("can update all settings at once", async () => {
     mockUpdateUser.mockResolvedValue({
       budgetStartDay: 15,
       carryOverEnabled: true,
+      carryDeficitEnabled: false,
     })
 
-    const res = await patch({ budgetStartDay: 15, carryOverEnabled: true })
+    const res = await patch({
+      budgetStartDay: 15,
+      carryOverEnabled: true,
+      carryDeficitEnabled: false,
+    })
     expect(res.status).toBe(200)
     expect(mockUpdateUser.mock.calls[0][0].data).toEqual({
       budgetStartDay: 15,
       carryOverEnabled: true,
+      carryDeficitEnabled: false,
     })
   })
 
   it("rejects a non-boolean carry-over value", async () => {
     const res = await patch({ carryOverEnabled: "yes" })
+    expect(res.status).toBe(400)
+    expect(mockUpdateUser).not.toHaveBeenCalled()
+  })
+
+  it("rejects a non-boolean deficit-carry value", async () => {
+    const res = await patch({ carryDeficitEnabled: "no" })
     expect(res.status).toBe(400)
     expect(mockUpdateUser).not.toHaveBeenCalled()
   })
@@ -117,7 +159,7 @@ describe("PATCH /api/user/budget-settings", () => {
 
   it("returns 401 when unauthenticated", async () => {
     mockAuth.mockResolvedValue(null)
-    const res = await patch({ carryOverEnabled: false })
+    const res = await patch({ carryDeficitEnabled: false })
     expect(res.status).toBe(401)
     expect(mockUpdateUser).not.toHaveBeenCalled()
   })

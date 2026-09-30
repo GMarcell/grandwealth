@@ -58,6 +58,11 @@ model User {
   // over to the next month. Purely a budgeting concept — it never creates
   // income or transactions, so it does not affect net wealth.
   carryOverEnabled Boolean     @default(true)
+  // Global switch: when true, a month's OVERALL deficit (expenses > income)
+  // carries as a negative balance into the next month's carried balance.
+  // When false, only surpluses carry — each month starts at 0 (or its
+  // accumulated surplus), so a deficit never reduces the following month.
+  carryDeficitEnabled Boolean    @default(true)
   transactions         Transaction[]
   goldDeposits         GoldDeposit[]
   stocks               Stock[]

@@ -73,7 +73,8 @@ async function loginContext(browser: Browser, email: string): Promise<{ context:
   await page.goto("/login", { waitUntil: "networkidle" })
   await page.waitForSelector('input[name="email"]', { state: "visible", timeout: 10_000 })
   await page.getByLabel("Email").fill(email)
-  await page.getByLabel("Password").fill(PASSWORD)
+  // exact: the login form's "Show password" toggle would substring-match too.
+  await page.getByLabel("Password", { exact: true }).fill(PASSWORD)
   await page.getByRole("button", { name: "Sign In" }).click()
   await page.waitForURL("**/dashboard", { timeout: 15_000 })
   return { context, page }
@@ -98,13 +99,13 @@ test.describe("Registration → trial request → admin approval", () => {
         await page.goto("/register", { waitUntil: "networkidle" })
         await page.getByLabel("Name").fill(users.trial.name)
         await page.getByLabel("Email").fill(users.trial.email)
-        await page.getByLabel("Password").fill(PASSWORD)
+        await page.getByLabel("Password", { exact: true }).fill(PASSWORD)
         await page.getByRole("button", { name: "Create Account" }).click()
         await page.waitForURL("**/login", { timeout: 10_000 })
 
         // Sign in with the fresh account.
         await page.getByLabel("Email").fill(users.trial.email)
-        await page.getByLabel("Password").fill(PASSWORD)
+        await page.getByLabel("Password", { exact: true }).fill(PASSWORD)
         await page.getByRole("button", { name: "Sign In" }).click()
         await page.waitForURL("**/dashboard", { timeout: 15_000 })
 

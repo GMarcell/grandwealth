@@ -208,3 +208,96 @@ test.describe("Budget Cycle — API", () => {
     expect(res2.status()).toBe(400)
   })
 })
+
+test.describe("Budget Cycle — Deficit Carry Setting", () => {
+  // Each test sets its own baseline through the API first, so they stay
+  // independent of the order in which they (or other suites) run.
+
+  test("PATCH /api/user/budget-settings persists carryDeficitEnabled", async ({
+    request,
+  }) => {
+    // Turn the deficit carry off…
+    const off = await request.patch("/api/user/budget-settings", {
+      data: { carryDeficitEnabled: false },
+    })
+    expect(off.ok()).toBeTruthy()
+    expect((await off.json()).carryDeficitEnabled).toBe(false)
+
+    // …verify it persisted…
+    const read = await request.get("/api/user/budget-settings")
+    expect(read.ok()).toBeTruthy()
+    expect((await read.json()).carryDeficitEnabled).toBe(false)
+
+    // …and restore the default (on) for the other tests.
+    const on = await request.patch("/api/user/budget-settings", {
+      data: { carryDeficitEnabled: true },
+    })
+    expect((await on.json()).carryDeficitEnabled).toBe(true)
+  })
+
+  test("PATCH rejects a non-boolean carryDeficitEnabled with 400", async ({
+    request,
+  }) => {
+    const res = await request.patch("/api/user/budget-settings", {
+      data: { carryDeficitEnabled: "yes" },
+    })
+    expect(res.status()).toBe(400)
+  })
+
+  test("shows the deficit toggle checked by default", async ({ page, request }) => {
+    await request.patch("/api/user/budget-settings", {
+      data: { carryDeficitEnabled: true },
+    })
+
+    await page.goto("/settings")
+
+    // The switch sits in the Budget Cycle card, below the carry-over toggle.
+    await expect(page.getByText("Carry deficit to next month")).toBeVisible()
+    await expect(page.getByLabel("Carry deficit to next month")).toBeChecked()
+  })
+
+  test("toggling off and saving persists the setting", async ({ page, request }) => {
+    await request.patch("/api/user/budget-settings", {
+      data: { carryDeficitEnabled: true },
+    })
+
+    await page.goto("/settings")
+    const deficitSwitch = page.getByLabel("Carry deficit to next month")
+    await expect(deficitSwitch).toBeChecked()
+
+    await deficitSwitch.click()
+    await expect(deficitSwitch).not.toBeChecked()
+
+    // Changing a setting reveals the save button; saving shows the toast.
+    const saveButton = page.getByRole("button", { name: "Save Budget Settings" })
+    await expect(saveButton).toBeVisible()
+    await saveButton.click()
+    await expect(page.getByText("Budget settings updated")).toBeVisible({
+      timeout: 10_000,
+    })
+
+    // The API confirms the new value stuck.
+    const read = await request.get("/api/user/budget-settings")
+    expect((await read.json()).carryDeficitEnabled).toBe(false)
+
+    // Restore the default (on) for the other tests.
+    await request.patch("/api/user/budget-settings", {
+      data: { carryDeficitEnabled: true },
+    })
+  })
+
+  test("reflects a saved off state after a page reload", async ({ page, request }) => {
+    await request.patch("/api/user/budget-settings", {
+      data: { carryDeficitEnabled: false },
+    })
+
+    // A fresh load must render the persisted value, not the default.
+    await page.goto("/settings")
+    await expect(page.getByLabel("Carry deficit to next month")).not.toBeChecked()
+
+    // Restore the default (on).
+    await request.patch("/api/user/budget-settings", {
+      data: { carryDeficitEnabled: true },
+    })
+  })
+})

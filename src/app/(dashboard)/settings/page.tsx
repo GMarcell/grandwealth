@@ -145,6 +145,7 @@ export default function SettingsPage() {
   const { data: budgetSettings } = useQuery<{
     budgetStartDay: number;
     carryOverEnabled: boolean;
+    carryDeficitEnabled: boolean;
   }>({
     queryKey: ["budget-settings"],
     queryFn: async () => {
@@ -156,6 +157,7 @@ export default function SettingsPage() {
 
   const [budgetStartDay, setBudgetStartDay] = useState(1);
   const [carryOverEnabled, setCarryOverEnabled] = useState(true);
+  const [carryDeficitEnabled, setCarryDeficitEnabled] = useState(true);
   const [settingsChanged, setSettingsChanged] = useState(false);
 
   const [currentPassword, setCurrentPassword] = useState("");
@@ -178,12 +180,24 @@ export default function SettingsPage() {
     setCarryOverEnabled(budgetSettings.carryOverEnabled);
   }
 
+  if (
+    budgetSettings &&
+    !settingsChanged &&
+    carryDeficitEnabled !== budgetSettings.carryDeficitEnabled
+  ) {
+    setCarryDeficitEnabled(budgetSettings.carryDeficitEnabled);
+  }
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
   const updateBudgetSettingsMutation = useMutation({
-    mutationFn: (data: { budgetStartDay: number; carryOverEnabled: boolean }) =>
+    mutationFn: (data: {
+      budgetStartDay: number;
+      carryOverEnabled: boolean;
+      carryDeficitEnabled: boolean;
+    }) =>
       fetch("/api/user/budget-settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -607,6 +621,29 @@ export default function SettingsPage() {
             />
           </div>
 
+          {/* Global deficit-carry switch (overall monthly balance) */}
+          <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="carryDeficit" className="text-sm font-medium">
+                Carry deficit to next month
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                When a month&apos;s expenses exceed its income, carry the
+                shortfall as a negative balance into the next month&apos;s
+                carried balance. Turn off to start each month fresh — only
+                surpluses carry forward.
+              </p>
+            </div>
+            <Switch
+              id="carryDeficit"
+              checked={carryDeficitEnabled}
+              onCheckedChange={(value) => {
+                setCarryDeficitEnabled(value);
+                setSettingsChanged(true);
+              }}
+            />
+          </div>
+
           {settingsChanged && (
             <Button
               size="sm"
@@ -614,6 +651,7 @@ export default function SettingsPage() {
                 updateBudgetSettingsMutation.mutate({
                   budgetStartDay,
                   carryOverEnabled,
+                  carryDeficitEnabled,
                 })
               }
               disabled={updateBudgetSettingsMutation.isPending}
