@@ -24,6 +24,8 @@
   --input: oklch(0.89 0.006 45);
   --ring: oklch(0.708 0 0);
   --radius: 0.625rem;
+
+  /* Sidebar (layout + mobile) */
   --sidebar: oklch(0.992 0.003 45);
   --sidebar-foreground: oklch(0.2 0.005 45);
   --sidebar-primary: oklch(0.472 0.157 218.474);
@@ -32,6 +34,25 @@
   --sidebar-accent-foreground: oklch(0.25 0.005 45);
   --sidebar-border: oklch(0.89 0.006 45);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* Chart palette — used by recharts and the 50/30/20 widget */
+  --color-income: oklch(0.472 0.157 218.474); /* primary */
+  --color-expense: oklch(0.632 0.215 25.334); /* red */
+  --color-gold: oklch(0.72 0.14 70.2);
+  --color-stocks: oklch(0.52 0.12 260);
+  --color-savings: oklch(0.49 0.12 145);
+  --color-cashflow: oklch(0.472 0.157 218.474);
+  --color-blue: oklch(0.62 0.17 230);
+  --color-amber: oklch(0.72 0.14 80);
+
+  /* Badge / status colours */
+  --color-profit: oklch(0.77 0.14 143);
+  --color-loss: oklch(0.68 0.19 25);
+
+  /* Charts axis / grid */
+  --color-chart-foreground: oklch(0.35 0.01 45);
+  --color-chart-grid: oklch(0.94 0.003 45);
+  --color-chart-legend: oklch(0.55 0.01 45);
 }
 
 .dark {
@@ -62,6 +83,22 @@
   --sidebar-accent-foreground: oklch(0.96 0.004 45);
   --sidebar-border: oklch(1 0.003 45 / 10%);
   --sidebar-ring: oklch(0.55 0.008 45);
+
+  --color-income: oklch(0.682 0.157 218.474);
+  --color-expense: oklch(0.72 0.16 25);
+  --color-gold: oklch(0.55 0.10 70);
+  --color-stocks: oklch(0.66 0.10 260);
+  --color-savings: oklch(0.66 0.10 145);
+  --color-cashflow: oklch(0.682 0.157 218.474);
+  --color-blue: oklch(0.66 0.10 230);
+  --color-amber: oklch(0.72 0.10 80);
+
+  --color-profit: oklch(0.77 0.14 143);
+  --color-loss: oklch(0.70 0.16 25);
+
+  --color-chart-foreground: oklch(0.85 0.006 45);
+  --color-chart-grid: oklch(1 0.003 45 / 12%);
+  --color-chart-legend: oklch(0.85 0.006 45);
 }
 
 @theme inline {
@@ -92,6 +129,23 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-income: var(--color-income);
+  --color-expense: var(--color-expense);
+  --color-gold: var(--color-gold);
+  --color-stocks: var(--color-stocks);
+  --color-savings: var(--color-savings);
+  --color-cashflow: var(--color-cashflow);
+  --color-blue: var(--color-blue);
+  --color-amber: var(--color-amber);
+
+  --color-profit: var(--color-profit);
+  --color-loss: var(--color-loss);
+
+  --color-chart-foreground: var(--color-chart-foreground);
+  --color-chart-grid: var(--color-chart-grid);
+  --color-chart-legend: var(--color-chart-legend);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

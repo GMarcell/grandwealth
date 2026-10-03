@@ -39,7 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatIDR, formatCompactIDR } from "@/lib/utils";
+import { formatCompactIDR, formatIDR } from "@/lib/utils";
 import { CHART_COLORS } from "@/lib/chart-colors";
 import {
   getCurrentBudgetMonthKey,

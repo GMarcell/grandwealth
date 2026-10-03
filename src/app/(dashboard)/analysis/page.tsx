@@ -23,7 +23,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
-import { formatIDR, formatCompactIDR } from "@/lib/utils"
+import { formatCompactIDR } from "@/lib/utils"
 import {
   Select,
   SelectContent,

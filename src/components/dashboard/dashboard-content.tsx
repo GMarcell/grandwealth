@@ -215,15 +215,33 @@ export function DashboardContent() {
     ],
   );
 
+  // Show a seeded skeleton while the dashboard first loads. The static header
+  // is already server-rendered, so we only mask the interactive content.
   if (isLoading) {
     return (
       <>
+        {/* Hero card skeleton — matches the server-rendered header */}
+        <div className="flex items-center justify-between gap-4 rounded-xl border bg-muted/30 p-5">
+          <div className="flex-1 space-y-3">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-12 w-44" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+          <div className="shrink-0 h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center">
+            <Skeleton className="h-8 w-8" />
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
             <StatCardSkeleton key={i} />
           ))}
         </div>
-        <Skeleton className="h-80 w-full" />
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Skeleton className="h-80 w-full" />
+          <Skeleton className="h-80 w-full" />
+        </div>
       </>
     );
   }

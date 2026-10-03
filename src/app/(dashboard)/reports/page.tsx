@@ -19,7 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
-import { formatIDR, formatCompactIDR } from "@/lib/utils"
+import { formatCompactIDR, formatIDR } from "@/lib/utils"
 import {
   Select,
   SelectContent,
