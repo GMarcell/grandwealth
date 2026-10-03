@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth"
 import { requireProAccess } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { updateBudgetSchema, safeParseBody } from "@/lib/validation"
+import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 
 export async function PATCH(
   req: Request,
@@ -19,6 +20,9 @@ export async function PATCH(
   const { id } = await params
 
   try {
+    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    if (replayed) return replayed
+
     const existing = await prisma.budget.findUnique({ where: { id } })
     if (!existing || existing.userId !== session.user.id) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -37,6 +41,8 @@ export async function PATCH(
       data,
     })
 
+    await recordIdempotencyKey(req, session.user.id)
+
     return NextResponse.json({
       id: updated.id,
       categoryName: updated.categoryName,
@@ -54,7 +60,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth()
@@ -68,12 +74,16 @@ export async function DELETE(
   const { id } = await params
 
   try {
+    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    if (replayed) return replayed
+
     const existing = await prisma.budget.findUnique({ where: { id } })
     if (!existing || existing.userId !== session.user.id) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
     await prisma.budget.delete({ where: { id } })
+    await recordIdempotencyKey(req, session.user.id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Delete budget error:", error)

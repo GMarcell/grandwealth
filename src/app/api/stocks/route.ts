@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { createStockSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 import { fetchStockPrice } from "@/lib/prices"
+import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 import { parsePagination, paginatedResponse } from "@/lib/utils"
 import type { Prisma } from "@prisma/client"
 
@@ -106,6 +107,10 @@ export async function POST(req: Request) {
   }
 
   try {
+    // Replayed offline write: the original already applied, so skip the create.
+    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    if (replayed) return replayed
+
     const parsed = await safeParseBody(req, createStockSchema)
     if ("error" in parsed) return parsed.error
 
@@ -147,6 +152,8 @@ export async function POST(req: Request) {
       // Non-blocking — auto-fetch failed, stock still created without live price
       console.warn(`Could not auto-fetch price for ${symbol}`)
     }
+
+    await recordIdempotencyKey(req, session.user.id)
 
     return NextResponse.json(
       {

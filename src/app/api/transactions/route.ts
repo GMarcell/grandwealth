@@ -8,6 +8,7 @@ import { getBudgetMonthRangeInclusive } from "@/lib/budget-months"
 import { getBudgetMonthKey } from "@/lib/budget-months"
 import { computeMonthlyBalanceChain } from "@/lib/monthly-balance"
 import { RULE_TYPES } from "@/lib/rule-type"
+import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 import type { Prisma } from "@prisma/client"
 
 export async function GET(req: Request) {
@@ -216,6 +217,10 @@ export async function POST(req: Request) {
   }
 
   try {
+    // Replayed offline write: the original already applied, so skip the create.
+    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    if (replayed) return replayed
+
     const parsed = await safeParseBody(req, createTransactionSchema)
     if ("error" in parsed) return parsed.error
 
@@ -231,6 +236,8 @@ export async function POST(req: Request) {
         userId: session.user.id,
       },
     })
+
+    await recordIdempotencyKey(req, session.user.id)
 
     return NextResponse.json(
       {

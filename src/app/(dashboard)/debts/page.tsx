@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/dialog"
 import { formatIDR, formatCompactIDR, formatDate } from "@/lib/utils"
 import { toast } from "sonner"
+import { apiMutate, isQueuedResult } from "@/lib/api-mutate"
 
 interface Loan {
   id: string
@@ -85,43 +86,42 @@ export default function DebtsPage() {
   })
 
   const saveMutation = useMutation({
-    mutationFn: async ({ id, ...data }: any) => {
-      const res = await fetch(id ? `/api/loans/${id}` : "/api/loans", {
+    mutationFn: async ({ id, ...data }: any) =>
+      apiMutate(id ? `/api/loans/${id}` : "/api/loans", {
         method: id ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Failed to save loan" }))
-        throw new Error(err.error || "Failed to save loan")
-      }
-      return res.json()
-    },
-    onSuccess: () => {
+        body: data,
+      }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["loans"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
       queryClient.invalidateQueries({ queryKey: ["net-worth"] })
-      toast.success(editing ? "Loan updated" : "Loan added")
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Saved offline — will sync when you reconnect"
+          : editing
+            ? "Loan updated"
+            : "Loan added"
+      )
       resetForm()
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to save loan"),
   })
 
   const payMutation = useMutation({
-    mutationFn: async ({ id, remainingBalance }: { id: string; remainingBalance: number }) => {
-      const res = await fetch(`/api/loans/${id}`, {
+    mutationFn: async ({ id, remainingBalance }: { id: string; remainingBalance: number }) =>
+      apiMutate(`/api/loans/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ remainingBalance }),
-      })
-      if (!res.ok) throw new Error("Failed to record payment")
-      return res.json()
-    },
-    onSuccess: () => {
+        body: { remainingBalance },
+      }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["loans"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
       queryClient.invalidateQueries({ queryKey: ["net-worth"] })
-      toast.success("Payment recorded")
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Saved offline — will sync when you reconnect"
+          : "Payment recorded"
+      )
       setPaying(null)
       setPaymentAmount("")
     },
@@ -129,15 +129,17 @@ export default function DebtsPage() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/loans/${id}`, { method: "DELETE" })
-      if (!res.ok) throw new Error("Failed to delete loan")
-    },
-    onSuccess: () => {
+    mutationFn: async (id: string) =>
+      apiMutate(`/api/loans/${id}`, { method: "DELETE" }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["loans"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
       queryClient.invalidateQueries({ queryKey: ["net-worth"] })
-      toast.success("Loan removed")
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Deleted offline — will sync when you reconnect"
+          : "Loan removed"
+      )
     },
     onError: () => toast.error("Failed to delete loan"),
   })

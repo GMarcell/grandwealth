@@ -30,6 +30,7 @@ import {
 import { formatIDR, formatDate } from "@/lib/utils"
 import { UpcomingDividends, type ProjectedDividend } from "@/components/stocks/upcoming-dividends"
 import { toast } from "sonner"
+import { apiMutate, isQueuedResult } from "@/lib/api-mutate"
 
 interface Dividend {
   id: string
@@ -135,34 +136,35 @@ export function DividendsPanel() {
         date: new Date(form.date).toISOString(),
         notes: form.notes || undefined,
       }
-      const res = await fetch(
+      return apiMutate(
         editing ? `/api/dividends/${editing.id}` : "/api/dividends",
-        {
-          method: editing ? "PATCH" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
+        { method: editing ? "PATCH" : "POST", body: payload },
       )
-      const json = await res.json().catch(() => ({ error: "Failed to save dividend" }))
-      if (!res.ok) throw new Error(json.error || "Failed to save dividend")
-      return json
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["dividends"] })
-      toast.success(editing ? "Dividend updated" : "Dividend recorded")
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Saved offline — will sync when you reconnect"
+          : editing
+            ? "Dividend updated"
+            : "Dividend recorded",
+      )
       resetForm()
     },
     onError: (err) => setSubmitError(err instanceof Error ? err.message : "Failed to save dividend"),
   })
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/dividends/${id}`, { method: "DELETE" })
-      if (!res.ok) throw new Error("Failed to delete dividend")
-    },
-    onSuccess: () => {
+    mutationFn: async (id: string) =>
+      apiMutate(`/api/dividends/${id}`, { method: "DELETE" }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["dividends"] })
-      toast.success("Dividend deleted")
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Deleted offline — will sync when you reconnect"
+          : "Dividend deleted",
+      )
     },
     onError: () => toast.error("Failed to delete dividend"),
   })

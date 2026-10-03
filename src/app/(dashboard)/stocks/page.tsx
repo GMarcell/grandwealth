@@ -50,6 +50,7 @@ import { Pagination } from "@/components/ui/pagination"
 import { FormError } from "@/components/ui/form-error"
 import { DividendsPanel } from "@/components/stocks/dividends-panel"
 import { toast } from "sonner"
+import { apiMutate, isQueuedResult } from "@/lib/api-mutate"
 
 interface Stock {
   id: string
@@ -171,59 +172,48 @@ export default function StocksPage() {
   const pagination = stocksData?.pagination
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const res = await fetch("/api/stocks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Unknown error" }))
-        throw new Error(err.error || "Failed to add stock")
-      }
-      return res.json()
-    },
-    onSuccess: () => {
+    mutationFn: async (data: any) =>
+      apiMutate("/api/stocks", { method: "POST", body: data }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["stocks"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
-      toast.success("Stock added")
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Saved offline — will sync when you reconnect"
+          : "Stock added"
+      )
       resetForm()
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to add stock"),
   })
 
   const updateMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const res = await fetch(`/api/stocks/${data.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Unknown error" }))
-        throw new Error(err.error || "Failed to update stock")
-      }
-      return res.json()
-    },
-    onSuccess: () => {
+    mutationFn: async (data: any) =>
+      apiMutate(`/api/stocks/${data.id}`, { method: "PATCH", body: data }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["stocks"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
-      toast.success("Stock updated")
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Saved offline — will sync when you reconnect"
+          : "Stock updated"
+      )
       resetForm()
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update stock"),
   })
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/stocks/${id}`, { method: "DELETE" })
-      if (!res.ok) throw new Error("Failed to delete stock")
-      return res.json()
-    },
-    onSuccess: () => {
+    mutationFn: async (id: string) =>
+      apiMutate(`/api/stocks/${id}`, { method: "DELETE" }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["stocks"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
-      toast.success("Stock deleted")
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Deleted offline — will sync when you reconnect"
+          : "Stock deleted"
+      )
     },
     onError: () => toast.error("Failed to delete stock"),
   })

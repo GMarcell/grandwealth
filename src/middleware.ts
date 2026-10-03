@@ -45,9 +45,10 @@ export const config = {
    * - _next/image (image optimization files)
    * - favicon.svg, robots.txt, sitemap.xml (public files)
    * - login, register, forgot-password, reset-password (public pages)
+   * - offline (public offline fallback served by the service worker)
    * - / (root — handled by page redirect)
    */
   matcher: [
-    "/((?!api/auth|api/cron|_next/static|_next/image|favicon\\.svg|robots\\.txt|sitemap\\.xml|login|register|forgot-password|reset-password|$).*)",
+    "/((?!api/auth|api/cron|_next/static|_next/image|favicon\\.svg|robots\\.txt|sitemap\\.xml|login|register|forgot-password|reset-password|offline|$).*)",
   ],
 }

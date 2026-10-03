@@ -51,6 +51,7 @@ import {
   computeCarryOverChain,
 } from "@/lib/budget-carry-over";
 import { toast } from "sonner";
+import { apiMutate, isQueuedResult } from "@/lib/api-mutate";
 import dynamic from "next/dynamic";
 
 // Dynamic import the budget allocation chart (ships recharts only when rendered)
@@ -186,21 +187,15 @@ export default function BudgetsPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const res = await fetch("/api/budgets", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Failed to save budget" }))
-        throw new Error(err.error || "Failed to save budget")
-      }
-      return res.json()
-    },
-    onSuccess: () => {
+    mutationFn: async (data: any) =>
+      apiMutate("/api/budgets", { method: "POST", body: data }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
-      toast.success("Budget saved");
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Saved offline — will sync when you reconnect"
+          : "Budget saved"
+      );
       resetForm();
     },
     onError: (err) => toast.error(err.message || "Failed to save budget"),
@@ -234,16 +229,15 @@ export default function BudgetsPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/budgets/${id}`, { method: "DELETE" })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Failed to delete budget" }))
-        throw new Error(err.error || "Failed to delete budget")
-      }
-    },
-    onSuccess: () => {
+    mutationFn: async (id: string) =>
+      apiMutate(`/api/budgets/${id}`, { method: "DELETE" }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
-      toast.success("Budget deleted");
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Deleted offline — will sync when you reconnect"
+          : "Budget deleted"
+      );
     },
     onError: (err) => toast.error(err.message || "Failed to delete budget"),
   });

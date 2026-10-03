@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { createGoldSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 import { computeGoldPortfolio, validateGoldChange } from "@/lib/gold"
+import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 import { parsePagination, paginatedResponse } from "@/lib/utils"
 import type { Prisma } from "@prisma/client"
 
@@ -118,6 +119,10 @@ export async function POST(req: Request) {
   }
 
   try {
+    // Replayed offline write: the original already applied, so skip the create.
+    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    if (replayed) return replayed
+
     const parsed = await safeParseBody(req, createGoldSchema)
     if ("error" in parsed) return parsed.error
 
@@ -154,6 +159,8 @@ export async function POST(req: Request) {
         userId: session.user.id,
       },
     })
+
+    await recordIdempotencyKey(req, session.user.id)
 
     return NextResponse.json(
       {

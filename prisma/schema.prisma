@@ -77,8 +77,28 @@ model User {
   accounts              Account[]
   sessions              Session[]
   trialRequests         TrialRequest[]
+  widgetTokens          WidgetToken[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+}
+
+/// A read-only credential a phone home-screen widget uses to fetch summary
+/// figures (net cash flow, remaining budget, net worth). Tokens are stored as
+/// a SHA-256 hash, never in plaintext, so a database leak cannot expose them.
+/// Widgets cannot write — quick-add opens the app instead.
+model WidgetToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// SHA-256 hash of the token. The plaintext is shown to the user once.
+  tokenHash  String    @unique
+  /// First characters of the token, so a user can tell tokens apart in Settings.
+  prefix     String
+  label      String    @default("Widget")
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
 }
 
 /// A user's request to be put on the Pro trial.
@@ -103,6 +123,24 @@ model TrialRequest {
 
   @@index([status, createdAt])
   @@index([userId])
+}
+
+/// Records client-supplied idempotency keys for writes that were queued while
+/// the device was offline. When the client replays a queued request, the key
+/// already exists, so the write is skipped instead of applied twice (which
+/// happens when the original request reached the server but its response was
+/// lost). Keys are scoped per user so one account can never suppress another's
+/// writes.
+model IdempotencyKey {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String
+  method    String
+  path      String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, key])
+  @@index([createdAt])
 }
 
 model Account {

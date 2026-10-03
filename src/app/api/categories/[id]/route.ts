@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { updateCategorySchema, safeParseBody } from "@/lib/validation"
+import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 
 export async function PATCH(
   req: Request,
@@ -15,6 +16,9 @@ export async function PATCH(
   const { id } = await params
 
   try {
+    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    if (replayed) return replayed
+
     const existing = await prisma.category.findUnique({ where: { id } })
     if (!existing || existing.userId !== session.user.id) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -36,6 +40,8 @@ export async function PATCH(
       data,
     })
 
+    await recordIdempotencyKey(req, session.user.id)
+
     return NextResponse.json({
       id: updated.id,
       name: updated.name,
@@ -53,7 +59,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth()
@@ -64,12 +70,16 @@ export async function DELETE(
   const { id } = await params
 
   try {
+    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    if (replayed) return replayed
+
     const existing = await prisma.category.findUnique({ where: { id } })
     if (!existing || existing.userId !== session.user.id) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
     await prisma.category.delete({ where: { id } })
+    await recordIdempotencyKey(req, session.user.id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Delete category error:", error)

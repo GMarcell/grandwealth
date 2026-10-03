@@ -67,6 +67,7 @@ import {
   getBudgetMonthLabel,
 } from "@/lib/budget-months";
 import { getBudgetAlert } from "@/lib/helper/transaction";
+import { apiMutate, isQueuedResult } from "@/lib/api-mutate";
 import {
   PREDEFINED_EXPENSE,
   PREDEFINED_INCOME,
@@ -119,6 +120,33 @@ export default function TransactionsPage() {
   const handleMonthChange = useCallback((value: string) => {
     setPickedMonth(value);
     setPage(1);
+  }, []);
+
+  // Quick-add deep link: a home-screen widget links to
+  // /transactions?add=1 so the add dialog opens immediately. `type` optionally
+  // preselects INCOME or EXPENSE. The param is cleared so a reload doesn't
+  // reopen the dialog.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("add") !== "1") return;
+
+    const typeParam = params.get("type");
+    if (typeParam === "INCOME" || typeParam === "EXPENSE") {
+      setValue("type", typeParam);
+    }
+    setIsDialogOpen(true);
+
+    params.delete("add");
+    params.delete("type");
+    const query = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}`,
+    );
+    // setValue/setIsDialogOpen are stable; run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const { data: budgetSettings } = useQuery<{ budgetStartDay: number }>({
@@ -263,23 +291,21 @@ export default function TransactionsPage() {
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await fetch("/api/transactions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) {
-        const err = await res
-          .json()
-          .catch(() => ({ error: "Failed to add transaction" }));
-        throw new Error(err.error || "Failed to add transaction");
-      }
-      return res.json();
+      return apiMutate("/api/transactions", { method: "POST", body: data });
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["rollover-history"] });
+
+      // Queued while offline: the write will sync on reconnect, so skip the
+      // server-dependent budget alert (it would be computed from stale data).
+      if (isQueuedResult(result)) {
+        toast.info("Saved offline — will sync when you reconnect");
+        resetForm();
+        return;
+      }
+
       toast.success("Transaction added");
 
       // Check budget alert for expense transactions
@@ -304,23 +330,22 @@ export default function TransactionsPage() {
 
   const updateMutation = useMutation({
     mutationFn: async (data: any) => {
-      const res = await fetch(`/api/transactions/${data.id}`, {
+      return apiMutate(`/api/transactions/${data.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: data,
       });
-      if (!res.ok) {
-        const err = await res
-          .json()
-          .catch(() => ({ error: "Failed to update transaction" }));
-        throw new Error(err.error || "Failed to update transaction");
-      }
-      return res.json();
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["rollover-history"] });
+
+      if (isQueuedResult(result)) {
+        toast.info("Saved offline — will sync when you reconnect");
+        resetForm();
+        return;
+      }
+
       toast.success("Transaction updated");
 
       // Check budget alert for expense transactions
@@ -353,17 +378,17 @@ export default function TransactionsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/transactions/${id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const err = await res
-          .json()
-          .catch(() => ({ error: "Failed to delete transaction" }));
-        throw new Error(err.error || "Failed to delete transaction");
-      }
+      return apiMutate(`/api/transactions/${id}`, { method: "DELETE" });
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+
+      if (isQueuedResult(result)) {
+        toast.info("Deleted offline — will sync when you reconnect");
+        return;
+      }
+
       toast.success("Transaction deleted");
     },
     onError: (err) =>
@@ -434,12 +459,26 @@ export default function TransactionsPage() {
   }
 
   const groupedByType = useMemo(() => {
+    // Bucket transactions by calendar day (using the same label shown on each
+    // row) so the list renders under a date header. The incoming list is
+    // already sorted newest-first, so the map preserves that order.
+    const groupByDate = (txs: TransactionInterface[]) => {
+      const dateMap = new Map<string, TransactionInterface[]>();
+      for (const tx of txs) {
+        const label = formatDate(tx.date);
+        const bucket = dateMap.get(label);
+        if (bucket) bucket.push(tx);
+        else dateMap.set(label, [tx]);
+      }
+      return dateMap;
+    };
+
     const makeGroup = (txs: TransactionInterface[]) => ({
       NEED: { dateMap: new Map<string, TransactionInterface[]>(), total: 0 },
       WANT: { dateMap: new Map<string, TransactionInterface[]>(), total: 0 },
       SAVINGS: { dateMap: new Map<string, TransactionInterface[]>(), total: 0 },
       OTHER: {
-        dateMap: new Map([["", txs]]),
+        dateMap: groupByDate(txs),
         // Net cash flow: income adds, expenses subtract.
         total: txs.reduce(
           (sum, tx) => sum + (tx.type === "INCOME" ? tx.amount : -tx.amount),

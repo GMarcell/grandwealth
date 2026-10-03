@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { updateTransactionSchema, safeParseBody } from "@/lib/validation"
+import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 
 export async function PATCH(
   req: Request,
@@ -15,6 +16,10 @@ export async function PATCH(
   const { id } = await params
 
   try {
+    // Replayed offline write: the original already applied, so skip the update.
+    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    if (replayed) return replayed
+
     const existing = await prisma.transaction.findUnique({ where: { id } })
     if (!existing || existing.userId !== session.user.id) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -36,6 +41,8 @@ export async function PATCH(
       data,
     })
 
+    await recordIdempotencyKey(req, session.user.id)
+
     return NextResponse.json({
       id: updated.id,
       type: updated.type,
@@ -54,7 +61,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth()
@@ -65,12 +72,17 @@ export async function DELETE(
   const { id } = await params
 
   try {
+    // Replayed offline delete: the original already applied.
+    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    if (replayed) return replayed
+
     const existing = await prisma.transaction.findUnique({ where: { id } })
     if (!existing || existing.userId !== session.user.id) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
     await prisma.transaction.delete({ where: { id } })
+    await recordIdempotencyKey(req, session.user.id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Delete transaction error:", error)

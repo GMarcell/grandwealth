@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth"
 import { requireProAccess } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { updateBankSavingSchema, safeParseBody } from "@/lib/validation"
+import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 
 export async function PATCH(
   req: Request,
@@ -19,6 +20,9 @@ export async function PATCH(
   const { id } = await params
 
   try {
+    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    if (replayed) return replayed
+
     const existing = await prisma.bankSaving.findUnique({ where: { id } })
     if (!existing || existing.userId !== session.user.id) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -36,6 +40,7 @@ export async function PATCH(
     if (notes !== undefined) data.notes = notes
 
     const updated = await prisma.bankSaving.update({ where: { id }, data })
+    await recordIdempotencyKey(req, session.user.id)
     return NextResponse.json({
       id: updated.id,
       type: updated.type,
@@ -54,7 +59,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth()
@@ -68,12 +73,16 @@ export async function DELETE(
   const { id } = await params
 
   try {
+    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    if (replayed) return replayed
+
     const existing = await prisma.bankSaving.findUnique({ where: { id } })
     if (!existing || existing.userId !== session.user.id) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
     await prisma.bankSaving.delete({ where: { id } })
+    await recordIdempotencyKey(req, session.user.id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Delete saving error:", error)

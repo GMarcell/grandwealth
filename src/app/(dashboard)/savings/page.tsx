@@ -49,6 +49,7 @@ import { formatIDR, formatDate, cn, type PaginatedResponse } from "@/lib/utils"
 import { Pagination } from "@/components/ui/pagination"
 import { FormError } from "@/components/ui/form-error"
 import { toast } from "sonner"
+import { apiMutate, isQueuedResult } from "@/lib/api-mutate"
 
 interface BankSaving {
   id: string
@@ -152,59 +153,48 @@ export default function SavingsPage() {
   } | undefined
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const res = await fetch("/api/savings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Unknown error" }))
-        throw new Error(err.error || "Failed to add record")
-      }
-      return res.json()
-    },
-    onSuccess: () => {
+    mutationFn: async (data: any) =>
+      apiMutate("/api/savings", { method: "POST", body: data }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["savings"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
-      toast.success("Savings record added")
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Saved offline — will sync when you reconnect"
+          : "Savings record added"
+      )
       resetForm()
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to add record"),
   })
 
   const updateMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const res = await fetch(`/api/savings/${data.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Unknown error" }))
-        throw new Error(err.error || "Failed to update record")
-      }
-      return res.json()
-    },
-    onSuccess: () => {
+    mutationFn: async (data: any) =>
+      apiMutate(`/api/savings/${data.id}`, { method: "PATCH", body: data }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["savings"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
-      toast.success("Savings record updated")
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Saved offline — will sync when you reconnect"
+          : "Savings record updated"
+      )
       resetForm()
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update record"),
   })
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/savings/${id}`, { method: "DELETE" })
-      if (!res.ok) throw new Error("Failed to delete record")
-      return res.json()
-    },
-    onSuccess: () => {
+    mutationFn: async (id: string) =>
+      apiMutate(`/api/savings/${id}`, { method: "DELETE" }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["savings"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
-      toast.success("Savings record deleted")
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Deleted offline — will sync when you reconnect"
+          : "Savings record deleted"
+      )
     },
     onError: () => toast.error("Failed to delete record"),
   })

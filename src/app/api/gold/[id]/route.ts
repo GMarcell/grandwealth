@@ -4,6 +4,7 @@ import { requireProAccess } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { updateGoldSchema, safeParseBody } from "@/lib/validation"
 import { validateGoldChange } from "@/lib/gold"
+import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 
 export async function PATCH(
   req: Request,
@@ -20,6 +21,9 @@ export async function PATCH(
   const { id } = await params
 
   try {
+    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    if (replayed) return replayed
+
     const existing = await prisma.goldDeposit.findUnique({ where: { id } })
     if (!existing || existing.userId !== session.user.id) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -73,6 +77,8 @@ export async function PATCH(
       data,
     })
 
+    await recordIdempotencyKey(req, session.user.id)
+
     return NextResponse.json({
       id: updated.id,
       type: updated.type,
@@ -92,7 +98,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth()
@@ -106,12 +112,16 @@ export async function DELETE(
   const { id } = await params
 
   try {
+    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    if (replayed) return replayed
+
     const existing = await prisma.goldDeposit.findUnique({ where: { id } })
     if (!existing || existing.userId !== session.user.id) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
     await prisma.goldDeposit.delete({ where: { id } })
+    await recordIdempotencyKey(req, session.user.id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Delete gold deposit error:", error)

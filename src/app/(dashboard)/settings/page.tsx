@@ -63,8 +63,10 @@ import { CHART_COLORS } from "@/lib/chart-colors";
 import { PASSWORD_MIN_LENGTH } from "@/lib/password";
 import { FormError } from "@/components/ui/form-error";
 import { toast } from "sonner";
+import { apiMutate, isQueuedResult } from "@/lib/api-mutate";
 import { SubscriptionCard } from "@/components/settings/subscription-card";
 import { TrialRequestCard } from "@/components/settings/trial-request-card";
+import { WidgetCard } from "@/components/settings/widget-card";
 
 interface Category {
   id: string;
@@ -197,18 +199,17 @@ export default function SettingsPage() {
       budgetStartDay: number;
       carryOverEnabled: boolean;
       carryDeficitEnabled: boolean;
-    }) =>
-      fetch("/api/user/budget-settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      }),
-    onSuccess: () => {
+    }) => apiMutate("/api/user/budget-settings", { method: "PATCH", body: data }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["budget-settings"] });
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       queryClient.invalidateQueries({ queryKey: ["rollover-history"] });
-      toast.success("Budget settings updated");
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Saved offline — will sync when you reconnect"
+          : "Budget settings updated",
+      );
       setSettingsChanged(false);
     },
     onError: () => toast.error("Failed to update budget settings"),
@@ -246,14 +247,14 @@ export default function SettingsPage() {
 
   const createMutation = useMutation({
     mutationFn: (data: any) =>
-      fetch("/api/categories", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      }),
-    onSuccess: () => {
+      apiMutate("/api/categories", { method: "POST", body: data }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
-      toast.success("Category created");
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Saved offline — will sync when you reconnect"
+          : "Category created",
+      );
       resetForm();
     },
     onError: () => toast.error("Failed to create category"),
@@ -261,15 +262,18 @@ export default function SettingsPage() {
 
   const updateRuleTypeMutation = useMutation({
     mutationFn: ({ id, ruleType }: { id: string; ruleType: string | null }) =>
-      fetch(`/api/categories/${id}`, {
+      apiMutate(`/api/categories/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ruleType }),
+        body: { ruleType },
       }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      toast.success("Rule type updated");
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Saved offline — will sync when you reconnect"
+          : "Rule type updated",
+      );
     },
     onError: () => toast.error("Failed to update rule type"),
   });
@@ -286,42 +290,30 @@ export default function SettingsPage() {
     }) => {
       const existing = userCategories.find((c) => c.name === name);
       if (existing) {
-        const res = await fetch(`/api/categories/${existing.id}`, {
+        return apiMutate(`/api/categories/${existing.id}`, {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ruleType }),
+          body: { ruleType },
         });
-        if (!res.ok) {
-          const err = await res
-            .json()
-            .catch(() => ({ error: "Failed to update" }));
-          throw new Error(err.error || "Failed to update rule type");
-        }
-        return res.json();
       } else {
-        const res = await fetch("/api/categories", {
+        return apiMutate("/api/categories", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+          body: {
             name,
             type,
             color: type === "INCOME" ? "#10b981" : "#6366f1",
             ruleType,
-          }),
+          },
         });
-        if (!res.ok) {
-          const err = await res
-            .json()
-            .catch(() => ({ error: "Failed to create" }));
-          throw new Error(err.error || "Failed to create category");
-        }
-        return res.json();
       }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      toast.success("Rule type updated");
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Saved offline — will sync when you reconnect"
+          : "Rule type updated",
+      );
     },
     onError: (err) =>
       toast.error(
@@ -331,10 +323,14 @@ export default function SettingsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
-      fetch(`/api/categories/${id}`, { method: "DELETE" }),
-    onSuccess: () => {
+      apiMutate(`/api/categories/${id}`, { method: "DELETE" }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
-      toast.success("Category deleted");
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Deleted offline — will sync when you reconnect"
+          : "Category deleted",
+      );
     },
     onError: () => toast.error("Failed to delete category"),
   });
@@ -469,6 +465,9 @@ export default function SettingsPage() {
 
       {/* Pro trial request */}
       <TrialRequestCard />
+
+      {/* Phone home-screen widget */}
+      <WidgetCard />
 
       {/* Password */}
       <Card>

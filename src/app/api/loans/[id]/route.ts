@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth"
 import { requireProAccess } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { updateLoanSchema, safeParseBody } from "@/lib/validation"
+import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 
 async function getOwnedLoan(id: string, userId: string) {
   const loan = await prisma.loan.findUnique({ where: { id } })
@@ -25,6 +26,9 @@ export async function PATCH(
   const { id } = await params
 
   try {
+    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    if (replayed) return replayed
+
     const existing = await getOwnedLoan(id, session.user.id)
     if (!existing) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -44,6 +48,8 @@ export async function PATCH(
     if (notes !== undefined) data.notes = notes
 
     const loan = await prisma.loan.update({ where: { id }, data })
+
+    await recordIdempotencyKey(req, session.user.id)
 
     return NextResponse.json({
       id: loan.id,
@@ -66,7 +72,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth()
@@ -80,12 +86,16 @@ export async function DELETE(
   const { id } = await params
 
   try {
+    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    if (replayed) return replayed
+
     const existing = await getOwnedLoan(id, session.user.id)
     if (!existing) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
     await prisma.loan.delete({ where: { id } })
+    await recordIdempotencyKey(req, session.user.id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Delete loan error:", error)

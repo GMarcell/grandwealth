@@ -4,6 +4,7 @@ import { requireProAccess } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { createLoanSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
+import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 
 export async function GET() {
   const session = await auth()
@@ -52,6 +53,9 @@ export async function POST(req: Request) {
   }
 
   try {
+    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    if (replayed) return replayed
+
     const parsed = await safeParseBody(req, createLoanSchema)
     if ("error" in parsed) return parsed.error
 
@@ -69,6 +73,8 @@ export async function POST(req: Request) {
         userId: session.user.id,
       },
     })
+
+    await recordIdempotencyKey(req, session.user.id)
 
     return NextResponse.json(
       {

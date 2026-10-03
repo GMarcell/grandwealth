@@ -2,6 +2,9 @@ import type { Metadata, Viewport } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import "./globals.css"
 import Providers from "@/lib/providers"
+import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar"
+import { OfflineSyncProvider } from "@/components/offline-sync-provider"
+import { OfflineBanner } from "@/components/offline-banner"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -117,7 +120,13 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
-        <Providers>{children}</Providers>
+        <Providers>
+          <OfflineSyncProvider>
+            {children}
+            <ServiceWorkerRegistrar />
+            <OfflineBanner />
+          </OfflineSyncProvider>
+        </Providers>
       </body>
     </html>
   )

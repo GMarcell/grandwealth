@@ -43,6 +43,7 @@ import {
 import { formatIDR, formatDate } from "@/lib/utils"
 import { FormError } from "@/components/ui/form-error"
 import { toast } from "sonner"
+import { apiMutate, isQueuedResult } from "@/lib/api-mutate"
 
 interface RecurringTransaction {
   id: string
@@ -158,74 +159,58 @@ export default function RecurringPage() {
   })
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const res = await fetch("/api/recurring-transactions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Failed to create recurring transaction" }))
-        throw new Error(err.error || "Failed to create recurring transaction")
-      }
-      return res.json()
-    },
-    onSuccess: () => {
+    mutationFn: async (data: any) =>
+      apiMutate("/api/recurring-transactions", { method: "POST", body: data }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["recurring-transactions"] })
-      toast.success("Recurring transaction created")
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Saved offline — will sync when you reconnect"
+          : "Recurring transaction created"
+      )
       resetForm()
     },
     onError: (err) => toast.error(err.message || "Failed to create recurring transaction"),
   })
 
   const updateMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const res = await fetch(`/api/recurring-transactions/${data.id}`, {
+    mutationFn: async (data: any) =>
+      apiMutate(`/api/recurring-transactions/${data.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Failed to update recurring transaction" }))
-        throw new Error(err.error || "Failed to update recurring transaction")
-      }
-      return res.json()
-    },
-    onSuccess: () => {
+        body: data,
+      }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["recurring-transactions"] })
-      toast.success("Recurring transaction updated")
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Saved offline — will sync when you reconnect"
+          : "Recurring transaction updated"
+      )
       resetForm()
     },
     onError: (err) => toast.error(err.message || "Failed to update recurring transaction"),
   })
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/recurring-transactions/${id}`, { method: "DELETE" })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Failed to delete recurring transaction" }))
-        throw new Error(err.error || "Failed to delete recurring transaction")
-      }
-    },
-    onSuccess: () => {
+    mutationFn: async (id: string) =>
+      apiMutate(`/api/recurring-transactions/${id}`, { method: "DELETE" }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["recurring-transactions"] })
-      toast.success("Recurring transaction deleted")
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Deleted offline — will sync when you reconnect"
+          : "Recurring transaction deleted"
+      )
     },
     onError: (err) => toast.error(err.message || "Failed to delete recurring transaction"),
   })
 
   const toggleMutation = useMutation({
-    mutationFn: async (data: { id: string; active: boolean }) => {
-      const res = await fetch(`/api/recurring-transactions/${data.id}`, {
+    mutationFn: async (data: { id: string; active: boolean }) =>
+      apiMutate(`/api/recurring-transactions/${data.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ active: data.active }),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Failed to toggle recurring transaction" }))
-        throw new Error(err.error || "Failed to toggle recurring transaction")
-      }
-    },
+        body: { active: data.active },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recurring-transactions"] })
     },

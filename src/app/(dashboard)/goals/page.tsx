@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/dialog"
 import { formatIDR, formatCompactIDR, formatDate } from "@/lib/utils"
 import { toast } from "sonner"
+import { apiMutate, isQueuedResult } from "@/lib/api-mutate"
 
 interface Goal {
   id: string
@@ -95,41 +96,37 @@ export default function GoalsPage() {
   })
 
   const saveMutation = useMutation({
-    mutationFn: async ({ id, ...data }: any) => {
-      const res = await fetch(id ? `/api/goals/${id}` : "/api/goals", {
+    mutationFn: async ({ id, ...data }: any) =>
+      apiMutate(id ? `/api/goals/${id}` : "/api/goals", {
         method: id ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Failed to save goal" }))
-        throw new Error(err.error || "Failed to save goal")
-      }
-      return res.json()
-    },
-    onSuccess: () => {
+        body: data,
+      }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["goals"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
-      toast.success(editing ? "Goal updated" : "Goal created")
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Saved offline — will sync when you reconnect"
+          : editing
+            ? "Goal updated"
+            : "Goal created"
+      )
       resetForm()
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to save goal"),
   })
 
   const contributeMutation = useMutation({
-    mutationFn: async ({ id, amount }: { id: string; amount: number }) => {
-      const res = await fetch(`/api/goals/${id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount }),
-      })
-      if (!res.ok) throw new Error("Failed to add to goal")
-      return res.json()
-    },
-    onSuccess: () => {
+    mutationFn: async ({ id, amount }: { id: string; amount: number }) =>
+      apiMutate(`/api/goals/${id}`, { method: "POST", body: { amount } }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["goals"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
-      toast.success("Contribution added")
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Saved offline — will sync when you reconnect"
+          : "Contribution added"
+      )
       setContributing(null)
       setContributeAmount("")
     },
@@ -137,14 +134,16 @@ export default function GoalsPage() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/goals/${id}`, { method: "DELETE" })
-      if (!res.ok) throw new Error("Failed to delete goal")
-    },
-    onSuccess: () => {
+    mutationFn: async (id: string) =>
+      apiMutate(`/api/goals/${id}`, { method: "DELETE" }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["goals"] })
       queryClient.invalidateQueries({ queryKey: ["dashboard"] })
-      toast.success("Goal deleted")
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Deleted offline — will sync when you reconnect"
+          : "Goal deleted"
+      )
     },
     onError: () => toast.error("Failed to delete goal"),
   })

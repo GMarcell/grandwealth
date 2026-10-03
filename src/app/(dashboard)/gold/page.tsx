@@ -40,6 +40,7 @@ import { formatIDR, formatDate, type PaginatedResponse } from "@/lib/utils";
 import { Pagination } from "@/components/ui/pagination";
 import { FormError } from "@/components/ui/form-error";
 import { toast } from "sonner";
+import { apiMutate, isQueuedResult } from "@/lib/api-mutate";
 
 interface GoldDeposit {
   id: string;
@@ -138,48 +139,32 @@ export default function GoldPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const res = await fetch("/api/gold", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) {
-        const err = await res
-          .json()
-          .catch(() => ({ error: "Failed to add gold record" }));
-        throw new Error(err.error || "Failed to add gold record");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
+    mutationFn: async (data: any) =>
+      apiMutate("/api/gold", { method: "POST", body: data }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["gold"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      toast.success("Gold record added");
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Saved offline — will sync when you reconnect"
+          : "Gold record added",
+      );
       resetForm();
     },
     onError: (err) => toast.error(err.message || "Failed to add gold record"),
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const res = await fetch(`/api/gold/${data.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
-      if (!res.ok) {
-        const err = await res
-          .json()
-          .catch(() => ({ error: "Failed to update gold record" }));
-        throw new Error(err.error || "Failed to update gold record");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
+    mutationFn: async (data: any) =>
+      apiMutate(`/api/gold/${data.id}`, { method: "PATCH", body: data }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["gold"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      toast.success("Gold record updated");
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Saved offline — will sync when you reconnect"
+          : "Gold record updated",
+      );
       resetForm();
     },
     onError: (err) =>
@@ -187,19 +172,16 @@ export default function GoldPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/gold/${id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const err = await res
-          .json()
-          .catch(() => ({ error: "Failed to delete gold record" }));
-        throw new Error(err.error || "Failed to delete gold record");
-      }
-    },
-    onSuccess: () => {
+    mutationFn: async (id: string) =>
+      apiMutate(`/api/gold/${id}`, { method: "DELETE" }),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["gold"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      toast.success("Gold record deleted");
+      toast[isQueuedResult(result) ? "info" : "success"](
+        isQueuedResult(result)
+          ? "Deleted offline — will sync when you reconnect"
+          : "Gold record deleted",
+      );
     },
     onError: (err) =>
       toast.error(err.message || "Failed to delete gold record"),

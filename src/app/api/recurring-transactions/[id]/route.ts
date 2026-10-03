@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth"
 import { requireProAccess } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { updateRecurringSchema, safeParseBody } from "@/lib/validation"
+import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 
 export async function PATCH(
   req: Request,
@@ -17,6 +18,9 @@ export async function PATCH(
   if (proAccess instanceof NextResponse) return proAccess
 
   try {
+    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    if (replayed) return replayed
+
     const { id } = await params
     const existing = await prisma.recurringTransaction.findUnique({
       where: { id },
@@ -58,6 +62,8 @@ export async function PATCH(
       include: { savingsGoal: { select: { name: true } } },
     })
 
+    await recordIdempotencyKey(req, session.user.id)
+
     return NextResponse.json({
       id: updated.id,
       type: updated.type,
@@ -82,7 +88,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth()
@@ -94,6 +100,9 @@ export async function DELETE(
   if (proAccess instanceof NextResponse) return proAccess
 
   try {
+    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    if (replayed) return replayed
+
     const { id } = await params
     const existing = await prisma.recurringTransaction.findUnique({
       where: { id },
@@ -104,6 +113,7 @@ export async function DELETE(
     }
 
     await prisma.recurringTransaction.delete({ where: { id } })
+    await recordIdempotencyKey(req, session.user.id)
 
     return NextResponse.json({ success: true })
   } catch (error) {
