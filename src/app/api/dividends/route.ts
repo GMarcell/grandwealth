@@ -1,26 +1,20 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { requireProAccess } from "@/lib/api-access"
+import { requireProUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { createDividendSchema, safeParseBody } from "@/lib/validation"
-import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
+import { rateLimit } from "@/lib/rate-limit"
 import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 
 export async function GET(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
   const url = new URL(req.url)
   const stockId = url.searchParams.get("stockId")
 
   const dividends = await prisma.dividend.findMany({
     where: {
-      userId: session.user.id,
+      userId: userId,
       ...(stockId ? { stockId } : {}),
     },
     include: { stock: { select: { symbol: true, name: true } } },
@@ -45,15 +39,10 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
-
-  const limiter = await rateLimit(`dividends:${session.user.id}`, {
+  const limiter = await rateLimit(`dividends:${userId}`, {
     limit: 30,
     windowMs: 60_000,
   })
@@ -62,7 +51,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    const replayed = await shortCircuitIdempotent(req, userId)
     if (replayed) return replayed
 
     const parsed = await safeParseBody(req, createDividendSchema)
@@ -72,7 +61,7 @@ export async function POST(req: Request) {
 
     // Verify the stock belongs to the user.
     const stock = await prisma.stock.findUnique({ where: { id: stockId } })
-    if (!stock || stock.userId !== session.user.id) {
+    if (!stock || stock.userId !== userId) {
       return NextResponse.json({ error: "Stock not found" }, { status: 404 })
     }
 
@@ -82,12 +71,12 @@ export async function POST(req: Request) {
         amount,
         date: date ? new Date(date) : new Date(),
         notes: notes ?? null,
-        userId: session.user.id,
+        userId: userId,
       },
       include: { stock: { select: { symbol: true, name: true } } },
     })
 
-    await recordIdempotencyKey(req, session.user.id)
+    await recordIdempotencyKey(req, userId)
 
     return NextResponse.json(
       {

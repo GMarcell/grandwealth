@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { requireAdminAccess } from "@/lib/api-access"
+import { requireAdminUser } from "@/lib/api-access"
 import { adminTrialRequestsQuerySchema } from "@/lib/validation"
 import { buildPagination } from "@/lib/utils"
 import { expireLapsedTrials } from "@/lib/trial"
@@ -15,15 +14,8 @@ import type { Prisma } from "@prisma/client"
  * requests card and the sidebar badge.
  */
 export async function GET(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const access = await requireAdminAccess(session.user.id)
-  if (access instanceof NextResponse) {
-    return access
-  }
+  const userId = await requireAdminUser()
+  if (userId instanceof NextResponse) return userId
 
   const url = new URL(req.url)
   const parsed = adminTrialRequestsQuerySchema.safeParse({

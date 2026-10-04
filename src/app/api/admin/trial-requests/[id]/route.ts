@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { requireAdminAccess } from "@/lib/api-access"
+import { requireAdminUser } from "@/lib/api-access"
 import { adminTrialRequestDecisionSchema, safeParseBody } from "@/lib/validation"
 import { proTrialPeriodEnd } from "@/lib/subscription"
 import { notifyUserOfApprovedTrial } from "@/lib/trial-request"
@@ -18,15 +17,8 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const access = await requireAdminAccess(session.user.id)
-  if (access instanceof NextResponse) {
-    return access
-  }
+  const userId = await requireAdminUser()
+  if (userId instanceof NextResponse) return userId
 
   const { id } = await params
 
@@ -83,7 +75,7 @@ export async function PATCH(
         data: {
           status,
           decisionNote: note || null,
-          decidedById: session.user!.id,
+          decidedById: userId,
           decidedAt,
         },
       })

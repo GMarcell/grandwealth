@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { fetchStockPrices } from "@/lib/prices"
 import { expireLapsedTrials } from "@/lib/trial"
+import { verifyCronSecret } from "@/lib/cron-auth"
 
 /**
  * Cron endpoint to update stock prices for ALL users.
@@ -11,7 +12,7 @@ import { expireLapsedTrials } from "@/lib/trial"
  *   - **Vercel Cron Jobs**: Set CRON_SECRET env var in Vercel dashboard.
  *     Vercel automatically sends Authorization: Bearer CRON_SECRET.
  *   - **Linux cron**: `curl -H "Authorization: Bearer YOUR_SECRET" https://yourdomain.com/api/cron/update-prices`
- *   - **Cron-job.org, etc**: Pass as query param `?secret=YOUR_SECRET`
+ *   - **Cron-job.org, etc**: send the secret as an `Authorization: Bearer` header
  *
  * Schedule (WIB = UTC+7):
  *   - Market open:  02:15 UTC = 09:15 WIB  →  cron: "15 2 * * *"
@@ -28,16 +29,8 @@ export async function GET(request: Request) {
     )
   }
 
-  // Verify the provided secret — supports Authorization header or ?secret= query param
-  const authHeader = request.headers.get("authorization")
-  const bearerToken = authHeader?.startsWith("Bearer ")
-    ? authHeader.slice(7)
-    : null
-  const url = new URL(request.url)
-  const querySecret = url.searchParams.get("secret")
-  const providedSecret = bearerToken ?? querySecret
-
-  if (providedSecret !== cronSecret) {
+  // Verify the caller's Bearer secret in constant time.
+  if (!verifyCronSecret(request.headers.get("authorization"), cronSecret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

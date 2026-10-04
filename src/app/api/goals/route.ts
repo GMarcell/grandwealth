@@ -1,22 +1,16 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { requireProAccess } from "@/lib/api-access"
+import { requireProUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { createGoalSchema, safeParseBody } from "@/lib/validation"
-import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
+import { rateLimit } from "@/lib/rate-limit"
 import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 
 export async function GET() {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
   const goals = await prisma.savingsGoal.findMany({
-    where: { userId: session.user.id },
+    where: { userId: userId },
     orderBy: { createdAt: "desc" },
   })
 
@@ -34,15 +28,10 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
-
-  const limiter = await rateLimit(`goals:${session.user.id}`, {
+  const limiter = await rateLimit(`goals:${userId}`, {
     limit: 30,
     windowMs: 60_000,
   })
@@ -51,7 +40,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    const replayed = await shortCircuitIdempotent(req, userId)
     if (replayed) return replayed
 
     const parsed = await safeParseBody(req, createGoalSchema)
@@ -66,11 +55,11 @@ export async function POST(req: Request) {
         savedAmount: savedAmount ?? 0,
         targetDate: targetDate ? new Date(targetDate) : null,
         color: color ?? "#6366f1",
-        userId: session.user.id,
+        userId: userId,
       },
     })
 
-    await recordIdempotencyKey(req, session.user.id)
+    await recordIdempotencyKey(req, userId)
 
     return NextResponse.json(
       {

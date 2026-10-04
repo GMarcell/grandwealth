@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { requireAdminAccess } from "@/lib/api-access"
+import { requireAdminUser } from "@/lib/api-access"
 import { adminUpdateUserSchema, safeParseBody } from "@/lib/validation"
 
 const USER_SELECT = {
@@ -48,18 +47,11 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const access = await requireAdminAccess(session.user.id)
-  if (access instanceof NextResponse) {
-    return access
-  }
+  const userId = await requireAdminUser()
+  if (userId instanceof NextResponse) return userId
 
   const { id } = await params
-  const actingUserId = session.user.id
+  const actingUserId = userId
 
   try {
     const target = await prisma.user.findUnique({ where: { id } })
@@ -158,15 +150,8 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const access = await requireAdminAccess(session.user.id)
-  if (access instanceof NextResponse) {
-    return access
-  }
+  const userId = await requireAdminUser()
+  if (userId instanceof NextResponse) return userId
 
   const { id } = await params
 
@@ -176,7 +161,7 @@ export async function DELETE(
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    if (id === session.user?.id) {
+    if (id === userId) {
       return NextResponse.json(
         { error: "You cannot delete your own account here" },
         { status: 400 }

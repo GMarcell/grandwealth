@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { generateAnalysisForUserAndMonth } from "@/lib/analysis-generator"
 import { getLastCompletedBudgetMonthKey } from "@/lib/budget-months"
 import { expireLapsedTrials } from "@/lib/trial"
+import { verifyCronSecret } from "@/lib/cron-auth"
 
 /**
  * Cron endpoint to generate a monthly spending & savings analysis for every user
@@ -13,7 +14,7 @@ import { expireLapsedTrials } from "@/lib/trial"
  * Setup options:
  *   - **Vercel Cron Jobs**: Set CRON_SECRET & GROQ_API_KEY env vars in Vercel dashboard.
  *   - **Linux cron**: `curl -H "Authorization: Bearer YOUR_SECRET" https://yourdomain.com/api/cron/monthly-analysis`
- *   - **Cron-job.org, etc**: Pass as query param `?secret=YOUR_SECRET`
+ *   - **Cron-job.org, etc**: send the secret as an `Authorization: Bearer` header
  *
  * Schedule: Runs on the last day of every month at 23:30 UTC.
  *   cron: "30 23 28-31 * *" (Vercel will run it only on the last day)
@@ -29,16 +30,8 @@ export async function GET(request: Request) {
     )
   }
 
-  // Verify the provided secret — supports Authorization header or ?secret= query param
-  const authHeader = request.headers.get("authorization")
-  const bearerToken = authHeader?.startsWith("Bearer ")
-    ? authHeader.slice(7)
-    : null
-  const url = new URL(request.url)
-  const querySecret = url.searchParams.get("secret")
-  const providedSecret = bearerToken ?? querySecret
-
-  if (providedSecret !== cronSecret) {
+  // Verify the caller's Bearer secret in constant time.
+  if (!verifyCronSecret(request.headers.get("authorization"), cronSecret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

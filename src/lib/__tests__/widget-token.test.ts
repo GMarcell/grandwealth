@@ -36,7 +36,7 @@ describe("createWidgetToken", () => {
   beforeEach(() => vi.clearAllMocks())
 
   it("stores only the hash and returns the plaintext once", async () => {
-    mockCreate.mockImplementation(({ data }: any) =>
+    mockCreate.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
       Promise.resolve({ id: "wt-1", ...data }),
     )
 
@@ -51,7 +51,7 @@ describe("createWidgetToken", () => {
   })
 
   it("generates unique tokens", async () => {
-    mockCreate.mockImplementation(({ data }: any) =>
+    mockCreate.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
       Promise.resolve({ id: "wt", ...data }),
     )
     const a = await createWidgetToken("user-1")

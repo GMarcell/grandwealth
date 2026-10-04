@@ -51,6 +51,16 @@ interface Loan {
 
 type LoanFormData = z.infer<typeof loanFormSchema>
 
+type LoanPayload = {
+  name: string
+  principal: number
+  remainingBalance: number
+  interestRate: number | null
+  monthlyPayment: number | null
+  startDate: string
+  notes: string | null
+}
+
 export default function DebtsPage() {
   const queryClient = useQueryClient()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -86,7 +96,7 @@ export default function DebtsPage() {
   })
 
   const saveMutation = useMutation({
-    mutationFn: async ({ id, ...data }: any) =>
+    mutationFn: async ({ id, ...data }: LoanPayload & { id?: string }) =>
       apiMutate(id ? `/api/loans/${id}` : "/api/loans", {
         method: id ? "PATCH" : "POST",
         body: data,

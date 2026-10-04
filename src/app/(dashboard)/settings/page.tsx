@@ -78,6 +78,12 @@ interface Category {
 
 type CategoryFormData = z.infer<typeof categoryFormSchema>;
 
+type CategoryPayload = {
+  name: string;
+  type: "INCOME" | "EXPENSE";
+  color?: string;
+};
+
 const PREDEFINED_EXPENSE_CATEGORIES = [
   "FOOD",
   "TRANSPORTATION",
@@ -124,7 +130,6 @@ export default function SettingsPage() {
     handleSubmit: formSubmit,
     control,
     reset,
-    watch,
     formState: { errors },
   } = useForm<CategoryFormData>({
     resolver: zodResolver(categoryFormSchema),
@@ -246,7 +251,7 @@ export default function SettingsPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: any) =>
+    mutationFn: (data: CategoryPayload) =>
       apiMutate("/api/categories", { method: "POST", body: data }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["categories"] });

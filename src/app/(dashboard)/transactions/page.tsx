@@ -51,9 +51,9 @@ import { Pagination } from "@/components/ui/pagination";
 import { FormError } from "@/components/ui/form-error";
 import {
   RULE_TYPES,
-  RULE_TYPE_ORDER,
   RULE_TYPE_CONFIGS,
   OTHER_CONFIG,
+  isValidRuleType,
 } from "@/lib/rule-type";
 import { toast } from "sonner";
 import {
@@ -74,6 +74,14 @@ import {
   TRANSACTION_TYPES,
 } from "@/const/transaction";
 import TransactionSkeleton from "@/components/dashboard/transaction/skeleton";
+
+type TransactionPayload = {
+  type: "INCOME" | "EXPENSE";
+  category: string;
+  amount: number;
+  description: string;
+  date: string;
+};
 
 export default function TransactionsPage() {
   const queryClient = useQueryClient();
@@ -216,7 +224,7 @@ export default function TransactionsPage() {
     },
   });
 
-  const transactionList = transactions?.data ?? [];
+  const transactionList = useMemo(() => transactions?.data ?? [], [transactions]);
   const pagination = transactions?.pagination;
   const summary = transactions?.summary;
 
@@ -290,7 +298,7 @@ export default function TransactionsPage() {
   }, [rolloverHistory, currentMonthKey]);
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: TransactionPayload) => {
       return apiMutate("/api/transactions", { method: "POST", body: data });
     },
     onSuccess: (result, variables) => {
@@ -329,7 +337,7 @@ export default function TransactionsPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: TransactionPayload & { id: string }) => {
       return apiMutate(`/api/transactions/${data.id}`, {
         method: "PATCH",
         body: data,
@@ -455,7 +463,7 @@ export default function TransactionsPage() {
 
   function getRuleType(category: string) {
     const value = ruleTypeMap.get(category);
-    return value && RULE_TYPES.includes(value as any) ? value : "OTHER";
+    return isValidRuleType(value) ? value : "OTHER";
   }
 
   const groupedByType = useMemo(() => {

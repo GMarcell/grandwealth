@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { parseCsv } from "@/lib/csv"
 import { rateLimit } from "@/lib/rate-limit"
@@ -10,14 +10,12 @@ const MAX_IMPORT_BYTES = 2 * 1024 * 1024 // 2 MB
 const MAX_IMPORT_ROWS = 5_000
 
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireUser()
+  if (userId instanceof NextResponse) return userId
 
   // Imports write to the database in bulk, so they get the same kind of
   // per-user throttle the other write routes use.
-  const limiter = await rateLimit(`transactions-import:${session.user.id}`, {
+  const limiter = await rateLimit(`transactions-import:${userId}`, {
     limit: 5,
     windowMs: 60_000,
   })
@@ -138,7 +136,7 @@ export async function POST(req: Request) {
         amount,
         description,
         date,
-        userId: session.user.id,
+        userId: userId,
       })
     }
 

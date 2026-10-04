@@ -1,19 +1,13 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { requireProAccess } from "@/lib/api-access"
+import { requireProUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { generateAnalysisForUserAndMonth } from "@/lib/analysis-generator"
 import { getLastCompletedBudgetMonthKey } from "@/lib/budget-months"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 
 export async function GET(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
   const { searchParams } = new URL(req.url)
   const month = searchParams.get("month") // optional: filter by specific month
@@ -25,7 +19,7 @@ export async function GET(req: Request) {
         where: {
           month_userId: {
             month,
-            userId: session.user.id,
+            userId: userId,
           },
         },
       })
@@ -59,7 +53,7 @@ export async function GET(req: Request) {
 
     // Return all analyses for the user (most recent first)
     const analyses = await prisma.monthlyAnalysis.findMany({
-      where: { userId: session.user.id },
+      where: { userId: userId },
       orderBy: { month: "desc" },
       select: {
         id: true,
@@ -94,13 +88,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
   let month: string
 
@@ -134,7 +123,7 @@ export async function POST(req: Request) {
   // may be generated. Budget-month keys sort lexicographically, so a key after
   // the last completed month's key is still in progress.
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: userId },
     select: { budgetStartDay: true },
   })
   const lastCompletedMonthKey = getLastCompletedBudgetMonthKey(
@@ -151,7 +140,7 @@ export async function POST(req: Request) {
   }
 
   // Rate limit: max 3 regenerations per 60 seconds per user
-  const rateLimitKey = `analysis:regenerate:${getRateLimitKey(req)}:${session.user.id}`
+  const rateLimitKey = `analysis:regenerate:${getRateLimitKey(req)}:${userId}`
   const { allowed, remaining, resetTime } = await rateLimit(rateLimitKey, {
     limit: 3,
     windowMs: 60_000,
@@ -181,7 +170,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const result = await generateAnalysisForUserAndMonth(session.user.id, month)
+    const result = await generateAnalysisForUserAndMonth(userId, month)
 
     return NextResponse.json(
       {

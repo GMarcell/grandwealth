@@ -1,3 +1,4 @@
+import path from "path"
 import { defineConfig, devices } from "@playwright/test"
 
 /**
@@ -13,6 +14,9 @@ import { defineConfig, devices } from "@playwright/test"
  */
 export default defineConfig({
   testDir: "./tests",
+  // Deletes every @test.grandwealth.app account after the run so repeated E2E
+  // runs (which each create fresh timestamped users) don't fill the database.
+  globalTeardown: path.resolve(__dirname, "global-teardown.ts"),
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

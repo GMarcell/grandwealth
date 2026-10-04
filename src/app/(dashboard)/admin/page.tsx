@@ -290,6 +290,80 @@ export default function AdminPage() {
     }
   }
 
+  function renderUserActions(user: AdminUser) {
+    return (
+      <div className="flex items-center justify-end gap-1">
+        <Button variant="ghost" size="icon-sm" title="Edit plan"
+          onClick={() => openEdit(user)}>
+          <Pencil className="h-4 w-4" />
+          <span className="sr-only">Edit {user.email}</span>
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          title={user.suspended ? "Unsuspend" : "Suspend"}
+          disabled={patchMutation.isPending}
+          onClick={() =>
+            patchMutation.mutate({
+              id: user.id,
+              body: { suspended: !user.suspended },
+            })
+          }
+        >
+          {user.suspended
+            ? <CheckCircle2 className="h-4 w-4" />
+            : <Ban className="h-4 w-4" />}
+          <span className="sr-only">{user.suspended ? "Unsuspend" : "Suspend"} {user.email}</span>
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          title={user.role === "ADMIN" ? "Remove admin" : "Make admin"}
+          disabled={patchMutation.isPending}
+          onClick={() =>
+            patchMutation.mutate({
+              id: user.id,
+              body: { role: user.role === "ADMIN" ? "USER" : "ADMIN" },
+            })
+          }
+        >
+          {user.role === "ADMIN"
+            ? <ShieldOff className="h-4 w-4" />
+            : <Shield className="h-4 w-4" />}
+          <span className="sr-only">Toggle admin for {user.email}</span>
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          title="Reset password"
+          onClick={() => setResettingUser(user)}
+        >
+          <KeyRound className="h-4 w-4" />
+          <span className="sr-only">Reset password for {user.email}</span>
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-red-600 hover:text-red-600"
+          title="Delete user"
+          disabled={deleteMutation.isPending}
+          onClick={() => {
+            if (
+              confirm(
+                `Delete ${user.email}? This permanently removes their account and ALL their data. This cannot be undone.`
+              )
+            ) {
+              deleteMutation.mutate(user.id)
+            }
+          }}
+        >
+          <Trash2 className="h-4 w-4" />
+          <span className="sr-only">Delete {user.email}</span>
+        </Button>
+      </div>
+    )
+  }
+
   const stats: Array<{
     label: string
     value: string | number
@@ -362,7 +436,7 @@ export default function AdminPage() {
       {/* Trial requests */}
       <Card className={pendingTrialRequests.length > 0 ? "border-primary/40" : undefined}>
         <CardContent className="pt-6 space-y-4">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="flex items-center gap-2 text-sm font-semibold">
                 <Gift className="h-4 w-4" />
@@ -441,8 +515,8 @@ export default function AdminPage() {
       {/* Users table */}
       <Card>
         <CardContent className="pt-6 space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative flex-1">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="relative w-full sm:min-w-[220px] sm:flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search by name or email..."
@@ -493,7 +567,8 @@ export default function AdminPage() {
             </Select>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* Desktop table */}
+          <div className="hidden overflow-x-auto lg:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -580,86 +655,80 @@ export default function AdminPage() {
                     <td className="py-3 pr-4 text-muted-foreground">
                       {formatDate(user.createdAt)}
                     </td>
-                    <td className="py-3 pr-4">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon-sm" title="Edit plan"
-                          onClick={() => openEdit(user)}>
-                          <Pencil className="h-4 w-4" />
-                          <span className="sr-only">Edit {user.email}</span>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          title={user.suspended ? "Unsuspend" : "Suspend"}
-                          disabled={patchMutation.isPending}
-                          onClick={() =>
-                            patchMutation.mutate({
-                              id: user.id,
-                              body: { suspended: !user.suspended },
-                            })
-                          }
-                        >
-                          {user.suspended
-                            ? <CheckCircle2 className="h-4 w-4" />
-                            : <Ban className="h-4 w-4" />}
-                          <span className="sr-only">{user.suspended ? "Unsuspend" : "Suspend"} {user.email}</span>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          title={user.role === "ADMIN" ? "Remove admin" : "Make admin"}
-                          disabled={patchMutation.isPending}
-                          onClick={() =>
-                            patchMutation.mutate({
-                              id: user.id,
-                              body: { role: user.role === "ADMIN" ? "USER" : "ADMIN" },
-                            })
-                          }
-                        >
-                          {user.role === "ADMIN"
-                            ? <ShieldOff className="h-4 w-4" />
-                            : <Shield className="h-4 w-4" />}
-                          <span className="sr-only">Toggle admin for {user.email}</span>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          title="Reset password"
-                          onClick={() => setResettingUser(user)}
-                        >
-                          <KeyRound className="h-4 w-4" />
-                          <span className="sr-only">Reset password for {user.email}</span>
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          className="text-red-600 hover:text-red-600"
-                          title="Delete user"
-                          disabled={deleteMutation.isPending}
-                          onClick={() => {
-                            if (
-                              confirm(
-                                `Delete ${user.email}? This permanently removes their account and ALL their data. This cannot be undone.`
-                              )
-                            ) {
-                              deleteMutation.mutate(user.id)
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          <span className="sr-only">Delete {user.email}</span>
-                        </Button>
-                      </div>
-                    </td>
+                    <td className="py-3 pr-4">{renderUserActions(user)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
+          {/* Mobile / tablet card list — the table above is too wide for
+              small screens, so the same data is shown as stacked cards. */}
+          <ul className="space-y-3 lg:hidden">
+            {usersLoading && (
+              <li className="py-10 text-center text-muted-foreground">
+                <Loader2 className="mx-auto h-5 w-5 animate-spin" />
+              </li>
+            )}
+            {!usersLoading && users.length === 0 && (
+              <li className="py-10 text-center text-muted-foreground">No users found</li>
+            )}
+            {users.map((user) => (
+              <li
+                key={user.id}
+                className={`space-y-3 rounded-lg border p-3 ${user.suspended ? "opacity-60" : ""}`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">
+                    {user.name?.[0]?.toUpperCase() || user.email[0]?.toUpperCase() || "?"}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="flex flex-wrap items-center gap-2 font-medium">
+                      <span className="truncate">{user.name || "Unnamed"}</span>
+                      {user.suspended && <Badge variant="destructive">Suspended</Badge>}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {user.plan === "PRO" ? (
+                    <Badge className="gap-1">
+                      <Crown className="h-3 w-3" /> Pro
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary">Free</Badge>
+                  )}
+                  {user.plan === "PRO" && user.isTrial && (
+                    <Badge variant="outline" className="gap-1 text-muted-foreground">
+                      <Gift className="h-3 w-3" /> Trial
+                    </Badge>
+                  )}
+                  {user.plan === "PRO" && (
+                    <Badge
+                      variant={user.subscriptionStatus === "ACTIVE" ? "profit" : "loss"}
+                    >
+                      {subscriptionStatusLabel(user.subscriptionStatus)}
+                    </Badge>
+                  )}
+                  {user.role === "ADMIN" && (
+                    <Badge variant="outline" className="gap-1">
+                      <Shield className="h-3 w-3" /> Admin
+                    </Badge>
+                  )}
+                  <span className="text-xs text-muted-foreground">
+                    Joined {formatDate(user.createdAt)}
+                  </span>
+                </div>
+                <div className="flex justify-end border-t pt-3">
+                  {renderUserActions(user)}
+                </div>
+              </li>
+            ))}
+          </ul>
+
           {/* Pagination */}
           {pagination && pagination.total > 0 && (
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
+            <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
               <p>
                 Showing {((pagination.page - 1) * pagination.pageSize) + 1}–
                 {Math.min(pagination.page * pagination.pageSize, pagination.total)} of{" "}

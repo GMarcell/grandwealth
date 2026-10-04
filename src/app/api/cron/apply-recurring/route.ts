@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { applyDueRecurringTransactions } from "@/lib/recurring"
+import { verifyCronSecret } from "@/lib/cron-auth"
 
 /**
  * Cron endpoint that converts due recurring transactions into real
@@ -23,16 +24,8 @@ export async function GET(request: Request) {
     )
   }
 
-  // Verify the provided secret — supports Authorization header or ?secret= query param
-  const authHeader = request.headers.get("authorization")
-  const bearerToken = authHeader?.startsWith("Bearer ")
-    ? authHeader.slice(7)
-    : null
-  const url = new URL(request.url)
-  const querySecret = url.searchParams.get("secret")
-  const providedSecret = bearerToken ?? querySecret
-
-  if (providedSecret !== cronSecret) {
+  // Verify the caller's Bearer secret in constant time.
+  if (!verifyCronSecret(request.headers.get("authorization"), cronSecret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

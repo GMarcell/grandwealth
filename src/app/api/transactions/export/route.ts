@@ -1,41 +1,75 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { escapeCsvField } from "@/lib/csv"
 
+/** Rows fetched from the database per batch. */
+const BATCH_SIZE = 1_000
+
+/**
+ * Stream the signed-in user's transactions as a CSV download.
+ *
+ * The export is streamed and paged rather than loaded into memory in one
+ * `findMany`, so a long transaction history can't exhaust the serverless
+ * function's memory or time budget. Only the exported columns are selected.
+ */
 export async function GET() {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireUser()
+  if (userId instanceof NextResponse) return userId
 
-  try {
-    const transactions = await prisma.transaction.findMany({
-      where: { userId: session.user.id },
-      orderBy: { date: "desc" },
-    })
+  const encoder = new TextEncoder()
 
-    const header = "type,category,amount,description,date"
-    const rows = transactions.map((tx) => {
-      const date = tx.date.toISOString().split("T")[0]
-      return [tx.type, tx.category, tx.amount, tx.description, date]
-        .map(escapeCsvField)
-        .join(",")
-    })
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        controller.enqueue(encoder.encode("type,category,amount,description,date\n"))
 
-    const csv = [header, ...rows].join("\n")
+        let skip = 0
+        for (;;) {
+          const transactions = await prisma.transaction.findMany({
+            where: { userId },
+            // Deterministic paging: stable tie-break on id.
+            orderBy: [{ date: "desc" }, { id: "desc" }],
+            skip,
+            take: BATCH_SIZE,
+            select: {
+              type: true,
+              category: true,
+              amount: true,
+              description: true,
+              date: true,
+            },
+          })
 
-    return new NextResponse(csv, {
-      headers: {
-        "Content-Type": "text/csv",
-        "Content-Disposition": `attachment; filename="transactions-export-${new Date().toISOString().split("T")[0]}.csv"`,
-      },
-    })
-  } catch (error) {
-    console.error("CSV export error:", error)
-    return NextResponse.json(
-      { error: "Failed to export transactions" },
-      { status: 500 }
-    )
-  }
+          if (transactions.length === 0) break
+
+          const chunk = transactions
+            .map((tx) => {
+              const date = tx.date.toISOString().split("T")[0]
+              return [tx.type, tx.category, tx.amount, tx.description, date]
+                .map(escapeCsvField)
+                .join(",")
+            })
+            .join("\n")
+
+          controller.enqueue(encoder.encode(`${chunk}\n`))
+
+          if (transactions.length < BATCH_SIZE) break
+          skip += BATCH_SIZE
+        }
+
+        controller.close()
+      } catch (error) {
+        console.error("CSV export error:", error)
+        controller.error(error)
+      }
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/csv",
+      "Content-Disposition": `attachment; filename="transactions-export-${new Date().toISOString().split("T")[0]}.csv"`,
+    },
+  })
 }

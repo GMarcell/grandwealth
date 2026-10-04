@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { requireProAccess } from "@/lib/api-access"
+import { requireProUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import {
   getBudgetMonthRangeInclusive,
@@ -14,15 +13,8 @@ import {
 } from "@/lib/budget-carry-over"
 
 export async function GET() {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
-
-  const userId = session.user.id
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
   try {
     // Get user's budget start day setting

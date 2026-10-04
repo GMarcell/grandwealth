@@ -53,11 +53,11 @@ export async function sendEmail(
   }
 
   // Development fallback — surface the email in the server log.
-  console.log("\n[GrandWealth email dev-mode]")
-  console.log(`To: ${message.to}`)
-  console.log(`Subject: ${message.subject}`)
-  console.log(message.html)
-  console.log("")
+  console.info("\n[GrandWealth email dev-mode]")
+  console.info(`To: ${message.to}`)
+  console.info(`Subject: ${message.subject}`)
+  console.info(message.html)
+  console.info("")
 
   return { sent: false, provider: "dev-log" }
 }

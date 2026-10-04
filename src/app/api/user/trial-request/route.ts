@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 import { trialRequestSchema, safeParseBody } from "@/lib/validation"
@@ -59,13 +59,11 @@ async function loadTrialState(userId: string) {
  * Settings → Pro trial card.
  */
 export async function GET() {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireUser()
+  if (userId instanceof NextResponse) return userId
 
   try {
-    const loaded = await loadTrialState(session.user.id)
+    const loaded = await loadTrialState(userId)
     if (!loaded) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -88,10 +86,8 @@ export async function GET() {
  * approve (granting 30 days of Pro) or decline it from the admin panel.
  */
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireUser()
+  if (userId instanceof NextResponse) return userId
 
   // Rate limit: 3 requests per hour per IP — each one emails every admin.
   const limiter = await rateLimit(`trial-request:${getRateLimitKey(req)}`, {
@@ -114,7 +110,7 @@ export async function POST(req: Request) {
   const message = parsed.data.message?.trim() || null
 
   try {
-    const loaded = await loadTrialState(session.user.id)
+    const loaded = await loadTrialState(userId)
     if (!loaded) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -126,7 +122,7 @@ export async function POST(req: Request) {
     }
 
     await prisma.trialRequest.create({
-      data: { userId: session.user.id, message },
+      data: { userId: userId, message },
     })
 
     // Notify the admins — best-effort: a mail outage must not fail the request.
@@ -140,7 +136,7 @@ export async function POST(req: Request) {
       console.error("Trial request notification error:", error)
     }
 
-    const refreshed = await loadTrialState(session.user.id)
+    const refreshed = await loadTrialState(userId)
 
     return NextResponse.json(refreshed?.state ?? loaded.state, { status: 201 })
   } catch (error) {

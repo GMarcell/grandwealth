@@ -1,16 +1,10 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { requireProAccess } from "@/lib/api-access"
+import { requireProUser } from "@/lib/api-access"
 import { fetchGoldPriceIdr } from "@/lib/prices"
 
 export async function GET() {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
   try {
     const price = await fetchGoldPriceIdr()

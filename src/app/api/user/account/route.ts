@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 
@@ -14,10 +14,8 @@ import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
  * This action is irreversible.
  */
 export async function DELETE(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireUser()
+  if (userId instanceof NextResponse) return userId
 
   // Rate limit: 2 account deletion attempts per 10 minutes per IP
   const limiter = await rateLimit(`delete-account:${getRateLimitKey(req)}`, {
@@ -37,7 +35,7 @@ export async function DELETE(req: Request) {
   try {
     // Double-check the user exists
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: userId },
       select: { id: true },
     })
 
@@ -47,7 +45,7 @@ export async function DELETE(req: Request) {
 
     // Delete the user — all related records are cascade-deleted by Prisma
     await prisma.user.delete({
-      where: { id: session.user.id },
+      where: { id: userId },
     })
 
     return NextResponse.json({ success: true })

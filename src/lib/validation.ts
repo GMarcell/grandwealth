@@ -214,7 +214,10 @@ export const changePasswordSchema = z.object({
 
 // ─── Password Reset ───────────────────────────────
 export const forgotPasswordSchema = z.object({
-  email: z.string().email("Invalid email address"),
+  // Trim + lowercase to match the normalized emails stored at registration
+  // (see registerSchema). Without this, a mixed-case address that exists in
+  // the database would silently never receive a reset link.
+  email: z.string().trim().toLowerCase().email("Invalid email address"),
 })
 
 export const resetPasswordSchema = z.object({

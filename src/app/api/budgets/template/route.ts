@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { requireProAccess } from "@/lib/api-access"
+import { requireProUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { budgetTemplateSchema, safeParseBody } from "@/lib/validation"
 import { buildBudgetTemplate } from "@/lib/budget-template"
 import { getBudgetMonthRangeInclusive } from "@/lib/budget-months"
-import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
+import { rateLimit } from "@/lib/rate-limit"
 
 /**
  * POST /api/budgets/template
@@ -15,15 +14,10 @@ import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
  * based on the month's income and the user's NEED/WANT/SAVINGS classifications.
  */
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
-
-  const limiter = await rateLimit(`budget-template:${session.user.id}`, {
+  const limiter = await rateLimit(`budget-template:${userId}`, {
     limit: 10,
     windowMs: 60_000,
   })
@@ -39,11 +33,11 @@ export async function POST(req: Request) {
 
     const [user, categories] = await Promise.all([
       prisma.user.findUnique({
-        where: { id: session.user.id },
+        where: { id: userId },
         select: { budgetStartDay: true },
       }),
       prisma.category.findMany({
-        where: { userId: session.user.id, ruleType: { not: null } },
+        where: { userId: userId, ruleType: { not: null } },
         select: { name: true, ruleType: true },
       }),
     ])
@@ -54,7 +48,7 @@ export async function POST(req: Request) {
     // Income for the target month.
     const monthTransactions = await prisma.transaction.findMany({
       where: {
-        userId: session.user.id,
+        userId: userId,
         date: { gte: start, lte: end },
       },
       select: { type: true, category: true, amount: true, date: true },
@@ -88,7 +82,7 @@ export async function POST(req: Request) {
 
     const historyTx = await prisma.transaction.findMany({
       where: {
-        userId: session.user.id,
+        userId: userId,
         type: "EXPENSE",
         OR: prevMonths.map((range) => ({
           date: { gte: range.start, lte: range.end },
@@ -120,7 +114,7 @@ export async function POST(req: Request) {
 
     // Upsert each generated budget for the month.
     const existing = await prisma.budget.findMany({
-      where: { userId: session.user.id, month },
+      where: { userId: userId, month },
     })
     const existingNames = new Set(existing.map((b) => b.categoryName))
 
@@ -133,14 +127,14 @@ export async function POST(req: Request) {
           categoryName_month_userId: {
             categoryName: budget.categoryName,
             month,
-            userId: session.user.id,
+            userId: userId,
           },
         },
         create: {
           categoryName: budget.categoryName,
           amount: budget.amount,
           month,
-          userId: session.user.id,
+          userId: userId,
         },
         update: { amount: budget.amount },
       })

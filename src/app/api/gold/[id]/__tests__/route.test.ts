@@ -195,8 +195,6 @@ describe("PATCH /api/gold/[id] — oversell protection", () => {
     const res = await PATCH(makeRequest("buy-10", { weightGram: 3 }), {
       params: Promise.resolve({ id: "buy-10" }),
     })
-    const body = await res.json()
-
     expect(res.status).toBe(400)
     expect(mockUpdate).not.toHaveBeenCalled()
   })

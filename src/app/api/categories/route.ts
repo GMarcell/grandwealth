@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { createCategorySchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 
 export async function GET(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireUser()
+  if (userId instanceof NextResponse) return userId
 
   const limiter = await rateLimit(`categories-get:${getRateLimitKey(req)}`, {
     limit: 60,
@@ -20,7 +18,7 @@ export async function GET(req: Request) {
   }
 
   const categories = await prisma.category.findMany({
-    where: { userId: session.user.id },
+    where: { userId: userId },
     orderBy: { name: "asc" },
   })
 
@@ -28,12 +26,10 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireUser()
+  if (userId instanceof NextResponse) return userId
 
-  const limiter = await rateLimit(`categories:${session.user.id}`, {
+  const limiter = await rateLimit(`categories:${userId}`, {
     limit: 20,
     windowMs: 60_000,
   })
@@ -42,7 +38,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    const replayed = await shortCircuitIdempotent(req, userId)
     if (replayed) return replayed
 
     const parsed = await safeParseBody(req, createCategorySchema)
@@ -51,7 +47,7 @@ export async function POST(req: Request) {
     const { name, type, color, ruleType } = parsed.data
 
     const existing = await prisma.category.findUnique({
-      where: { name_userId: { name, userId: session.user.id } },
+      where: { name_userId: { name, userId: userId } },
     })
 
     if (existing) {
@@ -67,11 +63,11 @@ export async function POST(req: Request) {
         type,
         color: color ?? "#6366f1",
         ruleType: ruleType ?? null,
-        userId: session.user.id,
+        userId: userId,
       },
     })
 
-    await recordIdempotencyKey(req, session.user.id)
+    await recordIdempotencyKey(req, userId)
 
     return NextResponse.json(category, { status: 201 })
   } catch (error) {

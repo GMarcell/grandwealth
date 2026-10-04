@@ -1,19 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { requireProAccess } from "@/lib/api-access"
+import { requireProUser } from "@/lib/api-access"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 import YahooFinance from "yahoo-finance2"
 
 const yahooFinance = new YahooFinance()
 
 export async function GET(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
   const limiter = await rateLimit(`stocks-search:${getRateLimitKey(req)}`, {
     limit: 30,

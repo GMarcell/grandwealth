@@ -79,7 +79,7 @@ export function MonthlyCashFlowChart({ data }: { data: MonthlyData[] }) {
                   borderRadius: "8px",
                   fontSize: "12px",
                 }}
-                formatter={(value: any) => [formatIDR(Number(value))]}
+                formatter={(value) => [formatIDR(Number(value))]}
               />
               <Line
                 type="monotone"
@@ -201,7 +201,7 @@ export function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
                   borderRadius: "8px",
                   fontSize: "12px",
                 }}
-                formatter={(value: any, name: any) => [
+                formatter={(value, name) => [
                   formatIDR(Number(value)),
                   name === "total" ? "Net wealth" : name === "debt" ? "Debt" : String(name),
                 ]}
@@ -284,7 +284,7 @@ export function WealthBreakdownChart({ data }: { data: WealthItem[] }) {
                   borderRadius: "8px",
                   fontSize: "12px",
                 }}
-                formatter={(value: any) => [formatIDR(Number(value))]}
+                formatter={(value) => [formatIDR(Number(value))]}
               />
             </PieChart>
           </ResponsiveContainer>

@@ -62,6 +62,14 @@ interface BankSaving {
 
 type SavingsFormData = z.infer<typeof savingsFormSchema>
 
+type SavingsPayload = {
+  type: "DEPOSIT" | "WITHDRAWAL"
+  accountName: string
+  amount: number
+  date: string
+  notes?: string
+}
+
 const SAVING_TYPES = ["DEPOSIT", "WITHDRAWAL"] as const
 
 const POPULAR_BANKS = [
@@ -115,7 +123,6 @@ export default function SavingsPage() {
     handleSubmit: formSubmit,
     control,
     reset,
-    watch,
     formState: { errors },
   } = useForm<SavingsFormData>({
     resolver: zodResolver(savingsFormSchema),
@@ -127,8 +134,6 @@ export default function SavingsPage() {
       notes: "",
     },
   })
-
-  const formAccountName = watch("accountName")
 
   const { data: savingsData, isLoading } = useQuery({
     queryKey: ["savings", page, debouncedSearch],
@@ -142,7 +147,7 @@ export default function SavingsPage() {
     },
   })
 
-  const savings = savingsData?.data ?? []
+  const savings = useMemo(() => savingsData?.data ?? [], [savingsData])
   const pagination = savingsData?.pagination
   const summary = savingsData?.summary as {
     totalDeposits: number
@@ -153,7 +158,7 @@ export default function SavingsPage() {
   } | undefined
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) =>
+    mutationFn: async (data: SavingsPayload) =>
       apiMutate("/api/savings", { method: "POST", body: data }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["savings"] })
@@ -169,7 +174,7 @@ export default function SavingsPage() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: async (data: any) =>
+    mutationFn: async (data: SavingsPayload & { id: string }) =>
       apiMutate(`/api/savings/${data.id}`, { method: "PATCH", body: data }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["savings"] })

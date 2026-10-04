@@ -71,7 +71,6 @@ export function Pagination({ pagination, page, onPageChange }: PaginationProps) 
     })
     return () => cancelAnimationFrame(raf)
     // Only run when page changes, not on every render
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page])
 
   if (totalPages <= 1) return null

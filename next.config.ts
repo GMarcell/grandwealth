@@ -37,8 +37,10 @@ const nextConfig: NextConfig = {
             value: "DENY",
           },
           {
-            key: "X-XSS-Protection",
-            value: "1; mode=block",
+            // Force HTTPS for two years. Only meaningful over HTTPS (ignored
+            // on plain-HTTP localhost), so it is safe to send everywhere.
+            key: "Strict-Transport-Security",
+            value: "max-age=63072000; includeSubDomains",
           },
           {
             key: "Referrer-Policy",

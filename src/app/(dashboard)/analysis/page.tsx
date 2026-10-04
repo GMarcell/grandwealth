@@ -9,8 +9,6 @@ import {
   PiggyBank,
   Calendar,
   Loader2,
-  Wallet,
-  Target,
   AlertTriangle,
   CheckCircle2,
   Sparkles,
@@ -68,7 +66,7 @@ interface AnalysisSummary {
 
 interface FullAnalysis extends AnalysisSummary {
   summary: string
-  rawData: any
+  rawData: unknown
 }
 
 const REGENERATION_STEPS = [

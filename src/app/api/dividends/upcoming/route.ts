@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { requireProAccess } from "@/lib/api-access"
+import { requireProUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 import {
@@ -22,15 +21,11 @@ import { SHARES_PER_LOT } from "@/lib/wealth-history"
  * trailing 12-month total per share, never invented.
  */
 export async function GET(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
-  // Stocks are a Pro module, and this endpoint fans out to Yahoo per holding.
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
-
+  // This endpoint fans out to Yahoo Finance per holding, so it needs its own
+  // throttle on top of the Pro gate.
   const limiter = await rateLimit(`dividends-upcoming:${getRateLimitKey(req)}`, {
     limit: 20,
     windowMs: 60_000,
@@ -41,7 +36,7 @@ export async function GET(req: Request) {
 
   try {
     const stocks = await prisma.stock.findMany({
-      where: { userId: session.user.id },
+      where: { userId: userId },
       orderBy: { date: "desc" },
     })
 

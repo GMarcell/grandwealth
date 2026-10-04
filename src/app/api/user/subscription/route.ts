@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { isAdminUser, isProUser } from "@/lib/subscription"
 import { expireLapsedTrials } from "@/lib/trial"
@@ -11,10 +11,8 @@ import { expireLapsedTrials } from "@/lib/trial"
  * and any plan-aware UI).
  */
 export async function GET() {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireUser()
+  if (userId instanceof NextResponse) return userId
 
   try {
     // Self-heal: if this account's trial just ended, downgrade it before
@@ -22,7 +20,7 @@ export async function GET() {
     await expireLapsedTrials()
 
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: userId },
       select: {
         role: true,
         plan: true,

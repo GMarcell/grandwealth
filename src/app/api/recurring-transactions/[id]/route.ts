@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { requireProAccess } from "@/lib/api-access"
+import { requireProUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { updateRecurringSchema, safeParseBody } from "@/lib/validation"
 import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
@@ -9,16 +8,11 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
   try {
-    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    const replayed = await shortCircuitIdempotent(req, userId)
     if (replayed) return replayed
 
     const { id } = await params
@@ -26,7 +20,7 @@ export async function PATCH(
       where: { id },
     })
 
-    if (!existing || existing.userId !== session.user.id) {
+    if (!existing || existing.userId !== userId) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
@@ -49,7 +43,7 @@ export async function PATCH(
       // When (re)linking, verify the goal belongs to the user.
       if (savingsGoalId) {
         const goal = await prisma.savingsGoal.findUnique({ where: { id: savingsGoalId } })
-        if (!goal || goal.userId !== session.user.id) {
+        if (!goal || goal.userId !== userId) {
           return NextResponse.json({ error: "Savings goal not found" }, { status: 404 })
         }
       }
@@ -62,7 +56,7 @@ export async function PATCH(
       include: { savingsGoal: { select: { name: true } } },
     })
 
-    await recordIdempotencyKey(req, session.user.id)
+    await recordIdempotencyKey(req, userId)
 
     return NextResponse.json({
       id: updated.id,
@@ -91,16 +85,11 @@ export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
   try {
-    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    const replayed = await shortCircuitIdempotent(req, userId)
     if (replayed) return replayed
 
     const { id } = await params
@@ -108,12 +97,12 @@ export async function DELETE(
       where: { id },
     })
 
-    if (!existing || existing.userId !== session.user.id) {
+    if (!existing || existing.userId !== userId) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
     await prisma.recurringTransaction.delete({ where: { id } })
-    await recordIdempotencyKey(req, session.user.id)
+    await recordIdempotencyKey(req, userId)
 
     return NextResponse.json({ success: true })
   } catch (error) {

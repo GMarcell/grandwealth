@@ -41,9 +41,9 @@ const routes: Array<{ name: string; get: (req: Request) => Promise<Response> }> 
 ]
 
 const makeRequest = (secret?: string) =>
-  new Request(
-    `http://localhost/api/cron/test${secret ? `?secret=${secret}` : ""}`
-  )
+  new Request("http://localhost/api/cron/test", {
+    headers: secret ? { authorization: `Bearer ${secret}` } : {},
+  })
 
 // ─── Tests ───────────────────────────────────
 
@@ -79,6 +79,21 @@ describe("cron endpoints — CRON_SECRET fail-closed", () => {
       process.env.CRON_SECRET = SECRET
 
       const res = await get(makeRequest("wrong-secret"))
+      expect(res.status).toBe(401)
+      expect(mockStockFindMany).not.toHaveBeenCalled()
+      expect(mockUserFindMany).not.toHaveBeenCalled()
+      expect(mockApplyDue).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(routes)(
+    "$name rejects a secret passed as a query param (header only)",
+    async ({ get }) => {
+      process.env.CRON_SECRET = SECRET
+
+      const res = await get(
+        new Request(`http://localhost/api/cron/test?secret=${SECRET}`)
+      )
       expect(res.status).toBe(401)
       expect(mockStockFindMany).not.toHaveBeenCalled()
       expect(mockUserFindMany).not.toHaveBeenCalled()

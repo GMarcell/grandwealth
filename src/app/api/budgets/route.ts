@@ -1,22 +1,16 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { requireProAccess } from "@/lib/api-access"
+import { requireProUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { createBudgetSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit } from "@/lib/rate-limit"
 import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 
 export async function GET() {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
   const budgets = await prisma.budget.findMany({
-    where: { userId: session.user.id },
+    where: { userId: userId },
     orderBy: [{ month: "desc" }, { categoryName: "asc" }],
   })
 
@@ -24,15 +18,10 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
-
-  const limiter = await rateLimit(`budgets:${session.user.id}`, {
+  const limiter = await rateLimit(`budgets:${userId}`, {
     limit: 20,
     windowMs: 60_000,
   })
@@ -42,7 +31,7 @@ export async function POST(req: Request) {
 
   try {
     // Replayed offline write: the original already applied, so skip it.
-    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    const replayed = await shortCircuitIdempotent(req, userId)
     if (replayed) return replayed
 
     const parsed = await safeParseBody(req, createBudgetSchema)
@@ -52,7 +41,7 @@ export async function POST(req: Request) {
 
     // Check if budget already exists for this category/month
     const existing = await prisma.budget.findUnique({
-      where: { categoryName_month_userId: { categoryName, month, userId: session.user.id } },
+      where: { categoryName_month_userId: { categoryName, month, userId: userId } },
     })
 
     if (existing) {
@@ -63,7 +52,7 @@ export async function POST(req: Request) {
           ...(rolloverCap !== undefined ? { rolloverCap } : {}),
         },
       })
-      await recordIdempotencyKey(req, session.user.id)
+      await recordIdempotencyKey(req, userId)
       return NextResponse.json({
         id: updated.id,
         categoryName: updated.categoryName,
@@ -79,11 +68,11 @@ export async function POST(req: Request) {
         amount,
         month,
         rolloverCap: rolloverCap ?? null,
-        userId: session.user.id,
+        userId: userId,
       },
     })
 
-    await recordIdempotencyKey(req, session.user.id)
+    await recordIdempotencyKey(req, userId)
 
     return NextResponse.json(
       {

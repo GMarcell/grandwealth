@@ -63,6 +63,18 @@ interface RecurringTransaction {
 
 type RecurringFormData = z.infer<typeof recurringFormSchema>
 
+type RecurringPayload = {
+  type: "INCOME" | "EXPENSE"
+  category: string
+  amount: number
+  description: string
+  frequency: "WEEKLY" | "MONTHLY" | "YEARLY"
+  startDate: string
+  endDate: string | null
+  nextDate: string
+  savingsGoalId: string | null
+}
+
 const PREDEFINED_INCOME = [
   "SALARY", "FREELANCE", "BUSINESS", "INVESTMENT", "DIVIDEND",
   "INTEREST", "RENTAL", "GIFT", "REFUND", "OTHER_INCOME",
@@ -130,7 +142,6 @@ export default function RecurringPage() {
   })
 
   const formType = watch("type")
-  const formFrequency = watch("frequency")
 
   const { data: recurring, isLoading } = useQuery<RecurringTransaction[]>({
     queryKey: ["recurring-transactions"],
@@ -160,7 +171,7 @@ export default function RecurringPage() {
   })
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) =>
+    mutationFn: async (data: RecurringPayload) =>
       apiMutate("/api/recurring-transactions", { method: "POST", body: data }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["recurring-transactions"] })
@@ -175,7 +186,7 @@ export default function RecurringPage() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: async (data: any) =>
+    mutationFn: async (data: RecurringPayload & { id: string }) =>
       apiMutate(`/api/recurring-transactions/${data.id}`, {
         method: "PATCH",
         body: data,

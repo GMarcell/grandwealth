@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { createTransactionSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
@@ -7,15 +7,13 @@ import { parsePagination, paginatedResponse } from "@/lib/utils"
 import { getBudgetMonthRangeInclusive } from "@/lib/budget-months"
 import { getBudgetMonthKey } from "@/lib/budget-months"
 import { computeMonthlyBalanceChain } from "@/lib/monthly-balance"
-import { RULE_TYPES } from "@/lib/rule-type"
+import { isValidRuleType } from "@/lib/rule-type"
 import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 import type { Prisma } from "@prisma/client"
 
 export async function GET(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireUser()
+  if (userId instanceof NextResponse) return userId
 
   const limiter = await rateLimit(`transactions-get:${getRateLimitKey(req)}`, {
     limit: 60,
@@ -34,7 +32,7 @@ export async function GET(req: Request) {
     url.searchParams.get("summaryByCategory") === "1"
 
   const where: Prisma.TransactionWhereInput = {
-    userId: session.user.id,
+    userId: userId,
     ...(searchQuery
       ? { description: { contains: searchQuery, mode: "insensitive" } }
       : {}),
@@ -47,7 +45,7 @@ export async function GET(req: Request) {
   // budgets, the dashboard, and the analysis pages.
   if (monthFilter && monthFilter !== "ALL") {
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: userId },
       select: { budgetStartDay: true },
     })
     const startDay = user?.budgetStartDay ?? 1
@@ -59,16 +57,16 @@ export async function GET(req: Request) {
   // Categories without a rule type (and any uncategorized name) count as OTHER.
   if (ruleFilter && ruleFilter !== "ALL") {
     const categories = await prisma.category.findMany({
-      where: { userId: session.user.id },
+      where: { userId: userId },
       select: { name: true, ruleType: true },
     })
     const classifiedNames = categories
-      .filter((c) => RULE_TYPES.includes(c.ruleType as any))
+      .filter((c) => isValidRuleType(c.ruleType))
       .map((c) => c.name)
 
     if (ruleFilter === "OTHER") {
       where.category = { notIn: classifiedNames }
-    } else if (RULE_TYPES.includes(ruleFilter as any)) {
+    } else if (isValidRuleType(ruleFilter)) {
       where.category = {
         in: categories
           .filter((c) => c.ruleType === ruleFilter)
@@ -154,13 +152,13 @@ export async function GET(req: Request) {
   let carryOver = { carryIn: 0, netCashflow: 0, carriedBalance: 0 }
   if (monthFilter && monthFilter !== "ALL") {
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: userId },
       select: { budgetStartDay: true, carryDeficitEnabled: true },
     })
     const startDay = user?.budgetStartDay ?? 1
     const { end } = getBudgetMonthRangeInclusive(monthFilter, startDay)
     const history = await prisma.transaction.findMany({
-      where: { userId: session.user.id, date: { lte: end } },
+      where: { userId: userId, date: { lte: end } },
       select: { type: true, amount: true, date: true },
     })
     const byMonth = new Map<string, { income: number; expenses: number }>()
@@ -202,13 +200,11 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireUser()
+  if (userId instanceof NextResponse) return userId
 
   // Rate limit: 30 transactions per minute per user
-  const limiter = await rateLimit(`transactions:${session.user.id}`, {
+  const limiter = await rateLimit(`transactions:${userId}`, {
     limit: 30,
     windowMs: 60_000,
   })
@@ -218,7 +214,7 @@ export async function POST(req: Request) {
 
   try {
     // Replayed offline write: the original already applied, so skip the create.
-    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    const replayed = await shortCircuitIdempotent(req, userId)
     if (replayed) return replayed
 
     const parsed = await safeParseBody(req, createTransactionSchema)
@@ -233,11 +229,11 @@ export async function POST(req: Request) {
         amount,
         description,
         date: date ? new Date(date) : new Date(),
-        userId: session.user.id,
+        userId: userId,
       },
     })
 
-    await recordIdempotencyKey(req, session.user.id)
+    await recordIdempotencyKey(req, userId)
 
     return NextResponse.json(
       {

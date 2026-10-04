@@ -1,17 +1,15 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { createWidgetToken } from "@/lib/widget-token"
 
 /** List the user's widget tokens (never returns the plaintext). */
 export async function GET() {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireUser()
+  if (userId instanceof NextResponse) return userId
 
   const tokens = await prisma.widgetToken.findMany({
-    where: { userId: session.user.id },
+    where: { userId: userId },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -27,10 +25,8 @@ export async function GET() {
 
 /** Create a new widget token. The plaintext is returned ONCE here. */
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireUser()
+  if (userId instanceof NextResponse) return userId
 
   const body = await req.json().catch(() => ({}))
   const label =
@@ -38,17 +34,15 @@ export async function POST(req: Request) {
       ? body.label.trim().slice(0, 40)
       : "Widget"
 
-  const { token, id, prefix } = await createWidgetToken(session.user.id, label)
+  const { token, id, prefix } = await createWidgetToken(userId, label)
 
   return NextResponse.json({ id, token, prefix, label }, { status: 201 })
 }
 
 /** Revoke a token by id. */
 export async function DELETE(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireUser()
+  if (userId instanceof NextResponse) return userId
 
   const { searchParams } = new URL(req.url)
   const id = searchParams.get("id")
@@ -57,7 +51,7 @@ export async function DELETE(req: Request) {
   }
 
   const existing = await prisma.widgetToken.findUnique({ where: { id } })
-  if (!existing || existing.userId !== session.user.id) {
+  if (!existing || existing.userId !== userId) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 

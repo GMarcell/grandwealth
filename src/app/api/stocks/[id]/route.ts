@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { requireProAccess } from "@/lib/api-access"
+import { requireProUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { updateStockSchema, safeParseBody } from "@/lib/validation"
 import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
@@ -9,22 +8,17 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
   const { id } = await params
 
   try {
-    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    const replayed = await shortCircuitIdempotent(req, userId)
     if (replayed) return replayed
 
     const existing = await prisma.stock.findUnique({ where: { id } })
-    if (!existing || existing.userId !== session.user.id) {
+    if (!existing || existing.userId !== userId) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
@@ -41,7 +35,7 @@ export async function PATCH(
     if (notes !== undefined) data.notes = notes
 
     const updated = await prisma.stock.update({ where: { id }, data })
-    await recordIdempotencyKey(req, session.user.id)
+    await recordIdempotencyKey(req, userId)
     return NextResponse.json({
       id: updated.id,
       symbol: updated.symbol,
@@ -66,27 +60,22 @@ export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
   const { id } = await params
 
   try {
-    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    const replayed = await shortCircuitIdempotent(req, userId)
     if (replayed) return replayed
 
     const existing = await prisma.stock.findUnique({ where: { id } })
-    if (!existing || existing.userId !== session.user.id) {
+    if (!existing || existing.userId !== userId) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
     await prisma.stock.delete({ where: { id } })
-    await recordIdempotencyKey(req, session.user.id)
+    await recordIdempotencyKey(req, userId)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Delete stock error:", error)

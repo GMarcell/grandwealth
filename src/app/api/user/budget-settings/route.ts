@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 
 const DEFAULTS = {
@@ -9,13 +9,11 @@ const DEFAULTS = {
 }
 
 export async function GET() {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireUser()
+  if (userId instanceof NextResponse) return userId
 
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: userId },
     select: { budgetStartDay: true, carryOverEnabled: true, carryDeficitEnabled: true },
   })
 
@@ -27,10 +25,8 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireUser()
+  if (userId instanceof NextResponse) return userId
 
   try {
     const body = await req.json()
@@ -85,7 +81,7 @@ export async function PATCH(req: Request) {
     }
 
     const updated = await prisma.user.update({
-      where: { id: session.user.id },
+      where: { id: userId },
       data,
       select: { budgetStartDay: true, carryOverEnabled: true, carryDeficitEnabled: true },
     })

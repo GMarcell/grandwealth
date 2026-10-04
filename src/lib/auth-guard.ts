@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
 import { isAdminUser, isProUser } from "@/lib/subscription"
+import { getAccessRecord } from "@/lib/account-access"
 import type { Plan, Role, SubscriptionStatus } from "@prisma/client"
 
 /**
@@ -21,33 +21,16 @@ export interface AccountAccess {
   suspended: boolean
 }
 
-const ACCOUNT_SELECT = {
-  id: true,
-  role: true,
-  plan: true,
-  subscriptionStatus: true,
-  currentPeriodEnd: true,
-  suspended: true,
-} as const
-
 async function getAccount(): Promise<AccountAccess | null> {
   const session = await auth()
   if (!session?.user?.id) return null
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: ACCOUNT_SELECT,
-  })
-  if (!user) return null
+  // Shares the per-request cached access record with `auth()`, so a page
+  // guard does not re-read the same row.
+  const account = await getAccessRecord(session.user.id)
+  if (!account) return null
 
-  return {
-    id: user.id,
-    role: user.role,
-    plan: user.plan,
-    subscriptionStatus: user.subscriptionStatus,
-    currentPeriodEnd: user.currentPeriodEnd,
-    suspended: user.suspended,
-  }
+  return { id: session.user.id, ...account }
 }
 
 function loginUrl(callbackUrl?: string): string {

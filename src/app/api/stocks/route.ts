@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { requireProAccess } from "@/lib/api-access"
+import { requireProUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { createStockSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
@@ -10,13 +9,8 @@ import { parsePagination, paginatedResponse } from "@/lib/utils"
 import type { Prisma } from "@prisma/client"
 
 export async function GET(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
   const limiter = await rateLimit(`stocks-get:${getRateLimitKey(req)}`, {
     limit: 60,
@@ -30,7 +24,7 @@ export async function GET(req: Request) {
   const searchQuery = url.searchParams.get("search")?.trim()
 
   const where: Prisma.StockWhereInput = {
-    userId: session.user.id,
+    userId: userId,
     ...(searchQuery
       ? {
           OR: [
@@ -90,15 +84,10 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
-
-  const limiter = await rateLimit(`stocks:${session.user.id}`, {
+  const limiter = await rateLimit(`stocks:${userId}`, {
     limit: 20,
     windowMs: 60_000,
   })
@@ -108,7 +97,7 @@ export async function POST(req: Request) {
 
   try {
     // Replayed offline write: the original already applied, so skip the create.
-    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    const replayed = await shortCircuitIdempotent(req, userId)
     if (replayed) return replayed
 
     const parsed = await safeParseBody(req, createStockSchema)
@@ -127,7 +116,7 @@ export async function POST(req: Request) {
         buyPrice,
         date: date ? new Date(date) : new Date(),
         notes: notes ?? null,
-        userId: session.user.id,
+        userId: userId,
       },
     })
 
@@ -153,7 +142,7 @@ export async function POST(req: Request) {
       console.warn(`Could not auto-fetch price for ${symbol}`)
     }
 
-    await recordIdempotencyKey(req, session.user.id)
+    await recordIdempotencyKey(req, userId)
 
     return NextResponse.json(
       {

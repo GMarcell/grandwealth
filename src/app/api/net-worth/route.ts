@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { computeNetWorthHistory } from "@/lib/wealth-history"
 import { computeGoldPortfolio } from "@/lib/gold"
@@ -10,10 +10,8 @@ import { fetchGoldPriceIdr } from "@/lib/prices"
  * Returns a month-by-month net-worth series computed from the user's records.
  */
 export async function GET(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireUser()
+  if (userId instanceof NextResponse) return userId
 
   const url = new URL(req.url)
   const monthsParam = parseInt(url.searchParams.get("months") ?? "12", 10)
@@ -23,31 +21,31 @@ export async function GET(req: Request) {
     const [user, transactions, goldDeposits, stocks, bankSavings, loans] =
       await Promise.all([
         prisma.user.findUnique({
-          where: { id: session.user.id },
+          where: { id: userId },
           select: { budgetStartDay: true },
         }),
         prisma.transaction.findMany({
-          where: { userId: session.user.id },
+          where: { userId: userId },
           select: { type: true, amount: true, date: true },
           orderBy: { date: "asc" },
         }),
         prisma.goldDeposit.findMany({
-          where: { userId: session.user.id },
+          where: { userId: userId },
           select: { type: true, weightGram: true, totalAmount: true, date: true },
           orderBy: { date: "asc" },
         }),
         prisma.stock.findMany({
-          where: { userId: session.user.id },
+          where: { userId: userId },
           select: { quantity: true, buyPrice: true, currentPrice: true, date: true },
           orderBy: { date: "asc" },
         }),
         prisma.bankSaving.findMany({
-          where: { userId: session.user.id },
+          where: { userId: userId },
           select: { type: true, amount: true, date: true },
           orderBy: { date: "asc" },
         }),
         prisma.loan.findMany({
-          where: { userId: session.user.id },
+          where: { userId: userId },
           select: { startDate: true, remainingBalance: true },
         }),
       ])

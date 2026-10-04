@@ -54,6 +54,15 @@ interface GoldDeposit {
 
 type GoldFormData = z.infer<typeof goldFormSchema>;
 
+type GoldPayload = {
+  type: "BUY" | "SELL";
+  weightGram: number;
+  pricePerGram: number;
+  totalAmount: number;
+  date: string;
+  notes?: string;
+};
+
 const GOLD_TYPES = ["BUY", "SELL"] as const;
 
 export default function GoldPage() {
@@ -96,7 +105,6 @@ export default function GoldPage() {
     },
   });
 
-  const formType = watch("type");
   const formWeight = watch("weight");
   const formPrice = watch("price");
 
@@ -116,7 +124,7 @@ export default function GoldPage() {
     },
   });
 
-  const deposits = depositsData?.data ?? [];
+  const deposits = useMemo(() => depositsData?.data ?? [], [depositsData]);
   const pagination = depositsData?.pagination;
   const summary = depositsData?.summary as
     | { totalWeight: number; totalInvested: number }
@@ -139,7 +147,7 @@ export default function GoldPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) =>
+    mutationFn: async (data: GoldPayload) =>
       apiMutate("/api/gold", { method: "POST", body: data }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["gold"] });
@@ -155,7 +163,7 @@ export default function GoldPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (data: any) =>
+    mutationFn: async (data: GoldPayload & { id: string }) =>
       apiMutate(`/api/gold/${data.id}`, { method: "PATCH", body: data }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["gold"] });

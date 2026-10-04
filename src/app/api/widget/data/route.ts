@@ -44,12 +44,19 @@ export async function GET(req: Request) {
 
   const userId = resolved.userId
 
+  // Widget tokens are a per-user credential, so the account's current state
+  // must still be honored: a suspended account loses access here just as it
+  // does on pages and session-authenticated API routes.
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { budgetStartDay: true, suspended: true },
+  })
+  if (!user || user.suspended) {
+    return NextResponse.json({ error: "Invalid widget token" }, { status: 401 })
+  }
+
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { budgetStartDay: true },
-    })
-    const startDay = user?.budgetStartDay ?? 1
+    const startDay = user.budgetStartDay ?? 1
     const monthKey = getCurrentBudgetMonthKey(startDay)
     const { start, end } = getBudgetMonthRangeInclusive(monthKey, startDay)
 
@@ -81,12 +88,12 @@ export async function GET(req: Request) {
           where: { userId, month: monthKey },
           select: { categoryName: true, amount: true },
         }),
-        // Month spend per category for remaining-budget. Uses ALL transactions
-        // up to the end of the current budget month so the widget matches the
-        // budgets page.
+        // Month spend per category for remaining-budget, scoped to the
+        // current budget month in SQL so we don't pull the user's entire
+        // expense history into memory just to discard most of it.
         prisma.transaction.findMany({
-          where: { userId, type: "EXPENSE", date: { lte: end } },
-          select: { amount: true, category: true, date: true },
+          where: { userId, type: "EXPENSE", date: { gte: start, lte: end } },
+          select: { amount: true, category: true },
         }),
       ])
 
@@ -98,11 +105,10 @@ export async function GET(req: Request) {
       .reduce((s, t) => s + t.amount, 0)
     const netCashflow = income - expenses
 
-    // Budget: spent per category within THIS budget month only.
+    // Budget: spent per category within THIS budget month (already scoped by
+    // the query above).
     const spentByCategory = new Map<string, number>()
     for (const tx of allTimeBudgetsTx) {
-      const d = new Date(tx.date)
-      if (d < start || d > end) continue
       spentByCategory.set(tx.category, (spentByCategory.get(tx.category) ?? 0) + tx.amount)
     }
     const totalBudgeted = budgets.reduce((s, b) => s + b.amount, 0)

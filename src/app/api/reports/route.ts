@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { requireProAccess } from "@/lib/api-access"
+import { requireProUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import {
   generateBudgetMonths,
@@ -10,19 +9,12 @@ import {
 } from "@/lib/budget-months"
 
 export async function GET(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
   const { searchParams } = new URL(req.url)
   const monthsParam = searchParams.get("months")
   const monthsBack = Math.min(Math.max(parseInt(monthsParam || "12"), 1), 24)
-
-  const userId = session.user.id
 
   try {
     // Reports must follow the user's budget cycle (the "Budget Month Starts On"

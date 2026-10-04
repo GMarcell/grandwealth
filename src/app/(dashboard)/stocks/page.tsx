@@ -9,7 +9,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   Plus,
   TrendingUp,
-  TrendingDown,
   Trash2,
   Edit2,
   Loader2,
@@ -65,6 +64,15 @@ interface Stock {
 }
 
 type StockFormData = z.infer<typeof stockFormSchema>
+
+type StockPayload = {
+  symbol: string
+  name: string
+  quantity: number
+  buyPrice: number
+  date: string
+  notes?: string
+}
 
 export default function StocksPage() {
   const queryClient = useQueryClient()
@@ -168,11 +176,11 @@ export default function StocksPage() {
     },
   })
 
-  const stocks = stocksData?.data ?? []
+  const stocks = useMemo(() => stocksData?.data ?? [], [stocksData])
   const pagination = stocksData?.pagination
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) =>
+    mutationFn: async (data: StockPayload) =>
       apiMutate("/api/stocks", { method: "POST", body: data }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["stocks"] })
@@ -188,7 +196,7 @@ export default function StocksPage() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: async (data: any) =>
+    mutationFn: async (data: StockPayload & { id: string }) =>
       apiMutate(`/api/stocks/${data.id}`, { method: "PATCH", body: data }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["stocks"] })

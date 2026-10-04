@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import {
   registerSchema,
+  forgotPasswordSchema,
   createTransactionSchema,
   updateTransactionSchema,
   createCategorySchema,
@@ -930,5 +931,28 @@ describe("date field validation", () => {
   it("keeps optional datetimes nullable on updates", () => {
     expect(updateBankSavingSchema.safeParse({ date: null }).success).toBe(false)
     expect(updateBankSavingSchema.safeParse({}).success).toBe(true)
+  })
+})
+
+// ─── forgotPasswordSchema ────────────────────
+//
+// The reset flow looks the account up by the email in the request. Accounts
+// are stored lowercased at registration, so a mixed-case address must be
+// normalized here too — otherwise a real user silently never gets a link.
+
+describe("forgotPasswordSchema", () => {
+  it("normalizes a mixed-case, padded email exactly like registration", () => {
+    const result = forgotPasswordSchema.safeParse({
+      email: "  User@Example.COM  ",
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.email).toBe("user@example.com")
+    }
+  })
+
+  it("rejects an invalid email", () => {
+    const result = forgotPasswordSchema.safeParse({ email: "not-an-email" })
+    expect(result.success).toBe(false)
   })
 })

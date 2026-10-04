@@ -9,7 +9,7 @@ const mockGenerate = vi.hoisted(() => vi.fn())
 const mockRateLimit = vi.hoisted(() => vi.fn())
 
 vi.mock("@/lib/auth", () => ({ auth: mockAuth }))
-vi.mock("@/lib/api-access", () => ({ requireProAccess: mockRequirePro }))
+vi.mock("@/lib/api-access", () => ({ requireProUser: mockRequirePro }))
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: { findUnique: mockFindUser },

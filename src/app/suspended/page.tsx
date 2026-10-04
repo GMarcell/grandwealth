@@ -1,5 +1,5 @@
 import { ShieldAlert } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 
 /**
  * Shown to suspended accounts. Static and public so it renders regardless

@@ -67,7 +67,7 @@ export function MonthlyBarChart({ data }: { data: MonthlyItem[] }) {
                   borderRadius: "8px",
                   fontSize: "12px",
                 }}
-                formatter={(value: any) => [formatIDR(Number(value))]}
+                formatter={(value) => [formatIDR(Number(value))]}
               />
               <Legend />
               <Bar
@@ -142,7 +142,7 @@ export function CategoryPieChart({
                       borderRadius: "8px",
                       fontSize: "12px",
                     }}
-                    formatter={(value: any) => [formatIDR(Number(value))]}
+                    formatter={(value) => [formatIDR(Number(value))]}
                   />
                 </PieChart>
               </ResponsiveContainer>

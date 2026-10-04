@@ -6,6 +6,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter"
 import { authConfig } from "./auth.config"
 import { rateLimit, getRateLimitKey } from "./rate-limit"
 import { isBootstrapAdminEmail } from "./admin-bootstrap"
+import { getAccessRecord } from "./account-access"
 
 const nextAuth = NextAuth({
   ...authConfig,
@@ -106,10 +107,9 @@ export async function auth() {
   const session = await nextAuth.auth()
   if (!session?.user?.id) return session
 
-  const account = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { suspended: true },
-  })
+  // Shares the per-request cached access record with requireProAccess /
+  // requireAdminAccess, so a guarded route performs a single user read.
+  const account = await getAccessRecord(session.user.id)
   if (!account || account.suspended) return null
   return session
 }

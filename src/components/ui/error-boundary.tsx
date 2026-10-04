@@ -1,6 +1,6 @@
 "use client"
 
-import { Component, type ReactNode } from "react"
+import { Component, type ErrorInfo, type ReactNode } from "react"
 import { AlertTriangle, RefreshCw } from "lucide-react"
 import { Button } from "./button"
 import { Card, CardContent, CardHeader, CardTitle } from "./card"
@@ -25,7 +25,7 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error }
   }
 
-  componentDidCatch(error: Error, errorInfo: any) {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("ErrorBoundary caught:", error, errorInfo)
   }
 

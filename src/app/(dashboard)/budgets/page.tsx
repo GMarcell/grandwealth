@@ -12,8 +12,6 @@ import {
   Trash2,
   Loader2,
   Wallet,
-  TrendingUp,
-  TrendingDown,
   AlertTriangle,
   CheckCircle2,
   Wand2,
@@ -103,12 +101,40 @@ interface Category {
   color: string;
 }
 
-interface TransactionSummary {
-  category: string;
-  total: number;
-}
-
 type BudgetFormData = z.infer<typeof budgetFormSchema>;
+
+type BudgetPayload = {
+  categoryName: string;
+  amount: number;
+  month: string;
+  rolloverCap: number | null;
+};
+
+/** Legacy unpaginated `/api/transactions` response (a plain array). */
+type BudgetTransaction = {
+  id: string;
+  type: string;
+  category: string;
+  amount: number;
+  description: string;
+  date: string;
+};
+
+type RolloverMonth = { key: string; label: string };
+type RolloverMonthEntry = {
+  month: string;
+  rolloverReceived: number;
+  carryOverEnabled: boolean;
+  unused: number;
+};
+type RolloverCategory = {
+  categoryName: string;
+  months: RolloverMonthEntry[];
+};
+type RolloverHistory = {
+  months: RolloverMonth[];
+  categories: RolloverCategory[];
+};
 
 
 export default function BudgetsPage() {
@@ -177,7 +203,7 @@ export default function BudgetsPage() {
     },
   });
 
-  const { data: transactions } = useQuery<any[]>({
+  const { data: transactions } = useQuery<BudgetTransaction[]>({
     queryKey: ["transactions"],
     queryFn: async () => {
       const res = await fetch("/api/transactions");
@@ -187,7 +213,7 @@ export default function BudgetsPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: any) =>
+    mutationFn: async (data: BudgetPayload) =>
       apiMutate("/api/budgets", { method: "POST", body: data }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["budgets"] });
@@ -292,7 +318,7 @@ export default function BudgetsPage() {
     setQuickAmounts(
       Object.fromEntries(monthBudgets.map((budget) => [budget.categoryName, String(budget.amount)])),
     );
-  }, [selectedMonth, budgets]);
+  }, [monthBudgets]);
 
   function saveQuickBudget(categoryName: string) {
     const amount = Number(quickAmounts[categoryName] || 0);
@@ -388,7 +414,7 @@ export default function BudgetsPage() {
   );
 
   // Rollover history data
-  const { data: rolloverHistory, isLoading: historyLoading } = useQuery<any>({
+  const { data: rolloverHistory, isLoading: historyLoading } = useQuery<RolloverHistory>({
     queryKey: ["rollover-history"],
     queryFn: async () => {
       const res = await fetch("/api/budgets/rollover-history");
@@ -667,7 +693,7 @@ export default function BudgetsPage() {
       </Card>
 
       {/* Rollover History */}
-      {(historyLoading || rolloverHistory?.categories?.length > 0) && (
+      {(historyLoading || (rolloverHistory?.categories.length ?? 0) > 0) && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -686,7 +712,7 @@ export default function BudgetsPage() {
                 <Skeleton className="h-10 w-full" />
                 <Skeleton className="h-10 w-full" />
               </div>
-            ) : (
+            ) : rolloverHistory ? (
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
@@ -695,12 +721,12 @@ export default function BudgetsPage() {
                         Category
                       </th>
                       {rolloverHistory.months
-                        .filter((m: any) =>
-                          rolloverHistory.categories.some((c: any) =>
-                            c.months.some((me: any) => me.month === m.key),
+                        .filter((m) =>
+                          rolloverHistory.categories.some((c) =>
+                            c.months.some((me) => me.month === m.key),
                           ),
                         )
-                        .map((m: any) => (
+                        .map((m) => (
                           <th
                             key={m.key}
                             className="text-right font-medium text-muted-foreground py-2 px-2 min-w-[80px]"
@@ -711,7 +737,7 @@ export default function BudgetsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {rolloverHistory.categories.map((cat: any) => (
+                    {rolloverHistory.categories.map((cat) => (
                       <tr
                         key={cat.categoryName}
                         className="border-b last:border-0 hover:bg-muted/30"
@@ -720,12 +746,12 @@ export default function BudgetsPage() {
                           {cat.categoryName}
                         </td>
                         {rolloverHistory.months
-                          .filter((m: any) =>
-                            cat.months.some((me: any) => me.month === m.key),
+                          .filter((m) =>
+                            cat.months.some((me) => me.month === m.key),
                           )
-                          .map((m: any) => {
+                          .map((m) => {
                             const entry = cat.months.find(
-                              (me: any) => me.month === m.key,
+                              (me) => me.month === m.key,
                             );
                             if (!entry)
                               return (
@@ -766,7 +792,7 @@ export default function BudgetsPage() {
                   </tbody>
                 </table>
               </div>
-            )}
+            ) : null}
           </CardContent>
         </Card>
       )}

@@ -48,7 +48,7 @@ export function BudgetAllocationChart({ data }: { data: PieItem[] }) {
                   borderRadius: "8px",
                   fontSize: "12px",
                 }}
-                formatter={(value: any, name: any) => [
+                formatter={(value, name) => [
                   formatIDR(Number(value)),
                   name,
                 ]}

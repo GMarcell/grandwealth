@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test"
+import { PrismaClient } from "@prisma/client"
 
 // Every dashboard page renders an <h1>; assert against it (scoped with
 // hasText) instead of getByText, which also matches the sidebar nav link and
@@ -14,6 +15,17 @@ const TEST_USER = {
   email: `e2e-auth-${Date.now()}@test.grandwealth.app`,
   password: "TestPass123!",
 }
+
+// Delete the account this suite registers (here and in the duplicate-email
+// test) once the file finishes, so repeated runs don't accumulate users.
+test.afterAll(async () => {
+  const prisma = new PrismaClient()
+  try {
+    await prisma.user.deleteMany({ where: { email: TEST_USER.email } })
+  } finally {
+    await prisma.$disconnect()
+  }
+})
 
 // ─── Unauthenticated tests ───────────────────
 

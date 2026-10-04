@@ -48,6 +48,14 @@ interface Goal {
 
 type GoalFormData = z.infer<typeof goalFormSchema>
 
+type GoalPayload = {
+  name: string
+  targetAmount: number
+  savedAmount: number
+  targetDate: string | null
+  color: string
+}
+
 const GOAL_COLORS = [
   "#6366f1",
   "#3b82f6",
@@ -96,7 +104,7 @@ export default function GoalsPage() {
   })
 
   const saveMutation = useMutation({
-    mutationFn: async ({ id, ...data }: any) =>
+    mutationFn: async ({ id, ...data }: GoalPayload & { id?: string }) =>
       apiMutate(id ? `/api/goals/${id}` : "/api/goals", {
         method: id ? "PATCH" : "POST",
         body: data,

@@ -1,19 +1,13 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { requireProAccess } from "@/lib/api-access"
+import { requireProUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { createRecurringSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 
 export async function GET(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
   const limiter = await rateLimit(`recurring-get:${getRateLimitKey(req)}`, {
     limit: 60,
@@ -24,7 +18,7 @@ export async function GET(req: Request) {
   }
 
   const recurring = await prisma.recurringTransaction.findMany({
-    where: { userId: session.user.id },
+    where: { userId: userId },
     include: { savingsGoal: { select: { name: true } } },
     orderBy: { nextDate: "asc" },
   })
@@ -48,15 +42,10 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
-
-  const limiter = await rateLimit(`recurring:${session.user.id}`, {
+  const limiter = await rateLimit(`recurring:${userId}`, {
     limit: 20,
     windowMs: 60_000,
   })
@@ -65,7 +54,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    const replayed = await shortCircuitIdempotent(req, userId)
     if (replayed) return replayed
 
     const parsed = await safeParseBody(req, createRecurringSchema)
@@ -76,7 +65,7 @@ export async function POST(req: Request) {
     // Verify the linked goal belongs to the user when one is provided.
     if (savingsGoalId) {
       const goal = await prisma.savingsGoal.findUnique({ where: { id: savingsGoalId } })
-      if (!goal || goal.userId !== session.user.id) {
+      if (!goal || goal.userId !== userId) {
         return NextResponse.json({ error: "Savings goal not found" }, { status: 404 })
       }
     }
@@ -92,12 +81,12 @@ export async function POST(req: Request) {
         endDate: endDate ? new Date(endDate) : null,
         nextDate: new Date(nextDate),
         savingsGoalId: savingsGoalId ?? null,
-        userId: session.user.id,
+        userId: userId,
       },
       include: { savingsGoal: { select: { name: true } } },
     })
 
-    await recordIdempotencyKey(req, session.user.id)
+    await recordIdempotencyKey(req, userId)
 
     return NextResponse.json(
       {

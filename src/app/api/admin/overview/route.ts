@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { requireAdminAccess } from "@/lib/api-access"
+import { requireAdminUser } from "@/lib/api-access"
 import { PRO_PRICE_IDR } from "@/lib/subscription"
 import { expireLapsedTrials } from "@/lib/trial"
 
@@ -9,15 +8,8 @@ import { expireLapsedTrials } from "@/lib/trial"
  * Admin-only aggregate stats for the admin dashboard.
  */
 export async function GET() {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const access = await requireAdminAccess(session.user.id)
-  if (access instanceof NextResponse) {
-    return access
-  }
+  const userId = await requireAdminUser()
+  if (userId instanceof NextResponse) return userId
 
   try {
     // End lapsed trials first so counts & MRR don't include them.

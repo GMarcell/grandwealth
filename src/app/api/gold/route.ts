@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
-import { requireProAccess } from "@/lib/api-access"
+import { requireProUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { createGoldSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
@@ -10,13 +9,8 @@ import { parsePagination, paginatedResponse } from "@/lib/utils"
 import type { Prisma } from "@prisma/client"
 
 export async function GET(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
   const limiter = await rateLimit(`gold-get:${getRateLimitKey(req)}`, {
     limit: 60,
@@ -31,7 +25,7 @@ export async function GET(req: Request) {
   const typeFilter = url.searchParams.get("type")?.trim()
 
   const where: Prisma.GoldDepositWhereInput = {
-    userId: session.user.id,
+    userId: userId,
     ...(searchQuery
       ? { notes: { contains: searchQuery, mode: "insensitive" } }
       : {}),
@@ -72,7 +66,7 @@ export async function GET(req: Request) {
     prisma.goldDeposit.findMany({
       // Summary cards reflect the FULL portfolio — never the search/type
       // filters, which only shape the list above.
-      where: { userId: session.user.id },
+      where: { userId: userId },
       select: { type: true, weightGram: true, totalAmount: true },
     }),
   ])
@@ -102,15 +96,10 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const userId = await requireProUser()
+  if (userId instanceof NextResponse) return userId
 
-  const proAccess = await requireProAccess(session.user.id)
-  if (proAccess instanceof NextResponse) return proAccess
-
-  const limiter = await rateLimit(`gold:${session.user.id}`, {
+  const limiter = await rateLimit(`gold:${userId}`, {
     limit: 20,
     windowMs: 60_000,
   })
@@ -120,7 +109,7 @@ export async function POST(req: Request) {
 
   try {
     // Replayed offline write: the original already applied, so skip the create.
-    const replayed = await shortCircuitIdempotent(req, session.user.id)
+    const replayed = await shortCircuitIdempotent(req, userId)
     if (replayed) return replayed
 
     const parsed = await safeParseBody(req, createGoldSchema)
@@ -131,7 +120,7 @@ export async function POST(req: Request) {
     // Reject sells that would exceed the gold the user currently holds.
     if (type === "SELL") {
       const held = await prisma.goldDeposit.findMany({
-        where: { userId: session.user.id },
+        where: { userId: userId },
         select: { type: true, weightGram: true, totalAmount: true },
       })
       const validation = validateGoldChange(held, [
@@ -156,11 +145,11 @@ export async function POST(req: Request) {
         totalAmount: totalAmount ?? weightGram * pricePerGram,
         date: date ? new Date(date) : new Date(),
         notes: notes ?? null,
-        userId: session.user.id,
+        userId: userId,
       },
     })
 
-    await recordIdempotencyKey(req, session.user.id)
+    await recordIdempotencyKey(req, userId)
 
     return NextResponse.json(
       {

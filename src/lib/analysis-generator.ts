@@ -321,7 +321,7 @@ BERIKAN LANGKAH-LANGKAH HEMAT YANG SPESIFIK DAN BISA DILAKUKAN. Hitung potensi p
 
   // Keep enough room for the requested 600–800 word report even when a
   // reasoning model spends completion tokens on internal reasoning.
-  let completion = await groq.chat.completions.create(buildRequest(16_384))
+  const completion = await groq.chat.completions.create(buildRequest(16_384))
   let summary = completion.choices[0]?.message?.content?.trim() ?? ""
 
   // `finish_reason === "length"` means the output was cut off — retry with more

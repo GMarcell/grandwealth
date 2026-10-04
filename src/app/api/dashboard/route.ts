@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
+import { requireUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import {
   generateBudgetMonths,
@@ -17,12 +17,8 @@ import { computeGoldPortfolio } from "@/lib/gold"
 import { fetchGoldPriceIdr } from "@/lib/prices"
 
 export async function GET() {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
-  const userId = session.user.id
+  const userId = await requireUser()
+  if (userId instanceof NextResponse) return userId
 
   try {
     // Get user's budget start day setting
@@ -203,7 +199,6 @@ export async function GET() {
 
     // Loan / debt calculations
     const totalDebt = loans.reduce((sum, l) => sum + l.remainingBalance, 0)
-    const totalPrincipal = loans.reduce((sum, l) => sum + l.principal, 0)
 
     // Monthly aggregation for chart — bucketed by BUDGET month so a transaction
     // dated 28-31 Aug lands in the "Sep" budget month (28 Aug – 27 Sep) rather
