@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Sidebar } from "./sidebar";
 import { Menu, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Chatbot } from "@/components/chatbot/chatbot";
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -50,6 +51,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </div>
         <div className="p-3 sm:p-6 lg:p-8">{children}</div>
       </main>
+      <Chatbot />
     </div>
   );
 }

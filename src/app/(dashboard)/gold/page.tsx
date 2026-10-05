@@ -75,6 +75,12 @@ export default function GoldPage() {
   const [editing, setEditing] = useState<GoldDeposit | null>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("add") !== "1") return;
+    setIsDialogOpen(true);
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
+
   // Debounce search input (300ms) before sending to server
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);

@@ -722,8 +722,8 @@ export default function SettingsPage() {
 
       {/* Custom Categories */}
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between">
-          <div>
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
             <CardTitle className="flex items-center gap-2">
               <Tag className="h-5 w-5" />
               Custom Categories
@@ -734,7 +734,7 @@ export default function SettingsPage() {
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button size="sm" onClick={() => resetForm()}>
+              <Button size="sm" onClick={() => resetForm()} className="w-full sm:w-auto">
                 <Plus className="h-4 w-4 mr-1" />
                 New Category
               </Button>
@@ -837,13 +837,13 @@ export default function SettingsPage() {
               <TrendingDown className="h-4 w-4 text-red-500" />
               Expense Categories
             </h4>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
               {PREDEFINED_EXPENSE_CATEGORIES.map((cat) => {
                 const userCat = userExpenseCategories.find(
                   (c) => c.name === cat,
                 );
                 return (
-                  <div key={cat} className="flex items-center gap-2">
+                  <div key={cat} className="flex min-w-0 items-center justify-between gap-2 rounded-md border bg-muted/20 p-2">
                     <Badge variant="secondary" className="text-xs">
                       {cat.replace("_", " ")}
                     </Badge>
@@ -876,7 +876,7 @@ export default function SettingsPage() {
                     ].includes(cat.name),
                 )
                 .map((cat) => (
-                  <div key={cat.id} className="flex items-center gap-2">
+                  <div key={cat.id} className="flex min-w-0 items-center justify-between gap-2 rounded-md border bg-muted/20 p-2">
                     <Badge
                       className="text-xs gap-1 group"
                       style={{
@@ -925,13 +925,13 @@ export default function SettingsPage() {
               <TrendingUp className="h-4 w-4 text-emerald-500" />
               Income Categories
             </h4>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
               {PREDEFINED_INCOME_CATEGORIES.map((cat) => {
                 const userCat = userIncomeCategories.find(
                   (c) => c.name === cat,
                 );
                 return (
-                  <div key={cat} className="flex items-center gap-2">
+                  <div key={cat} className="flex min-w-0 items-center justify-between gap-2 rounded-md border bg-muted/20 p-2">
                     <Badge variant="secondary" className="text-xs">
                       {cat.replace("_", " ")}
                     </Badge>
@@ -962,7 +962,7 @@ export default function SettingsPage() {
                 ].includes(cat.name);
                 if (isPredefined) return null;
                 return (
-                  <div key={cat.id} className="flex items-center gap-2">
+                  <div key={cat.id} className="flex min-w-0 items-center justify-between gap-2 rounded-md border bg-muted/20 p-2">
                     <Badge
                       className="text-xs gap-1 group"
                       style={{

@@ -101,6 +101,12 @@ export default function SavingsPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [page, setPage] = useState(1)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("add") !== "1") return
+    setIsDialogOpen(true)
+    window.history.replaceState(null, "", window.location.pathname)
+  }, [])
   const [editing, setEditing] = useState<BankSaving | null>(null)
   const [comboboxOpen, setComboboxOpen] = useState(false)
   const [comboboxQuery, setComboboxQuery] = useState("")

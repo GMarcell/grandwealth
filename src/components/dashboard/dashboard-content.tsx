@@ -261,6 +261,47 @@ export function DashboardContent() {
         </Button>
       </div>
 
+      {/* Quick Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Quick Actions</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <Link href="/transactions?add=1" className="block">
+              <Button variant="outline" className="w-full justify-start" size="sm">
+                <ArrowLeftRight className="mr-2 h-4 w-4 shrink-0" />
+                <span className="truncate">Add Transaction</span>
+              </Button>
+            </Link>
+            <Link href="/budgets" className="block">
+              <Button variant="outline" className="w-full justify-start" size="sm">
+                <PiggyBank className="mr-2 h-4 w-4 shrink-0" />
+                <span className="truncate">Set Budgets</span>
+              </Button>
+            </Link>
+            <Link href="/gold" className="block">
+              <Button variant="outline" className="w-full justify-start" size="sm">
+                <CircleDollarSign className="mr-2 h-4 w-4 shrink-0" />
+                <span className="truncate">Record Gold</span>
+              </Button>
+            </Link>
+            <Link href="/stocks" className="block">
+              <Button variant="outline" className="w-full justify-start" size="sm">
+                <TrendingUp className="mr-2 h-4 w-4 shrink-0" />
+                <span className="truncate">Add Stock</span>
+              </Button>
+            </Link>
+            <Link href="/savings" className="block">
+              <Button variant="outline" className="w-full justify-start" size="sm">
+                <Landmark className="mr-2 h-4 w-4 shrink-0" />
+                <span className="truncate">Record Savings</span>
+              </Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Total Wealth Hero */}
       <Card className="bg-linear-to-br from-primary/5 via-primary/5 to-transparent border-primary/10">
         <CardContent className="p-6">
@@ -831,69 +872,9 @@ export function DashboardContent() {
         </Card>
       )}
 
-      {/* Quick Actions & Recent Transactions */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      {/* Recent Transactions */}
+      <div>
         <Card>
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <Link href="/transactions" className="block">
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  size="sm"
-                >
-                  <ArrowLeftRight className="h-4 w-4 mr-2 shrink-0" />
-                  <span className="truncate">Add Transaction</span>
-                </Button>
-              </Link>
-              <Link href="/budgets" className="block">
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  size="sm"
-                >
-                  <PiggyBank className="h-4 w-4 mr-2 shrink-0" />
-                  <span className="truncate">Set Budgets</span>
-                </Button>
-              </Link>
-              <Link href="/gold" className="block">
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  size="sm"
-                >
-                  <CircleDollarSign className="h-4 w-4 mr-2 shrink-0" />
-                  <span className="truncate">Record Gold</span>
-                </Button>
-              </Link>
-              <Link href="/stocks" className="block">
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  size="sm"
-                >
-                  <TrendingUp className="h-4 w-4 mr-2 shrink-0" />
-                  <span className="truncate">Add Stock</span>
-                </Button>
-              </Link>
-            </div>
-            <Link href="/savings" className="block">
-              <Button
-                variant="outline"
-                className="w-full justify-start"
-                size="sm"
-              >
-                <Landmark className="h-4 w-4 mr-2 shrink-0" />
-                <span className="truncate">Record Savings</span>
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Recent Transactions</CardTitle>
           </CardHeader>
