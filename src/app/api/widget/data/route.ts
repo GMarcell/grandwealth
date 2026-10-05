@@ -11,6 +11,7 @@ import {
   resolveWidgetToken,
   WIDGET_TOKEN_HEADER,
 } from "@/lib/widget-token"
+import { isProUser } from "@/lib/subscription"
 
 // Home-screen widgets poll on a schedule, so this must never be cached.
 export const dynamic = "force-dynamic"
@@ -49,11 +50,19 @@ export async function GET(req: Request) {
   // does on pages and session-authenticated API routes.
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { budgetStartDay: true, suspended: true },
+    select: {
+      budgetStartDay: true,
+      suspended: true,
+      role: true,
+      plan: true,
+      subscriptionStatus: true,
+      currentPeriodEnd: true,
+    },
   })
   if (!user || user.suspended) {
     return NextResponse.json({ error: "Invalid widget token" }, { status: 401 })
   }
+  const hasProAccess = isProUser(user)
 
   try {
     const startDay = user.budgetStartDay ?? 1
@@ -131,7 +140,9 @@ export async function GET(req: Request) {
       savingsValue += s.type === "DEPOSIT" ? s.amount : -s.amount
     }
     const totalDebt = loans.reduce((s, l) => s + l.remainingBalance, 0)
-    const netWorth = allTimeCash + goldInvested + stockValue + savingsValue - totalDebt
+    const netWorth = hasProAccess
+      ? allTimeCash + goldInvested + stockValue + savingsValue - totalDebt
+      : allTimeCash
 
     return NextResponse.json({
       monthKey,
@@ -139,10 +150,11 @@ export async function GET(req: Request) {
       netCashflow,
       income,
       expenses,
-      remainingBudget,
-      totalBudgeted,
-      totalSpent,
+      remainingBudget: hasProAccess ? remainingBudget : null,
+      totalBudgeted: hasProAccess ? totalBudgeted : null,
+      totalSpent: hasProAccess ? totalSpent : null,
       netWorth,
+      isPro: hasProAccess,
       updatedAt: new Date().toISOString(),
     })
   } catch (error) {

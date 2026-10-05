@@ -35,6 +35,15 @@ export function WidgetCard() {
   const [newToken, setNewToken] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
+  const { data: subscription } = useQuery<{ isPro: boolean }>({
+    queryKey: ["user-subscription"],
+    queryFn: async () => {
+      const res = await fetch("/api/user/subscription")
+      if (!res.ok) throw new Error("Failed to load subscription")
+      return res.json()
+    },
+  })
+
   const { data, isLoading } = useQuery<{ tokens: WidgetToken[] }>({
     queryKey: ["widget-tokens"],
     queryFn: async () => {
@@ -103,6 +112,11 @@ export function WidgetCard() {
           and net worth. Generate a read-only token and paste it into your widget
           app.
         </CardDescription>
+        {!subscription?.isPro && (
+          <Badge variant="secondary" className="w-fit">
+            Free plan: cash flow only
+          </Badge>
+        )}
       </CardHeader>
       <CardContent className="space-y-4">
         {newToken && (
