@@ -78,6 +78,14 @@ export async function GET() {
           date: { gte: windowStart },
         },
         orderBy: { date: "desc" },
+        select: {
+          id: true,
+          type: true,
+          category: true,
+          amount: true,
+          description: true,
+          date: true,
+        },
       }),
       // All-time income/expense sums (single cheap DB aggregate) for the
       // hero's cash component — see allTimeNetCashflow below.
@@ -91,16 +99,17 @@ export async function GET() {
       }),
       prisma.goldDeposit.findMany({
         where: { userId },
-        orderBy: { date: "desc" },
+        select: { type: true, weightGram: true, totalAmount: true },
       }),
       prisma.stock.findMany({
         where: { userId },
-        orderBy: { date: "desc" },
+        select: { quantity: true, currentPrice: true, buyPrice: true },
       }),
       // All budgets across the carry-over chain (the last 13 budget months)
       // so rollover can compound month over month.
       prisma.budget.findMany({
         where: { userId, month: { in: chainMonths } },
+        select: { month: true, categoryName: true, amount: true, rolloverCap: true },
       }),
       prisma.monthlyAnalysis.findFirst({
         where: { userId, month: { lte: lastCompletedMonthKey } },
@@ -123,11 +132,11 @@ export async function GET() {
       }),
       prisma.bankSaving.findMany({
         where: { userId },
+        select: { type: true, amount: true, accountName: true },
       }),
       prisma.loan.findMany({
         where: { userId },
-        select: { id: true, name: true, principal: true, remainingBalance: true, monthlyPayment: true, startDate: true },
-        orderBy: { startDate: "desc" },
+        select: { remainingBalance: true },
       }),
     ])
 

@@ -82,7 +82,14 @@ describe("GET /api/widget/data — authorization", () => {
 
     expect(mockUserFindUnique).toHaveBeenCalledWith({
       where: { id: "user-1" },
-      select: { budgetStartDay: true, suspended: true },
+      select: {
+        budgetStartDay: true,
+        suspended: true,
+        role: true,
+        plan: true,
+        subscriptionStatus: true,
+        currentPeriodEnd: true,
+      },
     })
   })
 })
