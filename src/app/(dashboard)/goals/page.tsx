@@ -17,6 +17,8 @@ import {
   Coins,
   Wallet,
   CheckCircle2,
+  Sparkles,
+  Lock,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -28,12 +30,15 @@ import { FormError } from "@/components/ui/form-error"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { formatIDR, formatCompactIDR, formatDate } from "@/lib/utils"
 import { toast } from "sonner"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { apiMutate, isQueuedResult } from "@/lib/api-mutate"
 
 interface Goal {
@@ -56,6 +61,54 @@ type GoalPayload = {
   color: string
 }
 
+// Admin-only AI goal plan (Groq).
+type GoalFeasibility = "ON_TRACK" | "TIGHT" | "UNREALISTIC"
+type GoalCategoryCut = {
+  category: string
+  monthlySaving: number
+  reason: string | null
+}
+type GoalPlan = {
+  goal: {
+    id: string
+    name: string
+    targetAmount: number
+    savedAmount: number
+    deadline: string
+  }
+  monthsRemaining: number
+  remaining: number
+  requiredMonthlySaving: number
+  lastMonth: {
+    sourceMonth: string
+    income: number
+    expenses: number
+    netSaving: number
+    categories: Array<{ name: string; spent: number }>
+  }
+  summary: string
+  feasibility: GoalFeasibility
+  actions: string[]
+  categoryCuts: GoalCategoryCut[]
+  projectedMonthlySaving: number
+  shortfall: number
+}
+
+const FEASIBILITY_LABEL: Record<GoalFeasibility, string> = {
+  ON_TRACK: "On track",
+  TIGHT: "Tight",
+  UNREALISTIC: "Unrealistic",
+}
+
+const FEASIBILITY_VARIANT: Record<
+  GoalFeasibility,
+  "profit" | "secondary" | "loss"
+> = {
+  ON_TRACK: "profit",
+  TIGHT: "secondary",
+  UNREALISTIC: "loss",
+}
+
 const GOAL_COLORS = [
   "#6366f1",
   "#3b82f6",
@@ -69,10 +122,20 @@ const GOAL_COLORS = [
 
 export default function GoalsPage() {
   const queryClient = useQueryClient()
+  const router = useRouter()
+  const { data: session } = useSession()
+  // The Groq AI goal planner is a Pro+ feature (admins always have access).
+  // The API is the authoritative gate — this is only the UI hint.
+  const canUseAiPlanner =
+    session?.user?.role === "ADMIN" || session?.user?.plan === "PRO_PLUS"
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Goal | null>(null)
   const [contributing, setContributing] = useState<Goal | null>(null)
   const [contributeAmount, setContributeAmount] = useState("")
+  const [planGoal, setPlanGoal] = useState<Goal | null>(null)
+  const [planDeadline, setPlanDeadline] = useState("")
+  const [aiPlan, setAiPlan] = useState<GoalPlan | null>(null)
+  const [isPlanDialogOpen, setIsPlanDialogOpen] = useState(false)
 
   const {
     register,
@@ -155,6 +218,47 @@ export default function GoalsPage() {
     },
     onError: () => toast.error("Failed to delete goal"),
   })
+
+  // Admin-only: ask Groq for a plan to reach the goal by the chosen deadline.
+  const planMutation = useMutation({
+    mutationFn: async ({ goalId, deadline }: { goalId: string; deadline: string }) => {
+      const res = await fetch("/api/goals/ai-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goalId, deadline }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to generate goal plan")
+      }
+      return json.plan as GoalPlan
+    },
+    onSuccess: (generated) => setAiPlan(generated),
+    onError: (err) =>
+      toast.error(
+        err instanceof Error ? err.message : "Failed to generate goal plan",
+      ),
+  })
+
+  function openPlan(goal: Goal) {
+    setPlanGoal(goal)
+    setPlanDeadline(
+      goal.targetDate
+        ? new Date(goal.targetDate).toISOString().split("T")[0]
+        : "",
+    )
+    setAiPlan(null)
+    setIsPlanDialogOpen(true)
+  }
+
+  function generatePlan() {
+    if (!planGoal) return
+    if (!planDeadline) {
+      toast.error("Pick a deadline for this goal")
+      return
+    }
+    planMutation.mutate({ goalId: planGoal.id, deadline: planDeadline })
+  }
 
   function resetForm() {
     setEditing(null)
@@ -456,6 +560,27 @@ export default function GoalsPage() {
                       <Plus className="h-4 w-4 mr-1" />
                       Contribute
                     </Button>
+                    {canUseAiPlanner ? (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => openPlan(goal)}
+                        aria-label="AI goal plan"
+                        title="Pro+ feature: AI plan to reach this goal by a deadline"
+                      >
+                        <Sparkles className="h-3.5 w-3.5 text-primary" />
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => router.push("/upgrade")}
+                        aria-label="AI goal plan — Pro+ feature"
+                        title="AI goal planning is a Pro+ feature"
+                      >
+                        <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon-sm"
@@ -547,6 +672,165 @@ export default function GoalsPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pro+ AI goal plan dialog */}
+      <Dialog open={isPlanDialogOpen} onOpenChange={setIsPlanDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              AI Goal Plan{planGoal ? ` — ${planGoal.name}` : ""}
+            </DialogTitle>
+          </DialogHeader>
+          <DialogDescription>
+            Pick a deadline and AI will build a step-by-step plan from your last
+            completed month of income and spending. This is a preview — it does
+            not change any data.
+          </DialogDescription>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="planDeadline">Deadline</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="planDeadline"
+                  type="date"
+                  value={planDeadline}
+                  onChange={(e) => setPlanDeadline(e.target.value)}
+                />
+                <Button onClick={generatePlan} disabled={planMutation.isPending}>
+                  {planMutation.isPending && (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  )}
+                  {aiPlan ? "Regenerate" : "Generate plan"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                The plan is built from your last completed month of income and
+                spending.
+              </p>
+            </div>
+
+            {planMutation.isPending && (
+              <div className="space-y-3" role="status" aria-live="polite">
+                <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Building your plan…
+                </p>
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+            )}
+
+            {!planMutation.isPending && planMutation.isError && (
+              <div
+                role="alert"
+                className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4"
+              >
+                <p className="text-sm">
+                  {planMutation.error instanceof Error
+                    ? planMutation.error.message
+                    : "Couldn't build a plan. Please try again."}
+                </p>
+                <Button size="sm" variant="outline" onClick={generatePlan}>
+                  Try again
+                </Button>
+              </div>
+            )}
+
+            {!planMutation.isPending && aiPlan && (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={FEASIBILITY_VARIANT[aiPlan.feasibility]}>
+                    {FEASIBILITY_LABEL[aiPlan.feasibility]}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {aiPlan.monthsRemaining} month
+                    {aiPlan.monthsRemaining === 1 ? "" : "s"} to{" "}
+                    {formatDate(aiPlan.goal.deadline)}
+                  </span>
+                </div>
+
+                {aiPlan.summary && (
+                  <p className="text-sm text-muted-foreground">{aiPlan.summary}</p>
+                )}
+
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-lg border p-3">
+                    <div className="text-xs text-muted-foreground">
+                      Needed / month
+                    </div>
+                    <div className="font-semibold">
+                      {formatIDR(aiPlan.requiredMonthlySaving)}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border p-3">
+                    <div className="text-xs text-muted-foreground">
+                      Projected / month
+                    </div>
+                    <div className="font-semibold">
+                      {formatIDR(aiPlan.projectedMonthlySaving)}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Net {formatCompactIDR(aiPlan.lastMonth.netSaving)} + cuts
+                    </div>
+                  </div>
+                </div>
+
+                {aiPlan.shortfall > 0 && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    Still {formatIDR(aiPlan.shortfall)} short each month after the
+                    suggested cuts.
+                  </p>
+                )}
+
+                {aiPlan.actions.length > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="text-xs font-medium text-muted-foreground">
+                      Action steps
+                    </div>
+                    <ol className="space-y-1 text-sm list-decimal list-inside">
+                      {aiPlan.actions.map((action, i) => (
+                        <li key={i}>{action}</li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+
+                {aiPlan.categoryCuts.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-xs font-medium text-muted-foreground">
+                      Suggested cuts
+                    </div>
+                    <div className="divide-y rounded-lg border">
+                      {aiPlan.categoryCuts.map((cut) => (
+                        <div
+                          key={cut.category}
+                          className="flex items-start justify-between gap-3 p-3"
+                        >
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium">
+                              {cut.category.replace("_", " ")}
+                            </div>
+                            {cut.reason && (
+                              <div className="text-xs text-muted-foreground">
+                                {cut.reason}
+                              </div>
+                            )}
+                          </div>
+                          <div className="whitespace-nowrap text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                            -{formatIDR(cut.monthlySaving)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

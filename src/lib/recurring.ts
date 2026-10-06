@@ -41,7 +41,8 @@ export async function applyDueRecurringTransactions(
       active: true,
       nextDate: { lte: now },
       user: {
-        plan: "PRO",
+        // Either paid tier is entitled (Pro+ is a superset of Pro).
+        plan: { in: ["PRO", "PRO_PLUS"] },
         subscriptionStatus: "ACTIVE",
         suspended: false,
         OR: [

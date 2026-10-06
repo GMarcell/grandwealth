@@ -1,12 +1,15 @@
 import { describe, it, expect } from "vitest"
 import {
   isAdminUser,
+  isProPlusUser,
   isProUser,
   isProOnlyPath,
   planLabel,
   subscriptionStatusLabel,
   proTrialPeriodEnd,
   PRO_PRICE_IDR,
+  PRO_PLUS_PRICE_IDR,
+  PRO_PLUS_ONLY_FEATURES,
   PRO_TRIAL_DAYS,
 } from "../subscription"
 
@@ -21,6 +24,14 @@ const freeUser = {
 const proUser = {
   role: "USER" as const,
   plan: "PRO" as const,
+  subscriptionStatus: "ACTIVE" as const,
+  currentPeriodEnd: null,
+  suspended: false,
+}
+
+const proPlusUser = {
+  role: "USER" as const,
+  plan: "PRO_PLUS" as const,
   subscriptionStatus: "ACTIVE" as const,
   currentPeriodEnd: null,
   suspended: false,
@@ -64,6 +75,32 @@ describe("isProUser", () => {
     expect(isProUser({ ...freeUser, role: "ADMIN" })).toBe(true)
     expect(isProUser({ ...freeUser, role: "ADMIN", suspended: true })).toBe(false)
   })
+
+  it("treats Pro+ as a superset of Pro", () => {
+    expect(isProUser(proPlusUser)).toBe(true)
+    expect(
+      isProUser({ ...proPlusUser, currentPeriodEnd: new Date(Date.now() - 1000) }),
+    ).toBe(false)
+    expect(isProUser({ ...proPlusUser, subscriptionStatus: "EXPIRED" })).toBe(false)
+    expect(isProUser({ ...proPlusUser, suspended: true })).toBe(false)
+  })
+})
+
+describe("isProPlusUser", () => {
+  it("only admits an active Pro+ subscription", () => {
+    expect(isProPlusUser(proPlusUser)).toBe(true)
+    expect(isProPlusUser(proUser)).toBe(false)
+    expect(isProPlusUser(freeUser)).toBe(false)
+    expect(isProPlusUser({ ...proPlusUser, subscriptionStatus: "CANCELED" })).toBe(false)
+    expect(isProPlusUser({ ...proPlusUser, suspended: true })).toBe(false)
+    expect(
+      isProPlusUser({ ...proPlusUser, currentPeriodEnd: new Date(Date.now() - 1000) }),
+    ).toBe(false)
+  })
+
+  it("does not auto-upgrade admins to Pro+", () => {
+    expect(isProPlusUser({ ...freeUser, role: "ADMIN" })).toBe(false)
+  })
 })
 
 describe("isAdminUser", () => {
@@ -78,6 +115,7 @@ describe("labels & constants", () => {
   it("labels plans", () => {
     expect(planLabel("FREE")).toBe("Free")
     expect(planLabel("PRO")).toBe("Pro")
+    expect(planLabel("PRO_PLUS")).toBe("Pro+")
   })
 
   it("labels subscription statuses", () => {
@@ -88,8 +126,15 @@ describe("labels & constants", () => {
     expect(subscriptionStatusLabel(null)).toBe("—")
   })
 
-  it("has a positive IDR price constant", () => {
+  it("has positive IDR price constants", () => {
     expect(PRO_PRICE_IDR).toBeGreaterThan(0)
+    expect(PRO_PLUS_PRICE_IDR).toBeGreaterThan(0)
+  })
+
+  it("lists the two AI planners as Pro+ features", () => {
+    const names = PRO_PLUS_ONLY_FEATURES.map((f) => f.name)
+    expect(names).toContain("AI budget planner")
+    expect(names).toContain("AI goal planner")
   })
 
   it("grants a 30-day trial", () => {

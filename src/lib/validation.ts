@@ -126,6 +126,13 @@ export const contributeGoalSchema = z.object({
   amount: z.number().finite(),
 })
 
+// ─── AI Goal Plan (admin-only) ────────────────────
+export const aiGoalPlanSchema = z.object({
+  goalId: z.string().min(1, "Goal is required"),
+  // The deadline to plan against. Optional only when the goal already has one.
+  deadline: dateString.optional(),
+})
+
 // ─── Loans / Debts ────────────────────────────────
 export const createLoanSchema = z.object({
   name: z.string().min(1, "Loan name is required").max(100),
@@ -157,7 +164,7 @@ export const updateDividendSchema = createDividendSchema.partial()
 export const adminUpdateUserSchema = z
   .object({
     role: z.enum(["USER", "ADMIN"]).optional(),
-    plan: z.enum(["FREE", "PRO"]).optional(),
+    plan: z.enum(["FREE", "PRO", "PRO_PLUS"]).optional(),
     subscriptionStatus: z
       .enum(["ACTIVE", "PAST_DUE", "CANCELED", "EXPIRED"])
       .nullable()
@@ -178,7 +185,7 @@ export const adminUpdateUserSchema = z
 export const adminUsersQuerySchema = z.object({
   search: z.string().trim().max(100).optional(),
   role: z.enum(["USER", "ADMIN"]).optional(),
-  plan: z.enum(["FREE", "PRO"]).optional(),
+  plan: z.enum(["FREE", "PRO", "PRO_PLUS"]).optional(),
   subscriptionStatus: z.enum(["ACTIVE", "PAST_DUE", "CANCELED", "EXPIRED"]).optional(),
   suspended: z.enum(["true", "false"]).optional(),
   page: z.coerce.number().int().positive().optional(),

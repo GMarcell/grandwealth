@@ -44,10 +44,10 @@ import {
 } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
 import { formatDate, formatCompactIDR } from "@/lib/utils"
-import { proTrialPeriodEnd, subscriptionStatusLabel } from "@/lib/subscription"
+import { planLabel, proTrialPeriodEnd, subscriptionStatusLabel } from "@/lib/subscription"
 import { DEFAULT_PASSWORD } from "@/lib/password"
 
-type Plan = "FREE" | "PRO"
+type Plan = "FREE" | "PRO" | "PRO_PLUS"
 type Role = "USER" | "ADMIN"
 type SubscriptionStatus = "ACTIVE" | "PAST_DUE" | "CANCELED" | "EXPIRED"
 
@@ -275,7 +275,7 @@ export default function AdminPage() {
         id: editingUser.id,
         body: {
           plan: editPlan,
-          ...(editPlan === "PRO"
+          ...(editPlan !== "FREE"
             ? {
                 subscriptionStatus: editStatus,
                 currentPeriodEnd: editPeriodEnd ? `${editPeriodEnd}T23:59:59.999Z` : null,
@@ -538,6 +538,7 @@ export default function AdminPage() {
                 <SelectItem value="all">All plans</SelectItem>
                 <SelectItem value="FREE">Free</SelectItem>
                 <SelectItem value="PRO">Pro</SelectItem>
+                <SelectItem value="PRO_PLUS">Pro+</SelectItem>
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1) }}>
@@ -618,14 +619,14 @@ export default function AdminPage() {
                     </td>
                     <td className="py-3 pr-4">
                       <div className="flex flex-wrap items-center gap-1">
-                        {user.plan === "PRO" ? (
+                        {user.plan !== "FREE" ? (
                           <Badge className="gap-1">
-                            <Crown className="h-3 w-3" /> Pro
+                            <Crown className="h-3 w-3" /> {planLabel(user.plan)}
                           </Badge>
                         ) : (
                           <Badge variant="secondary">Free</Badge>
                         )}
-                        {user.plan === "PRO" && user.isTrial && (
+                        {user.plan !== "FREE" && user.isTrial && (
                           <Badge variant="outline" className="gap-1 text-muted-foreground">
                             <Gift className="h-3 w-3" /> Trial
                           </Badge>
@@ -633,7 +634,7 @@ export default function AdminPage() {
                       </div>
                     </td>
                     <td className="py-3 pr-4">
-                      {user.plan === "PRO" ? (
+                      {user.plan !== "FREE" ? (
                         <Badge
                           variant={user.subscriptionStatus === "ACTIVE" ? "profit" : "loss"}
                         >
@@ -691,19 +692,19 @@ export default function AdminPage() {
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  {user.plan === "PRO" ? (
+                  {user.plan !== "FREE" ? (
                     <Badge className="gap-1">
-                      <Crown className="h-3 w-3" /> Pro
+                      <Crown className="h-3 w-3" /> {planLabel(user.plan)}
                     </Badge>
                   ) : (
                     <Badge variant="secondary">Free</Badge>
                   )}
-                  {user.plan === "PRO" && user.isTrial && (
+                  {user.plan !== "FREE" && user.isTrial && (
                     <Badge variant="outline" className="gap-1 text-muted-foreground">
                       <Gift className="h-3 w-3" /> Trial
                     </Badge>
                   )}
-                  {user.plan === "PRO" && (
+                  {user.plan !== "FREE" && (
                     <Badge
                       variant={user.subscriptionStatus === "ACTIVE" ? "profit" : "loss"}
                     >
@@ -825,13 +826,15 @@ export default function AdminPage() {
                 value={editPlan}
                 onValueChange={(v) => setEditPlan(v as Plan)}
               >
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-full">                <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="FREE">Free</SelectItem>
                   <SelectItem value="PRO">Pro</SelectItem>
+                  <SelectItem value="PRO_PLUS">Pro+</SelectItem>
                 </SelectContent>
               </Select>
-            </div>                {editPlan === "PRO" && (
+            </div>                {editPlan !== "FREE" && (
                   <>
                     <div className="space-y-2">
                       <Label>Subscription status</Label>

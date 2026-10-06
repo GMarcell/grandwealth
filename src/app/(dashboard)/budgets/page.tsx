@@ -17,6 +17,7 @@ import {
   Wand2,
   CalendarRange,
   Sparkles,
+  Lock,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ import { FormError } from "@/components/ui/form-error";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -52,6 +54,7 @@ import {
 } from "@/lib/budget-carry-over";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { apiMutate, isQueuedResult } from "@/lib/api-mutate";
 import dynamic from "next/dynamic";
 
@@ -182,9 +185,13 @@ type AiPlan = {
 
 export default function BudgetsPage() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const { data: session } = useSession();
-  // Groq AI budgeting is an admin tool; everyone else uses the 50/30/20 planner.
-  const isAdmin = session?.user?.role === "ADMIN";
+  // The Groq AI planner is a Pro+ feature (admins always have access);
+  // everyone else uses the deterministic 50/30/20 planner. The API is the
+  // authoritative gate — this is only the UI hint.
+  const canUseAiPlanner =
+    session?.user?.role === "ADMIN" || session?.user?.plan === "PRO_PLUS";
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [quickAmounts, setQuickAmounts] = useState<Record<string, string>>({});
@@ -368,15 +375,20 @@ export default function BudgetsPage() {
       }
       return json.plan as AiPlan;
     },
-    onSuccess: (generated) => {
-      setAiPlan(generated);
-      setIsAiDialogOpen(true);
-    },
+    onSuccess: (generated) => setAiPlan(generated),
     onError: (err) =>
       toast.error(
         err instanceof Error ? err.message : "Failed to generate AI budget plan",
       ),
   });
+
+  // Open the dialog immediately and let it show progress, rather than leaving
+  // the user with no feedback while the plan is being generated.
+  function openAiPlan() {
+    setAiPlan(null)
+    setIsAiDialogOpen(true)
+    aiPlanMutation.mutate()
+  }
 
   // Admin-only: write the AI plan to this month's budgets.
   const aiApplyMutation = useMutation({
@@ -605,14 +617,14 @@ export default function BudgetsPage() {
               ))}
             </SelectContent>
           </Select>
-          {isAdmin && (
+          {canUseAiPlanner ? (
             <Button
               size="sm"
               variant="outline"
-              onClick={() => aiPlanMutation.mutate()}
+              onClick={openAiPlan}
               disabled={aiPlanMutation.isPending || aiApplyMutation.isPending}
               className="w-full sm:w-auto"
-              title="Admin only: let AI (Groq) plan this month's budget from last month's actual spending"
+              title="Pro+ feature: let AI plan this month's budget from last month's actual spending"
             >
               {aiPlanMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-1" />
@@ -620,6 +632,17 @@ export default function BudgetsPage() {
                 <Sparkles className="h-4 w-4 mr-1" />
               )}
               AI Plan
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => router.push("/upgrade")}
+              className="w-full text-muted-foreground sm:w-auto"
+              title="AI budget planning is a Pro+ feature — see what's included"
+            >
+              <Lock className="h-4 w-4 mr-1" />
+              AI Plan · Pro+
             </Button>
           )}
           <Button
@@ -1122,24 +1145,58 @@ export default function BudgetsPage() {
         </CardContent>
       </Card>
 
-      {/* Admin-only AI plan preview (Groq) — review before applying */}
+      {/* Pro+ AI plan preview (Groq) — review before applying */}
       <Dialog open={isAiDialogOpen} onOpenChange={setIsAiDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
-              AI Budget Plan (Admin)
+              AI Budget Plan
             </DialogTitle>
           </DialogHeader>
-          {aiPlan && (
+          <DialogDescription>
+            {aiPlan
+              ? `Built from your spending in ${getBudgetMonthLabel(aiPlan.sourceMonth, startDay)}. Review it before applying — nothing is saved until you press Apply.`
+              : "AI builds a budget from your last completed month of spending. Nothing is saved until you apply it."}
+          </DialogDescription>
+
+          {aiPlanMutation.isPending && (
+            <div className="space-y-3" role="status" aria-live="polite">
+              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Analyzing last month&apos;s spending…
+              </p>
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          )}
+
+          {!aiPlanMutation.isPending && aiPlanMutation.isError && (
+            <div
+              role="alert"
+              className="space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4"
+            >
+              <p className="text-sm">
+                {aiPlanMutation.error instanceof Error
+                  ? aiPlanMutation.error.message
+                  : "Couldn't generate a plan. Please try again."}
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => aiPlanMutation.mutate()}
+              >
+                Try again
+              </Button>
+            </div>
+          )}
+
+          {!aiPlanMutation.isPending && aiPlan && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
                 {aiPlan.summary ||
                   `Proposed budget for ${getBudgetMonthLabel(selectedMonth, startDay)}.`}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Based on spending in{" "}
-                {getBudgetMonthLabel(aiPlan.sourceMonth, startDay)}
               </p>
 
               <div className="max-h-64 divide-y overflow-y-auto rounded-lg border">

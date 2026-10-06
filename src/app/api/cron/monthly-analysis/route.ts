@@ -54,7 +54,8 @@ export async function GET(request: Request) {
     // active subscription (keeps Groq usage/cost aligned with paying users).
     const users = await prisma.user.findMany({
       where: {
-        plan: "PRO",
+        // Either paid tier is entitled (Pro+ is a superset of Pro).
+        plan: { in: ["PRO", "PRO_PLUS"] },
         subscriptionStatus: "ACTIVE",
         suspended: false,
         OR: [

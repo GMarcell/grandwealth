@@ -100,7 +100,8 @@ export async function PATCH(
         data.currentPeriodEnd = null
         data.isTrial = false
       } else {
-        if (plan === "PRO") data.plan = "PRO"
+        // Both paid tiers share the same subscription lifecycle.
+        if (plan === "PRO" || plan === "PRO_PLUS") data.plan = plan
         if (subscriptionStatus !== undefined) data.subscriptionStatus = subscriptionStatus
 
         if (currentPeriodEnd !== undefined) {
@@ -118,8 +119,11 @@ export async function PATCH(
           }
         }
 
-        // Granting PRO without an explicit status means: activate now.
-        if (data.plan === "PRO" && data.subscriptionStatus === undefined) {
+        // Granting a paid plan without an explicit status means: activate now.
+        if (
+          (data.plan === "PRO" || data.plan === "PRO_PLUS") &&
+          data.subscriptionStatus === undefined
+        ) {
           data.subscriptionStatus = "ACTIVE"
         }
 

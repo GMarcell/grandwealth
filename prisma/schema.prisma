@@ -16,6 +16,10 @@ enum Role {
 enum Plan {
   FREE
   PRO
+  // PRO_PLUS is a superset of PRO: it unlocks everything Pro does plus any
+  // future Pro+-exclusive features. See isProUser / isProPlusUser in
+  // src/lib/subscription.ts.
+  PRO_PLUS
 }
 
 enum SubscriptionStatus {

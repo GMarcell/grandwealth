@@ -1,7 +1,12 @@
 import Link from "next/link"
 import { Wallet, Check, Crown } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { PLAN_FEATURES, PRO_PRICE_IDR } from "@/lib/subscription"
+import {
+  PLAN_FEATURES,
+  PRO_PRICE_IDR,
+  PRO_PLUS_PRICE_IDR,
+  PRO_PLUS_ONLY_FEATURES,
+} from "@/lib/subscription"
 import { formatIDR } from "@/lib/utils"
 
 /**
@@ -28,7 +33,7 @@ export default function UpgradePage() {
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card className="border-border/60">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -76,6 +81,46 @@ export default function UpgradePage() {
                   </span>
                 </li>
               ))}
+            </ul>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/60">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Crown className="h-5 w-5" />
+              Pro+
+            </CardTitle>
+            <CardDescription>
+              {formatIDR(PRO_PLUS_PRICE_IDR)}/month — everything in Pro, and more
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-2 text-sm">
+              <li className="flex items-start gap-2">
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <span>
+                  <span className="font-medium">Everything in Pro</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    — all {proFeatures.length} Pro modules
+                  </span>
+                </span>
+              </li>
+              {PRO_PLUS_ONLY_FEATURES.map((f) => (
+                <li key={f.name} className="flex items-start gap-2">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  <span>
+                    <span className="font-medium">{f.name}</span>
+                    <span className="text-muted-foreground"> — {f.description}</span>
+                  </span>
+                </li>
+              ))}
+              {PRO_PLUS_ONLY_FEATURES.length === 0 && (
+                <li className="text-xs text-muted-foreground">
+                  New Pro+-exclusive features are coming soon.
+                </li>
+              )}
             </ul>
           </CardContent>
         </Card>

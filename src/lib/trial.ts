@@ -15,7 +15,8 @@ import { prisma } from "@/lib/prisma"
 export async function expireLapsedTrials(now: Date = new Date()): Promise<number> {
   const result = await prisma.user.updateMany({
     where: {
-      plan: "PRO",
+      // Trials can be granted on either paid tier (Pro or Pro+).
+      plan: { in: ["PRO", "PRO_PLUS"] },
       isTrial: true,
       subscriptionStatus: "ACTIVE",
       currentPeriodEnd: { lt: now },

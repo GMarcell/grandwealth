@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdminUser } from "@/lib/api-access"
+import { requireAdminOrProPlusUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
 import { aiBudgetPlanSchema, safeParseBody } from "@/lib/validation"
 import { generateAiBudgetPlanForUser, BudgetAiError } from "@/lib/budget-ai"
@@ -9,15 +9,16 @@ import { rateLimit } from "@/lib/rate-limit"
  * POST /api/budgets/ai-plan
  * Body: { month: "YYYY-MM", apply?: boolean }
  *
- * Admin-only. Generates a budget for `month` from the immediately preceding
- * budget month's actual spending using Groq AI. Regular users get the
- * deterministic 50/30/20 planner at /api/budgets/plan instead. By default the
- * plan is returned for preview only; pass `apply: true` to upsert it over the
- * user's budgets for that month.
+ * Pro+ (and admin). Generates a budget for `month` from the immediately
+ * preceding budget month's actual spending using Groq AI. Regular Pro users
+ * get the deterministic 50/30/20 planner at /api/budgets/plan instead. By
+ * default the plan is returned for preview only; pass `apply: true` to upsert
+ * it over the user's budgets for that month.
  */
 export async function POST(req: Request) {
-  // Admins only — this endpoint calls an external, metered AI service.
-  const userId = await requireAdminUser()
+  // Pro+ exclusive (admins always pass) — this endpoint calls an external,
+  // metered AI service.
+  const userId = await requireAdminOrProPlusUser()
   if (userId instanceof NextResponse) return userId
 
   const limiter = await rateLimit(`budget-ai-plan:${userId}`, {

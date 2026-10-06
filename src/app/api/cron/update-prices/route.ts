@@ -46,7 +46,8 @@ export async function GET(request: Request) {
     const stocks = await prisma.stock.findMany({
       where: {
         user: {
-          plan: "PRO",
+          // Either paid tier is entitled (Pro+ is a superset of Pro).
+          plan: { in: ["PRO", "PRO_PLUS"] },
           subscriptionStatus: "ACTIVE",
           suspended: false,
           OR: [

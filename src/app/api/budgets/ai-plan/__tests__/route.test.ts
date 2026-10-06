@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 
 // ─── Hoisted mocks (available before module instantiation) ───
 
-const mockRequireAdmin = vi.hoisted(() => vi.fn())
+const mockRequireProPlus = vi.hoisted(() => vi.fn())
 const mockRateLimit = vi.hoisted(() => vi.fn())
 const mockBudgetFindMany = vi.hoisted(() => vi.fn())
 const mockBudgetUpsert = vi.hoisted(() => vi.fn())
@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => {
   return { generate: vi.fn(), BudgetAiError: TestBudgetAiError }
 })
 
-vi.mock("@/lib/api-access", () => ({ requireAdminUser: mockRequireAdmin }))
+vi.mock("@/lib/api-access", () => ({ requireAdminOrProPlusUser: mockRequireProPlus }))
 vi.mock("@/lib/rate-limit", () => ({ rateLimit: mockRateLimit }))
 vi.mock("@/lib/prisma", () => ({
   prisma: { budget: { findMany: mockBudgetFindMany, upsert: mockBudgetUpsert } },
@@ -53,10 +53,10 @@ const post = (body: unknown) =>
     body: JSON.stringify(body),
   })
 
-describe("POST /api/budgets/ai-plan (admin-only)", () => {
+describe("POST /api/budgets/ai-plan (Pro+/admin only)", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockRequireAdmin.mockResolvedValue("admin-1")
+    mockRequireProPlus.mockResolvedValue("user-1")
     mockRateLimit.mockResolvedValue({
       allowed: true,
       remaining: 4,
@@ -67,17 +67,18 @@ describe("POST /api/budgets/ai-plan (admin-only)", () => {
     mockBudgetUpsert.mockResolvedValue({})
   })
 
-  it("rejects a non-admin before calling the AI", async () => {
-    // requireAdminUser returns a 403 for a signed-in non-admin account.
-    mockRequireAdmin.mockResolvedValue(
-      NextResponse.json({ error: "Admin access required" }, { status: 403 }),
+  it("rejects a non-entitled user before calling the AI", async () => {
+    // requireAdminOrProPlusUser returns a 403 for a signed-in Pro (or free)
+    // account that is neither Pro+ nor an admin.
+    mockRequireProPlus.mockResolvedValue(
+      NextResponse.json({ error: "Pro+ subscription required" }, { status: 403 }),
     )
 
     const res = await POST(post({ month: "2026-09" }))
     const body = await res.json()
 
     expect(res.status).toBe(403)
-    expect(body.error).toMatch(/admin/i)
+    expect(body.error).toMatch(/pro\+/i)
     expect(mocks.generate).not.toHaveBeenCalled()
     expect(mockBudgetUpsert).not.toHaveBeenCalled()
   })
@@ -110,7 +111,7 @@ describe("POST /api/budgets/ai-plan (admin-only)", () => {
           categoryName_month_userId: {
             categoryName: "FOOD",
             month: "2026-09",
-            userId: "admin-1",
+            userId: "user-1",
           },
         },
         update: { amount: 1_400_000 },

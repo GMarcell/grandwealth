@@ -39,7 +39,7 @@ interface UserRow {
   name: string | null
   email: string
   role: "ADMIN" | "USER"
-  plan: "FREE" | "PRO"
+  plan: "FREE" | "PRO" | "PRO_PLUS"
   subscriptionStatus: "ACTIVE" | "PAST_DUE" | "CANCELED" | "EXPIRED" | null
   currentPeriodEnd: Date | null
   isTrial: boolean
@@ -226,6 +226,49 @@ describe("PATCH /api/admin/users/[id] — plan transitions", () => {
 
     const data = mockUpdate.mock.calls[0][0].data
     expect(data).toMatchObject({ plan: "PRO", subscriptionStatus: "ACTIVE" })
+  })
+
+  it("granting PRO_PLUS without a status activates the subscription", async () => {
+    setupAdminActingOn(userRow())
+    mockUpdate.mockImplementation(
+      async (args: { where: { id: string }; data: Record<string, unknown> }) =>
+        updatedUser(userRow(), args.data)
+    )
+
+    const res = await PATCH(makeRequest("user-2", { plan: "PRO_PLUS" }), {
+      params: Promise.resolve({ id: "user-2" }),
+    })
+    expect(res.status).toBe(200)
+
+    const data = mockUpdate.mock.calls[0][0].data
+    expect(data).toMatchObject({ plan: "PRO_PLUS", subscriptionStatus: "ACTIVE" })
+  })
+
+  it("downgrading from PRO_PLUS to FREE clears subscription state", async () => {
+    const plus = userRow({ plan: "PRO_PLUS", subscriptionStatus: "ACTIVE" })
+    setupAdminActingOn(plus)
+    mockUpdate.mockImplementation(
+      async (args: { where: { id: string }; data: Record<string, unknown> }) =>
+        updatedUser(plus, args.data)
+    )
+
+    const res = await PATCH(makeRequest("user-2", { plan: "FREE" }), {
+      params: Promise.resolve({ id: "user-2" }),
+    })
+    expect(res.status).toBe(200)
+
+    const data = mockUpdate.mock.calls[0][0].data
+    expect(data).toMatchObject({ plan: "FREE", subscriptionStatus: null })
+  })
+
+  it("rejects an unknown plan value", async () => {
+    setupAdminActingOn(userRow())
+
+    const res = await PATCH(makeRequest("user-2", { plan: "PRO_MAX" }), {
+      params: Promise.resolve({ id: "user-2" }),
+    })
+    expect(res.status).toBe(400)
+    expect(mockUpdate).not.toHaveBeenCalled()
   })
 
   it("rejects an invalid period end date", async () => {

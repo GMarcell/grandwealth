@@ -26,7 +26,7 @@ describe("expireLapsedTrials", () => {
     expect(count).toBe(2)
     expect(mockUpdateMany).toHaveBeenCalledWith({
       where: {
-        plan: "PRO",
+        plan: { in: ["PRO", "PRO_PLUS"] },
         isTrial: true,
         subscriptionStatus: "ACTIVE",
         currentPeriodEnd: { lt: now },

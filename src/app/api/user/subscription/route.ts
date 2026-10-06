@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireUser } from "@/lib/api-access"
 import { prisma } from "@/lib/prisma"
-import { isAdminUser, isProUser } from "@/lib/subscription"
+import { isAdminUser, isProPlusUser, isProUser } from "@/lib/subscription"
 import { expireLapsedTrials } from "@/lib/trial"
 
 /**
@@ -43,6 +43,7 @@ export async function GET() {
       isTrial: user.isTrial,
       suspended: user.suspended,
       isPro: isProUser(user),
+      isProPlus: isProPlusUser(user),
       isAdmin: isAdminUser(user),
     })
   } catch (error) {

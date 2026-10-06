@@ -17,12 +17,13 @@ import { planLabel, subscriptionStatusLabel } from "@/lib/subscription"
 
 interface SubscriptionState {
   role: "USER" | "ADMIN"
-  plan: "FREE" | "PRO"
+  plan: "FREE" | "PRO" | "PRO_PLUS"
   subscriptionStatus: "ACTIVE" | "PAST_DUE" | "CANCELED" | "EXPIRED" | null
   currentPeriodEnd: string | null
   isTrial: boolean
   suspended: boolean
   isPro: boolean
+  isProPlus: boolean
   isAdmin: boolean
 }
 
@@ -76,7 +77,7 @@ export function SubscriptionCard() {
             </Badge>
           )}
 
-          {!isLoading && data?.plan === "PRO" && data.subscriptionStatus && (
+          {!isLoading && data && data.plan !== "FREE" && data.subscriptionStatus && (
             <Badge
               variant={data.subscriptionStatus === "ACTIVE" ? "default" : "secondary"}
             >
@@ -93,7 +94,7 @@ export function SubscriptionCard() {
             <dd className="font-medium">
               {data?.currentPeriodEnd
                 ? formatDate(data.currentPeriodEnd)
-                : data?.plan === "PRO"
+                : data?.plan !== "FREE"
                   ? "No end date set"
                   : "—"}
             </dd>
@@ -115,7 +116,7 @@ export function SubscriptionCard() {
           </p>
         )}
 
-        {!isLoading && data && !data.isPro && data.plan === "PRO" && data.isTrial && (
+        {!isLoading && data && !data.isPro && data.plan !== "FREE" && data.isTrial && (
           <p className="rounded-lg bg-destructive/10 p-3 text-xs text-muted-foreground">
             Your free trial has ended. To keep using the Pro modules, ask your
             administrator to activate your subscription.
