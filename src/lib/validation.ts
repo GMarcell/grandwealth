@@ -230,6 +230,22 @@ export const budgetTemplateSchema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/, "Month must be in YYYY-MM format"),
 })
 
+// ─── Budget Plan (50/30/20) ───────────────────────
+export const budgetPlanSchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/, "Month must be in YYYY-MM format"),
+  // When true, the generated plan is written to the user's budgets. Defaults
+  // to false so the client can preview the plan before applying it.
+  apply: z.boolean().optional(),
+})
+
+// ─── AI Budget Plan (admin-only) ──────────────────
+export const aiBudgetPlanSchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/, "Month must be in YYYY-MM format"),
+  // When true, the generated plan is written to the user's budgets. Defaults
+  // to false so the client can preview the plan before applying it.
+  apply: z.boolean().optional(),
+})
+
 // ─── Form Schemas (for react-hook-form validation) ───
 // These use z.string() with .refine() for numeric fields
 // since HTML inputs always produce strings.

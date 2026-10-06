@@ -15,6 +15,8 @@ import {
   AlertTriangle,
   CheckCircle2,
   Wand2,
+  CalendarRange,
+  Sparkles,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,6 +51,7 @@ import {
   computeCarryOverChain,
 } from "@/lib/budget-carry-over";
 import { toast } from "sonner";
+import { useSession } from "next-auth/react";
 import { apiMutate, isQueuedResult } from "@/lib/api-mutate";
 import dynamic from "next/dynamic";
 
@@ -69,6 +72,12 @@ const BudgetAllocationChart = dynamic(
     ),
   },
 );
+
+const RULE_TYPE_LABEL: Record<"NEED" | "WANT" | "SAVINGS", string> = {
+  NEED: "Need",
+  WANT: "Want",
+  SAVINGS: "Savings",
+};
 
 const EXPENSE_CATEGORIES = [
   "FOOD",
@@ -136,12 +145,53 @@ type RolloverHistory = {
   categories: RolloverCategory[];
 };
 
+type PlanBudget = {
+  categoryName: string;
+  amount: number;
+  ruleType: "NEED" | "WANT" | "SAVINGS";
+  spent: number;
+};
+type BudgetPlan = {
+  month: string;
+  sourceMonth: string;
+  incomeMonth: string;
+  summary: string;
+  income: number;
+  totalExpenses: number;
+  totalBudgeted: number;
+  budgets: PlanBudget[];
+  skippedGroups: Array<"NEED" | "WANT" | "SAVINGS">;
+};
+
+// Admin-only AI plan shape (Groq).
+type AiPlanBudget = {
+  categoryName: string;
+  amount: number;
+  reason: string | null;
+};
+type AiPlan = {
+  month: string;
+  sourceMonth: string;
+  summary: string;
+  totalIncome: number;
+  totalExpenses: number;
+  totalBudgeted: number;
+  budgets: AiPlanBudget[];
+};
+
 
 export default function BudgetsPage() {
   const queryClient = useQueryClient();
+  const { data: session } = useSession();
+  // Groq AI budgeting is an admin tool; everyone else uses the 50/30/20 planner.
+  const isAdmin = session?.user?.role === "ADMIN";
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [quickAmounts, setQuickAmounts] = useState<Record<string, string>>({});
+  const [plan, setPlan] = useState<BudgetPlan | null>(null);
+  const [isPlanDialogOpen, setIsPlanDialogOpen] = useState(false);
+  const [aiPlan, setAiPlan] = useState<AiPlan | null>(null);
+  const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
 
   const {
     register,
@@ -252,6 +302,106 @@ export default function BudgetsPage() {
       }
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to generate template"),
+  });
+
+  // Build a 50/30/20 plan from last month's existing data (preview only).
+  const planMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/budgets/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month: selectedMonth }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to generate budget plan");
+      }
+      return json.plan as BudgetPlan;
+    },
+    onSuccess: (generated) => {
+      setPlan(generated);
+      setIsPlanDialogOpen(true);
+    },
+    onError: (err) =>
+      toast.error(
+        err instanceof Error ? err.message : "Failed to generate budget plan",
+      ),
+  });
+
+  // Write the generated plan to this month's budgets.
+  const applyPlanMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/budgets/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month: selectedMonth, apply: true }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to apply budget plan");
+      }
+      return json as { message?: string };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["budgets"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      toast.success(data.message || "Budget plan applied");
+      setIsPlanDialogOpen(false);
+    },
+    onError: (err) =>
+      toast.error(
+        err instanceof Error ? err.message : "Failed to apply budget plan",
+      ),
+  });
+
+  // Admin-only: ask Groq for a plan (preview only — nothing is written yet).
+  const aiPlanMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/budgets/ai-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month: selectedMonth }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to generate AI budget plan");
+      }
+      return json.plan as AiPlan;
+    },
+    onSuccess: (generated) => {
+      setAiPlan(generated);
+      setIsAiDialogOpen(true);
+    },
+    onError: (err) =>
+      toast.error(
+        err instanceof Error ? err.message : "Failed to generate AI budget plan",
+      ),
+  });
+
+  // Admin-only: write the AI plan to this month's budgets.
+  const aiApplyMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/budgets/ai-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month: selectedMonth, apply: true }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to apply AI budget plan");
+      }
+      return json as { message?: string };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["budgets"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      toast.success(data.message || "AI budget plan applied");
+      setIsAiDialogOpen(false);
+    },
+    onError: (err) =>
+      toast.error(
+        err instanceof Error ? err.message : "Failed to apply AI budget plan",
+      ),
   });
 
   const deleteMutation = useMutation({
@@ -455,6 +605,38 @@ export default function BudgetsPage() {
               ))}
             </SelectContent>
           </Select>
+          {isAdmin && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => aiPlanMutation.mutate()}
+              disabled={aiPlanMutation.isPending || aiApplyMutation.isPending}
+              className="w-full sm:w-auto"
+              title="Admin only: let AI (Groq) plan this month's budget from last month's actual spending"
+            >
+              {aiPlanMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+              ) : (
+                <Sparkles className="h-4 w-4 mr-1" />
+              )}
+              AI Plan
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => planMutation.mutate()}
+            disabled={planMutation.isPending || applyPlanMutation.isPending}
+            className="w-full sm:w-auto"
+            title="Build this month's budget from last month's spending using the 50/30/20 rule"
+          >
+            {planMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-1" />
+            ) : (
+              <CalendarRange className="h-4 w-4 mr-1" />
+            )}
+            Plan Last Month
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -939,6 +1121,193 @@ export default function BudgetsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Admin-only AI plan preview (Groq) — review before applying */}
+      <Dialog open={isAiDialogOpen} onOpenChange={setIsAiDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              AI Budget Plan (Admin)
+            </DialogTitle>
+          </DialogHeader>
+          {aiPlan && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                {aiPlan.summary ||
+                  `Proposed budget for ${getBudgetMonthLabel(selectedMonth, startDay)}.`}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Based on spending in{" "}
+                {getBudgetMonthLabel(aiPlan.sourceMonth, startDay)}
+              </p>
+
+              <div className="max-h-64 divide-y overflow-y-auto rounded-lg border">
+                {aiPlan.budgets.map((b) => (
+                  <div
+                    key={b.categoryName}
+                    className="flex items-start justify-between gap-3 p-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium">
+                        {formatCategoryName(b.categoryName)}
+                      </div>
+                      {b.reason && (
+                        <div className="text-xs text-muted-foreground">
+                          {b.reason}
+                        </div>
+                      )}
+                    </div>
+                    <div className="whitespace-nowrap text-sm font-semibold">
+                      {formatIDR(b.amount)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Total proposed</span>
+                <span className="font-bold">{formatIDR(aiPlan.totalBudgeted)}</span>
+              </div>
+              {aiPlan.totalIncome > 0 && aiPlan.totalBudgeted > aiPlan.totalIncome && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  Proposed total exceeds last month&apos;s income of{" "}
+                  {formatIDR(aiPlan.totalIncome)}.
+                </p>
+              )}
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => aiPlanMutation.mutate()}
+                  disabled={aiPlanMutation.isPending || aiApplyMutation.isPending}
+                >
+                  {aiPlanMutation.isPending && (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  )}
+                  Regenerate
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={() => aiApplyMutation.mutate()}
+                  disabled={aiApplyMutation.isPending || aiPlanMutation.isPending}
+                >
+                  {aiApplyMutation.isPending && (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  )}
+                  Apply to {getBudgetMonthLabel(selectedMonth, startDay)}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* 50/30/20 plan preview — review before applying */}
+      <Dialog open={isPlanDialogOpen} onOpenChange={setIsPlanDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarRange className="h-5 w-5 text-primary" />
+              Budget Plan for {getBudgetMonthLabel(selectedMonth, startDay)}
+            </DialogTitle>
+          </DialogHeader>
+          {plan && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">{plan.summary}</p>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-lg border p-3">
+                  <div className="text-xs text-muted-foreground">Income base</div>
+                  <div className="font-semibold">{formatIDR(plan.income)}</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {getBudgetMonthLabel(plan.incomeMonth, startDay)}
+                  </div>
+                </div>
+                <div className="rounded-lg border p-3">
+                  <div className="text-xs text-muted-foreground">
+                    Last month spent
+                  </div>
+                  <div className="font-semibold">{formatIDR(plan.totalExpenses)}</div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {getBudgetMonthLabel(plan.sourceMonth, startDay)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="max-h-64 divide-y overflow-y-auto rounded-lg border">
+                {plan.budgets.map((b) => (
+                  <div
+                    key={b.categoryName}
+                    className="flex items-start justify-between gap-3 p-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-medium">
+                          {formatCategoryName(b.categoryName)}
+                        </span>
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] leading-none"
+                        >
+                          {RULE_TYPE_LABEL[b.ruleType]}
+                        </Badge>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Spent last month: {formatIDR(b.spent)}
+                      </div>
+                    </div>
+                    <div className="whitespace-nowrap text-sm font-semibold">
+                      {formatIDR(b.amount)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Total proposed</span>
+                <span className="font-bold">{formatIDR(plan.totalBudgeted)}</span>
+              </div>
+
+              {plan.skippedGroups.length > 0 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  Some 50/30/20 groups are unallocated because no{" "}
+                  {plan.skippedGroups
+                    .map((g) => RULE_TYPE_LABEL[g].toLowerCase())
+                    .join(" or ")}{" "}
+                  category had spending last month. Classify categories in
+                  Settings.
+                </p>
+              )}
+
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => planMutation.mutate()}
+                  disabled={planMutation.isPending || applyPlanMutation.isPending}
+                >
+                  {planMutation.isPending && (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  )}
+                  Recalculate
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={() => applyPlanMutation.mutate()}
+                  disabled={applyPlanMutation.isPending || planMutation.isPending}
+                >
+                  {applyPlanMutation.isPending && (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  )}
+                  Apply to {getBudgetMonthLabel(selectedMonth, startDay)}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
