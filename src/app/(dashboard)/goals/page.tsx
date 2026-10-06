@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   Sparkles,
   Lock,
+  CircleDot,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -92,6 +93,19 @@ type GoalPlan = {
   categoryCuts: GoalCategoryCut[]
   projectedMonthlySaving: number
   shortfall: number
+  includeOptions: {
+    includeSavings: boolean
+    includeGold: boolean
+    includeSellStocks: boolean
+  }
+  investmentOptions: Array<{
+    type: "SAVINGS" | "GOLD" | "SELL_STOCKS"
+    title: string
+    description: string
+    pros: string[]
+    cons: string[]
+    relevantData?: Record<string, number | string>
+  }>
 }
 
 const FEASIBILITY_LABEL: Record<GoalFeasibility, string> = {
@@ -134,6 +148,11 @@ export default function GoalsPage() {
   const [contributeAmount, setContributeAmount] = useState("")
   const [planGoal, setPlanGoal] = useState<Goal | null>(null)
   const [planDeadline, setPlanDeadline] = useState("")
+  const [planIncludeOptions, setPlanIncludeOptions] = useState({
+    includeSavings: true,
+    includeGold: true,
+    includeSellStocks: true,
+  })
   const [aiPlan, setAiPlan] = useState<GoalPlan | null>(null)
   const [isPlanDialogOpen, setIsPlanDialogOpen] = useState(false)
 
@@ -221,11 +240,11 @@ export default function GoalsPage() {
 
   // Admin-only: ask Groq for a plan to reach the goal by the chosen deadline.
   const planMutation = useMutation({
-    mutationFn: async ({ goalId, deadline }: { goalId: string; deadline: string }) => {
+    mutationFn: async ({ goalId, deadline, includeOptions }: { goalId: string; deadline: string; includeOptions?: { includeSavings?: boolean; includeGold?: boolean; includeSellStocks?: boolean } }) => {
       const res = await fetch("/api/goals/ai-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ goalId, deadline }),
+        body: JSON.stringify({ goalId, deadline, ...includeOptions }),
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -247,6 +266,11 @@ export default function GoalsPage() {
         ? new Date(goal.targetDate).toISOString().split("T")[0]
         : "",
     )
+    setPlanIncludeOptions({
+      includeSavings: true,
+      includeGold: true,
+      includeSellStocks: true,
+    })
     setAiPlan(null)
     setIsPlanDialogOpen(true)
   }
@@ -257,7 +281,7 @@ export default function GoalsPage() {
       toast.error("Pick a deadline for this goal")
       return
     }
-    planMutation.mutate({ goalId: planGoal.id, deadline: planDeadline })
+    planMutation.mutate({ goalId: planGoal.id, deadline: planDeadline, includeOptions: planIncludeOptions })
   }
 
   function resetForm() {
@@ -691,6 +715,52 @@ export default function GoalsPage() {
           </DialogDescription>
 
           <div className="space-y-4">
+            {/* Include options toggles */}
+            <div className="space-y-2">
+              <Label>Include in plan (optional)</Label>
+              <div className="grid grid-cols-1 gap-2">
+                <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={planIncludeOptions.includeSavings}
+                    onChange={(e) => setPlanIncludeOptions(prev => ({ ...prev, includeSavings: e.target.checked }))}
+                    className="h-4 w-4 rounded border-muted-foreground accent-emerald-500"
+                  />
+                  <div>
+                    <div className="text-sm font-medium">💰 Tabungan / Deposito</div>
+                    <div className="text-xs text-muted-foreground">Kurangi pengeluaran untuk menabung mencapai tujuan</div>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={planIncludeOptions.includeGold}
+                    onChange={(e) => setPlanIncludeOptions(prev => ({ ...prev, includeGold: e.target.checked }))}
+                    className="h-4 w-4 rounded border-muted-foreground accent-emerald-500"
+                  />
+                  <div>
+                    <div className="text-sm font-medium">🥇 Emas (Gold)</div>
+                    <div className="text-xs text-muted-foreground">Jual emas untuk mendanai tujuan jika Anda punya</div>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={planIncludeOptions.includeSellStocks}
+                    onChange={(e) => setPlanIncludeOptions(prev => ({ ...prev, includeSellStocks: e.target.checked }))}
+                    className="h-4 w-4 rounded border-muted-foreground accent-emerald-500"
+                  />
+                  <div>
+                    <div className="text-sm font-medium">📈 Saham (Stocks)</div>
+                    <div className="text-xs text-muted-foreground">Jual saham untung untuk mendanai tujuan</div>
+                  </div>
+                </label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Pilih opsi yang ingin Anda pertimbangkan dalam rencana. AI akan menunjukkan kelebihan dan kekurangan masing-masing.
+              </p>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="planDeadline">Deadline</Label>
               <div className="flex gap-2">
@@ -826,6 +896,75 @@ export default function GoalsPage() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {/* Investment options with pros/cons */}
+                {aiPlan.investmentOptions && aiPlan.investmentOptions.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="text-xs font-medium text-muted-foreground">
+                      Opsi investasi untuk mencapai tujuan
+                    </div>
+                    {aiPlan.investmentOptions.map((option) => (
+                      <div key={option.type} className="rounded-lg border bg-muted/30 p-4">
+                        <div className="flex items-start justify-between gap-2 mb-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              {option.type === "SAVINGS" && <Coins className="h-4 w-4 text-emerald-500" />}
+                              {option.type === "GOLD" && <CircleDot className="h-4 w-4 text-amber-500" />}
+                              {option.type === "SELL_STOCKS" && <TrendingUp className="h-4 w-4 text-blue-500" />}
+                              <span className="font-medium">{option.title}</span>
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-1">{option.description}</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <div className="text-xs font-medium text-emerald-600 dark:text-emerald-400 mb-1">
+                              ✅ Kelebihan (Pros)
+                            </div>
+                            <ul className="space-y-1">
+                              {option.pros.map((pro, i) => (
+                                <li key={i} className="flex items-start gap-2">
+                                  <span className="text-emerald-500 mt-0.5">✓</span>
+                                  <span className="text-muted-foreground">{pro}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div>
+                            <div className="text-xs font-medium text-rose-600 dark:text-rose-400 mb-1">
+                              ⚠️ Kekurangan (Cons)
+                            </div>
+                            <ul className="space-y-1">
+                              {option.cons.map((con, i) => (
+                                <li key={i} className="flex items-start gap-2">
+                                  <span className="text-rose-500 mt-0.5">✗</span>
+                                  <span className="text-muted-foreground">{con}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+
+                        {option.relevantData && (
+                          <div className="mt-3 pt-3 border-t text-xs">
+                            <div className="text-muted-foreground mb-1">Data relevan:</div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {Object.entries(option.relevantData).map(([key, value]) => (
+                                <div key={key} className="flex justify-between">
+                                  <span className="capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}:</span>
+                                  <span className="font-medium text-right">
+                                    {typeof value === 'number' ? formatCompactIDR(value) : value}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>

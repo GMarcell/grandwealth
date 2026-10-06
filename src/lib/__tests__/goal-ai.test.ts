@@ -18,6 +18,8 @@ vi.mock("@/lib/prisma", () => ({
     savingsGoal: { findUnique: mockGoalFindUnique },
     user: { findUnique: mockUserFindUnique },
     transaction: { findMany: mockTransactionFindMany },
+    goldDeposit: { findMany: vi.fn().mockResolvedValue([]) },
+    stock: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }))
 

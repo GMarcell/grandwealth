@@ -10,6 +10,9 @@
  * are computed here, not by the model. The model only supplies the qualitative
  * assessment, actions, and category-level cut suggestions, which are validated
  * against the real spending data before being returned.
+ *
+ * Users can also choose to include investment options (savings accounts, gold,
+ * or selling stocks) in their plan, with pros and cons for each option.
  */
 
 import { z } from "zod"
@@ -20,11 +23,27 @@ import {
   getBudgetMonthRangeInclusive,
   getLastCompletedBudgetMonthKey,
 } from "@/lib/budget-months"
+import { fetchGoldPriceIdr } from "@/lib/prices"
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
 /** Average Gregorian month length in ms, used for month math. */
 const AVG_MONTH_MS = 30.4375 * 24 * 60 * 60 * 1000
+
+/** Format a number as IDR with locale formatting */
+function formatIDR(n: number): string {
+  return `Rp ${Math.round(n).toLocaleString("id-ID")}`
+}
+
+/** Get current gold price in IDR/gram, fallback to 0 if unavailable */
+async function getGoldPrice(): Promise<number> {
+  try {
+    const result = await fetchGoldPriceIdr()
+    return result.pricePerGramIdr
+  } catch {
+    return 0
+  }
+}
 
 export type GoalFeasibility = "ON_TRACK" | "TIGHT" | "UNREALISTIC"
 
@@ -65,6 +84,21 @@ export interface AiGoalPlan {
   projectedMonthlySaving: number
   /** How far the projected saving falls short of the required monthly amount. */
   shortfall: number
+  /** User-selected options to include in the plan. */
+  includeOptions: {
+    includeSavings: boolean
+    includeGold: boolean
+    includeSellStocks: boolean
+  }
+  /** Investment options with pros and cons, based on user's actual holdings. */
+  investmentOptions: Array<{
+    type: "SAVINGS" | "GOLD" | "SELL_STOCKS"
+    title: string
+    description: string
+    pros: string[]
+    cons: string[]
+    relevantData?: Record<string, number | string>
+  }>
 }
 
 /** Error carrying an HTTP status so the route can respond meaningfully. */
@@ -276,11 +310,19 @@ export function parseAiGoalPlanResponse(
 /**
  * Generate an AI plan to reach `goalId` by `deadline` (defaults to the goal's
  * own target date when omitted), grounded in last month's spending.
+ *
+ * Users can optionally include investment options (savings accounts, gold,
+ * or selling stocks) in their plan.
  */
 export async function generateAiGoalPlanForUser(
   userId: string,
   goalId: string,
   deadlineISO: string | null,
+  includeOptions: {
+    includeSavings?: boolean
+    includeGold?: boolean
+    includeSellStocks?: boolean
+  } = {},
 ): Promise<AiGoalPlan> {
   if (!process.env.GROQ_API_KEY) {
     throw new GoalAiError("AI goal planning is not configured (missing GROQ_API_KEY)", 503)
@@ -351,6 +393,159 @@ export async function generateAiGoalPlanForUser(
   }
 
   const requiredMonthlySaving = remaining / monthsRemaining
+
+  // Fetch user's gold and stock holdings for investment options
+  const goldDeposits = await prisma.goldDeposit.findMany({
+    where: { userId, type: "BUY" },
+    select: { weightGram: true, pricePerGram: true, totalAmount: true, date: true },
+    orderBy: { date: "desc" },
+  })
+
+  const currentGoldPrice = await getGoldPrice()
+  const stocks = await prisma.stock.findMany({
+    where: { userId },
+    select: {
+      id: true,
+      symbol: true,
+      name: true,
+      quantity: true,
+      buyPrice: true,
+      currentPrice: true,
+    },
+  })
+
+  // Calculate total gold holdings
+  const totalGoldWeight = goldDeposits.reduce((sum, g) => sum + g.weightGram, 0)
+  const totalGoldCost = goldDeposits.reduce((sum, g) => sum + g.totalAmount, 0)
+  const currentGoldValue = totalGoldWeight * (currentGoldPrice ?? 0)
+  const goldProfitLoss = currentGoldValue - totalGoldCost
+
+  // Calculate total stock portfolio value and potential selling proceeds
+  let totalStockValue = 0
+  let totalStockCost = 0
+  const stocksWithProfit: Array<{
+    symbol: string
+    name: string
+    quantity: number
+    currentPrice: number
+    costPerShare: number
+    currentValue: number
+    costBasis: number
+    profitLoss: number
+    profitPercent: number
+  }> = []
+
+  for (const stock of stocks) {
+    const currentPrice = stock.currentPrice ?? stock.buyPrice
+    const currentValue = stock.quantity * currentPrice
+    const costBasis = stock.quantity * stock.buyPrice
+    const profitLoss = currentValue - costBasis
+    const profitPercent = costBasis > 0 ? (profitLoss / costBasis) * 100 : 0
+
+    totalStockValue += currentValue
+    totalStockCost += costBasis
+
+    if (currentPrice > 0) {
+      stocksWithProfit.push({
+        symbol: stock.symbol,
+        name: stock.name,
+        quantity: stock.quantity,
+        currentPrice,
+        costPerShare: stock.buyPrice,
+        currentValue,
+        costBasis,
+        profitLoss,
+        profitPercent,
+      })
+    }
+  }
+
+  const includeSavings = includeOptions.includeSavings ?? true
+  const includeGold = includeOptions.includeGold ?? true
+  const includeSellStocks = includeOptions.includeSellStocks ?? true
+
+  // Build investment options with pros and cons
+  const investmentOptions: AiGoalPlan["investmentOptions"] = []
+
+  if (includeSavings) {
+    investmentOptions.push({
+      type: "SAVINGS",
+      title: "Tabungan Berjangka / Deposito",
+      description: `Kumpulkan ${formatIDR(requiredMonthlySaving)} per bulan dari pemotongan pengeluaran untuk mendanai tujuan Anda.`,
+      pros: [
+        "Mudah dilakukan — bisa otomatis melalui transfer bulanan",
+        "Tidak ada risiko kerugian modal",
+        "Cairan fleksibel sesuai tenor",
+        "Bunga deposito bisa lebih tinggi daripada tabungan biasa",
+      ],
+      cons: [
+        "Bunga biasanya lebih rendah daripada investasi lain",
+        "Mungkin sulit mencapai target jika perbedaannya besar",
+        "Bunga subject to pajak",
+      ],
+      relevantData: {
+        requiredMonthlySaving,
+        monthsRemaining,
+        totalNeeded: remaining,
+      },
+    })
+  }
+
+  if (includeGold && totalGoldWeight > 0) {
+    investmentOptions.push({
+      type: "GOLD",
+      title: "Jual/emas untuk Mendanai Goal",
+      description: `Anda memiliki ${totalGoldWeight.toFixed(2)} gram emas dengan nilai saat ini sekitar ${formatIDR(currentGoldValue)}.`,
+      pros: [
+        "Emas mudah dicairkan dan likuid",
+        "Nilai emas bisa lebih tinggi jika harga naik",
+        "Emas dianggap sebagai lindung nilai inflasi",
+      ],
+      cons: [
+        "Harga emas fluktuatif — bisa turun saat Anda menjual",
+        "Mungkin incur biaya transaksi saat menjual",
+        "Kehilangan aset investasi jangka panjang",
+        "Tidak ada pendapatan pasif seperti dividen",
+      ],
+      relevantData: {
+        totalGoldWeight: Math.round(totalGoldWeight * 100) / 100,
+        currentGoldPrice: Math.round(currentGoldPrice ?? 0),
+        currentGoldValue: Math.round(currentGoldValue),
+        costBasis: Math.round(totalGoldCost),
+        unrealizedPnl: Math.round(goldProfitLoss),
+      },
+    })
+  }
+
+  if (includeSellStocks && stocksWithProfit.length > 0) {
+    const profitableStocks = stocksWithProfit.filter((s) => s.profitLoss > 0)
+    const totalPotentialProceeds = profitableStocks.reduce((sum, s) => sum + s.currentValue, 0)
+
+    investmentOptions.push({
+      type: "SELL_STOCKS",
+      title: "Jual Saham untuk Mendanai Goal",
+      description: `Anda memiliki ${profitableStocks.length} saham dengan unrealised profit. Total nilai portofolio saat ini sekitar ${formatIDR(totalStockValue)}.`,
+      pros: [
+        "Potensi profit instant jika harga sudah mahal",
+        "Diversifikasi yang baik — tidak semua telur di satu keranjang",
+        "Modal bisa langsung digunakan untuk goal",
+      ],
+      cons: [
+        "Pertumbuhan saham jangka panjang bisa lebih besar daripada menggunakan modal sekarang",
+        "Pajak Capital Gains (PPH final 0.1% untuk saham umum)",
+        "Kehilangan potensi dividen di masa depan",
+        "Timing pasar sulit — jual saat harga rendah bisa merugikan",
+      ],
+      relevantData: {
+        stockCount: stocksWithProfit.length,
+        profitableCount: profitableStocks.length,
+        totalStockValue: Math.round(totalStockValue),
+        totalCostBasis: Math.round(totalStockCost),
+        totalPotentialProceeds: Math.round(totalPotentialProceeds),
+        totalUnrealizedPnl: Math.round(profitableStocks.reduce((sum, s) => sum + s.profitLoss, 0)),
+      },
+    })
+  }
 
   const prompt = buildGoalPlanPrompt({
     goalName: goal.name,
@@ -432,5 +627,11 @@ export async function generateAiGoalPlanForUser(
     categoryCuts: ai.categoryCuts,
     projectedMonthlySaving: round2(projectedMonthlySaving),
     shortfall: round2(shortfall),
+    includeOptions: {
+      includeSavings,
+      includeGold,
+      includeSellStocks,
+    },
+    investmentOptions,
   }
 }

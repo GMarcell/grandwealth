@@ -7,13 +7,16 @@ import { rateLimit } from "@/lib/rate-limit"
 
 /**
  * POST /api/budgets/ai-plan
- * Body: { month: "YYYY-MM", apply?: boolean }
+ * Body: { month: "YYYY-MM", apply?: boolean, maxTotalBudget?: number }
  *
  * Pro+ (and admin). Generates a budget for `month` from the immediately
  * preceding budget month's actual spending using Groq AI. Regular Pro users
  * get the deterministic 50/30/20 planner at /api/budgets/plan instead. By
  * default the plan is returned for preview only; pass `apply: true` to upsert
  * it over the user's budgets for that month.
+ *
+ * Categories with `canReduce: false` in existing budgets will not have their
+ * budget reduced by the AI.
  */
 export async function POST(req: Request) {
   // Pro+ exclusive (admins always pass) — this endpoint calls an external,
@@ -36,8 +39,23 @@ export async function POST(req: Request) {
     const parsed = await safeParseBody(req, aiBudgetPlanSchema)
     if ("error" in parsed) return parsed.error
 
-    const { month, apply } = parsed.data
-    const plan = await generateAiBudgetPlanForUser(userId, month)
+    const { month, apply, maxTotalBudget } = parsed.data
+
+    // Get existing budgets to find which categories cannot be reduced
+    const existingBudgets = await prisma.budget.findMany({
+      where: { userId, month },
+      select: { categoryName: true, canReduce: true },
+    })
+    const cannotReduceCategories = existingBudgets
+      .filter((b) => !b.canReduce)
+      .map((b) => b.categoryName)
+
+    const plan = await generateAiBudgetPlanForUser(
+      userId,
+      month,
+      maxTotalBudget,
+      cannotReduceCategories,
+    )
 
     if (!apply) {
       return NextResponse.json({ applied: false, plan })

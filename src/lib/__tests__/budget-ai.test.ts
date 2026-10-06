@@ -17,7 +17,13 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: { findUnique: mockUserFindUnique },
     transaction: { findMany: mockTransactionFindMany },
+    budget: { findMany: vi.fn().mockResolvedValue([]) },
   },
+}))
+
+const mockFetchGoldPriceIdr = vi.hoisted(() => vi.fn())
+vi.mock("@/lib/prices", () => ({
+  fetchGoldPriceIdr: mockFetchGoldPriceIdr,
 }))
 
 const { parseAiBudgetResponse, generateAiBudgetPlanForUser, BudgetAiError } =
@@ -114,7 +120,7 @@ describe("generateAiBudgetPlanForUser", () => {
       ),
     )
 
-    const plan = await generateAiBudgetPlanForUser("user-1", "2026-09")
+    const plan = await generateAiBudgetPlanForUser("user-1", "2026-09", undefined)
 
     expect(plan.sourceMonth).toBe("2026-08")
     expect(plan.month).toBe("2026-09")
@@ -125,6 +131,27 @@ describe("generateAiBudgetPlanForUser", () => {
       "FOOD",
       "TRANSPORTATION",
     ])
+  })
+
+  it("passes maxTotalBudget constraint to the prompt when provided", async () => {
+    mockTransactionFindMany.mockResolvedValue([
+      { type: "EXPENSE", category: "FOOD", amount: 1_000_000 },
+    ])
+    mockCreate.mockResolvedValue(
+      completion(
+        JSON.stringify({
+          summary: "Dibatasi",
+          budgets: [
+            { category: "FOOD", amount: 900_000 },
+          ],
+        }),
+      ),
+    )
+
+    const plan = await generateAiBudgetPlanForUser("user-1", "2026-09", 1_000_000)
+
+    expect(plan.totalBudgeted).toBe(900_000)
+    expect(plan.budgets).toHaveLength(1)
   })
 
   it("rejects when the source month has no expenses", async () => {

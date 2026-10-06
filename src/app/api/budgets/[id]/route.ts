@@ -25,10 +25,11 @@ export async function PATCH(
     const parsed = await safeParseBody(req, updateBudgetSchema)
     if ("error" in parsed) return parsed.error
 
-    const { amount, rolloverCap } = parsed.data
+    const { amount, rolloverCap, canReduce } = parsed.data
     const data: Record<string, unknown> = {}
     if (amount !== undefined) data.amount = amount
     if (rolloverCap !== undefined) data.rolloverCap = rolloverCap
+    if (canReduce !== undefined) data.canReduce = canReduce
 
     const updated = await prisma.budget.update({
       where: { id },
@@ -43,6 +44,7 @@ export async function PATCH(
       amount: updated.amount,
       month: updated.month,
       rolloverCap: updated.rolloverCap,
+      canReduce: updated.canReduce,
     })
   } catch (error) {
     console.error("Update budget error:", error)

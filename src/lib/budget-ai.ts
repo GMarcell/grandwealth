@@ -82,6 +82,10 @@ export interface BudgetPlanSourceData {
   totalIncome: number
   totalExpenses: number
   categories: Array<{ name: string; spent: number }>
+  /** Categories that cannot have their budget reduced. */
+  cannotReduceCategories: string[]
+  /** Optional maximum total budget to constrain the plan. */
+  maxTotalBudget?: number
 }
 
 /**
@@ -99,15 +103,24 @@ export function buildAiBudgetPlanPrompt(data: BudgetPlanSourceData): string {
       }`,
   )
 
+  let constraints = `\n\nSetiap kategori di atas adalah nama kategori yang harus dipakai apa adanya. Kembalikan JSON sesuai format yang diminta.`
+
+  // Add constrained categories (cannot reduce)
+  if (data.cannotReduceCategories.length > 0) {
+    constraints = `\n\n KATEGORI TIDAK BOLEH DITURUNKAN: ${data.cannotReduceCategories.join(", ")}. JANGAN PERNAH menurunkan anggaran kategori ini dibandingkan pengeluaran bulan lalu. Jika perlu, boleh ditambah atau tetap sama.\n\n${constraints}`
+  }
+
+  if (data.maxTotalBudget != null) {
+    constraints = `\n\n BATASAN: Total anggaran semua kategori GABUNGAN tidak boleh melebihi ${idr(data.maxTotalBudget)}. Sesuaikan anggaran setiap kategori (kecuali yang tidak boleh diturunkan) agar totalnya di bawah batas ini.\n\n${constraints}`
+  }
+
   return `Buat rencana anggaran untuk bulan ${data.monthLabel} berdasarkan pengeluaran nyata bulan lalu (${data.sourceMonthLabel}).
 
 Pendapatan bulan ${data.sourceMonthLabel}: ${idr(data.totalIncome)}
-Total pengeluaran bulan ${data.sourceMonthLabel}: ${idr(data.totalExpenses)}
+Total pengeluaran bulan ${data.sourceMonthLabel}: ${idr(data.totalExpenses)}${data.maxTotalBudget != null ? `\n\nAnggaran maksimum yang diinginkan: ${idr(data.maxTotalBudget)}` : ""}
 
 Pengeluaran per kategori bulan lalu:
-${lines.join("\n")}
-
-Setiap kategori di atas adalah nama kategori yang harus dipakai apa adanya. Kembalikan JSON sesuai format yang diminta.`
+${lines.join("\n")}${constraints}`
 }
 
 const rawBudgetSchema = z.object({
@@ -218,10 +231,15 @@ export function parseAiBudgetResponse(
 /**
  * Generate an AI budget plan for `targetMonth` from the immediately preceding
  * budget month's spending.
+ *
+ * If `maxTotalBudget` is provided, the AI will constrain the total of all
+ * category budgets to not exceed this amount.
  */
 export async function generateAiBudgetPlanForUser(
   userId: string,
   targetMonth: string,
+  maxTotalBudget?: number,
+  cannotReduceCategories: string[] = [],
 ): Promise<AiBudgetPlan> {
   if (!process.env.GROQ_API_KEY) {
     throw new BudgetAiError("AI budget planning is not configured (missing GROQ_API_KEY)", 503)
@@ -255,6 +273,21 @@ export async function generateAiBudgetPlanForUser(
     )
   }
 
+  // Combine categories that cannot be reduced from both the passed parameter
+  // and existing budgets in the target month
+  const existingBudgets = await prisma.budget.findMany({
+    where: { userId, month: targetMonth },
+    select: { categoryName: true, canReduce: true },
+  })
+  const existingCannotReduce = new Set(
+    existingBudgets.filter((b) => !b.canReduce).map((b) => b.categoryName),
+  )
+  // Merge: parameter categories + existing budget categories
+  const allCannotReduceCategories = [...new Set([
+    ...cannotReduceCategories,
+    ...Array.from(existingCannotReduce),
+  ])]
+
   const byCategory = new Map<string, number>()
   for (const tx of expenseTxs) {
     byCategory.set(tx.category, (byCategory.get(tx.category) ?? 0) + tx.amount)
@@ -269,6 +302,8 @@ export async function generateAiBudgetPlanForUser(
     totalIncome,
     totalExpenses,
     categories,
+    cannotReduceCategories: allCannotReduceCategories,
+    maxTotalBudget,
   })
 
   // Groq's model catalog changes over time; allow deployments to override it,

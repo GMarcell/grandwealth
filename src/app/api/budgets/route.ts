@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     const parsed = await safeParseBody(req, createBudgetSchema)
     if ("error" in parsed) return parsed.error
 
-    const { categoryName, amount, month, rolloverCap } = parsed.data
+    const { categoryName, amount, month, rolloverCap, canReduce } = parsed.data
 
     // Check if budget already exists for this category/month
     const existing = await prisma.budget.findUnique({
@@ -50,6 +50,7 @@ export async function POST(req: Request) {
         data: {
           amount,
           ...(rolloverCap !== undefined ? { rolloverCap } : {}),
+          ...(canReduce !== undefined ? { canReduce } : {}),
         },
       })
       await recordIdempotencyKey(req, userId)
@@ -59,6 +60,7 @@ export async function POST(req: Request) {
         amount: updated.amount,
         month: updated.month,
         rolloverCap: updated.rolloverCap,
+        canReduce: updated.canReduce,
       })
     }
 
@@ -68,6 +70,7 @@ export async function POST(req: Request) {
         amount,
         month,
         rolloverCap: rolloverCap ?? null,
+        canReduce: canReduce ?? true,
         userId: userId,
       },
     })
@@ -81,6 +84,7 @@ export async function POST(req: Request) {
         amount: budget.amount,
         month: budget.month,
         rolloverCap: budget.rolloverCap,
+        canReduce: budget.canReduce,
       },
       { status: 201 }
     )

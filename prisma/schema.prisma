@@ -229,6 +229,7 @@ model Budget {
   amount          Float
   month           String   // format: "YYYY-MM"
   rolloverCap     Float?   // maximum carry-over allowed, null means no cap
+  canReduce       Boolean  @default(true)  // whether AI can suggest reducing this budget
   userId          String
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt       DateTime @default(now())

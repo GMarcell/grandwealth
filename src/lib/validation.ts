@@ -51,6 +51,7 @@ export const createBudgetSchema = z.object({
   amount: z.number().positive("Budget amount must be greater than 0").finite(),
   month: z.string().regex(/^\d{4}-\d{2}$/, "Month must be in YYYY-MM format"),
   rolloverCap: z.number().nonnegative("Rollover cap must be >= 0").finite().nullable().optional(),
+  canReduce: z.boolean().optional().default(true),
 })
 
 export const updateBudgetSchema = createBudgetSchema.partial().omit({ categoryName: true, month: true })
@@ -131,6 +132,10 @@ export const aiGoalPlanSchema = z.object({
   goalId: z.string().min(1, "Goal is required"),
   // The deadline to plan against. Optional only when the goal already has one.
   deadline: dateString.optional(),
+  // User-selected options to include in the plan. All three default to true.
+  includeSavings: z.boolean().optional().default(true),
+  includeGold: z.boolean().optional().default(true),
+  includeSellStocks: z.boolean().optional().default(true),
 })
 
 // ─── Loans / Debts ────────────────────────────────
@@ -251,6 +256,10 @@ export const aiBudgetPlanSchema = z.object({
   // When true, the generated plan is written to the user's budgets. Defaults
   // to false so the client can preview the plan before applying it.
   apply: z.boolean().optional(),
+  // Optional maximum total budget the user wants to set for the month.
+  // If provided, the AI will constrain the total of all category budgets
+  // to not exceed this amount.
+  maxTotalBudget: z.number().positive("Max total budget must be positive").finite().optional(),
 })
 
 // ─── Form Schemas (for react-hook-form validation) ───
@@ -263,6 +272,7 @@ export const budgetFormSchema = z.object({
     .min(1, "Amount is required")
     .refine((v) => !isNaN(Number(v)) && Number(v) > 0, "Amount must be a positive number"),
   rolloverCap: z.string().optional(),
+  canReduce: z.boolean().optional(),
 })
 
 export const goldFormSchema = z.object({

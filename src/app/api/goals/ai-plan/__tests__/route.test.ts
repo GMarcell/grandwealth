@@ -92,14 +92,22 @@ describe("POST /api/goals/ai-plan (Pro+/admin only)", () => {
 
     expect(res.status).toBe(200)
     expect(body.plan).toEqual(plan)
-    expect(mocks.generate).toHaveBeenCalledWith("user-1", "goal-1", "2026-12-31")
+    expect(mocks.generate).toHaveBeenCalledWith("user-1", "goal-1", "2026-12-31", expect.objectContaining({
+      includeSavings: true,
+      includeGold: true,
+      includeSellStocks: true,
+    }))
   })
 
   it("allows omitting the deadline (falls back to the goal's target date)", async () => {
     const res = await POST(post({ goalId: "goal-1" }))
 
     expect(res.status).toBe(200)
-    expect(mocks.generate).toHaveBeenCalledWith("user-1", "goal-1", null)
+    expect(mocks.generate).toHaveBeenCalledWith("user-1", "goal-1", null, expect.objectContaining({
+      includeSavings: true,
+      includeGold: true,
+      includeSellStocks: true,
+    }))
   })
 
   it("rejects a missing goalId before calling the AI", async () => {

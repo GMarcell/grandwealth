@@ -18,6 +18,7 @@ import {
   CalendarRange,
   Sparkles,
   Lock,
+  Unlock,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -104,6 +105,7 @@ interface Budget {
   amount: number;
   month: string;
   rolloverCap: number | null;
+  canReduce: boolean;
 }
 
 interface Category {
@@ -120,6 +122,7 @@ type BudgetPayload = {
   amount: number;
   month: string;
   rolloverCap: number | null;
+  canReduce?: boolean;
 };
 
 /** Legacy unpaginated `/api/transactions` response (a plain array). */
@@ -456,6 +459,29 @@ export default function BudgetsPage() {
       amount: parseFloat(data.amount),
       month: selectedMonth,
       rolloverCap: data.rolloverCap ? parseFloat(data.rolloverCap) : null,
+      canReduce: data.canReduce ?? true,
+    });
+  }
+
+  // Toggle whether AI can reduce this budget
+  function toggleCanReduce(budget: Budget) {
+    type BudgetUpdateResult = { canReduce: boolean } | { error: string }
+    apiMutate<BudgetUpdateResult>(`/api/budgets/${budget.id}`, {
+      method: "PATCH",
+      body: { canReduce: !budget.canReduce },
+    }).then((result) => {
+      if ("error" in result) {
+        toast.error(result.error || "Failed to update budget");
+      } else if ("queued" in result) {
+        toast.info("Saved offline — will sync when you reconnect");
+      } else {
+        toast.success(
+          result.canReduce
+            ? `AI can now reduce ${budget.categoryName} budget`
+            : `Locked ${budget.categoryName} budget - AI cannot reduce it`,
+        );
+        queryClient.invalidateQueries({ queryKey: ["budgets"] });
+      }
     });
   }
 
@@ -758,9 +784,20 @@ export default function BudgetsPage() {
                     <p className="text-xs text-muted-foreground">
                       Maximum amount that can roll over. Leave empty for no
                       limit.
-                    </p>
-                  </div>
-                )}
+                    </p>                   </div>
+                 )}
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="canReduce"
+                    className="h-4 w-4 rounded border-muted-foreground accent-emerald-500"
+                    {...register("canReduce")}
+                  />
+                  <Label htmlFor="canReduce" className="text-sm">
+                    Allow AI to reduce this budget
+                  </Label>
+                </div>
 
                 <Button
                   type="submit"
@@ -866,34 +903,52 @@ export default function BudgetsPage() {
           </p>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {uniqueCategories.map((category) => (
-            <div key={category} className="rounded-lg border p-3">
-              <div className="min-w-0 flex-1 space-y-1">
-                <Label htmlFor={`quick-${category}`} className="truncate text-xs">
-                  {formatCategoryName(category)}
-                </Label>
-                <Input
-                  id={`quick-${category}`}
-                  type="number"
-                  min="0"
-                  placeholder="0"
-                  value={quickAmounts[category] ?? ""}
-                  onChange={(event) => setQuickAmounts((current) => ({ ...current, [category]: event.target.value }))}
-                />
+          {uniqueCategories.map((category) => {
+            const existingBudget = monthBudgets.find((b) => b.categoryName === category);
+            const canReduce = existingBudget?.canReduce ?? true;
+            return (
+              <div key={category} className="rounded-lg border p-3">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor={`quick-${category}`} className="truncate text-xs">
+                      {formatCategoryName(category)}
+                    </Label>
+                    <button
+                      type="button"
+                      className={`text-xs flex items-center gap-1 ${canReduce ? "text-muted-foreground" : "text-primary"}`}
+                      onClick={() => toggleCanReduce(existingBudget!)}
+                      title={canReduce ? "Click to lock - AI cannot reduce" : "Click to unlock - AI can reduce"}
+                    >
+                      {canReduce ? (
+                        <><Unlock className="h-3 w-3" /> Open</>
+                      ) : (
+                        <><Lock className="h-3 w-3" /> Fixed</>
+                      )}
+                    </button>
+                  </div>
+                  <Input
+                    id={`quick-${category}`}
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={quickAmounts[category] ?? ""}
+                    onChange={(event) => setQuickAmounts((current) => ({ ...current, [category]: event.target.value }))}
+                  />
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <span className="truncate text-[11px] text-muted-foreground">
+                    Spent:{" "}
+                    {formatIDR(
+                      spentByMonthCategory.get(selectedMonth)?.get(category) ?? 0,
+                    )}
+                  </span>
+                  <Button size="sm" variant="outline" onClick={() => saveQuickBudget(category)} disabled={createMutation.isPending}>
+                    Save
+                  </Button>
+                </div>
               </div>
-              <div className="mt-2 flex items-center justify-between gap-2">
-                <span className="truncate text-[11px] text-muted-foreground">
-                  Spent:{" "}
-                  {formatIDR(
-                    spentByMonthCategory.get(selectedMonth)?.get(category) ?? 0,
-                  )}
-                </span>
-                <Button size="sm" variant="outline" onClick={() => saveQuickBudget(category)} disabled={createMutation.isPending}>
-                  Save
-                </Button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </CardContent>
       </Card>
 
