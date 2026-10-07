@@ -339,20 +339,20 @@ export default function StocksPage() {
             Track your stock portfolio
           </p>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <Button
             size="sm"
             variant="outline"
             onClick={() => refreshPricesMutation.mutate()}
             disabled={refreshPricesMutation.isPending}
-            className="flex-1 sm:flex-initial"
+            className="w-full sm:w-auto"
           >
             <RefreshCw className={`h-4 w-4 mr-1 ${refreshPricesMutation.isPending ? "animate-spin" : ""}`} />
             Refresh Prices
           </Button>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button size="sm" onClick={() => resetForm()} className="flex-1 sm:flex-initial">
+              <Button size="sm" onClick={() => resetForm()} className="w-full sm:w-auto">
                 <Plus className="h-4 w-4 mr-1" />
                 Add Stock
               </Button>
@@ -658,12 +658,12 @@ export default function StocksPage() {
               return (
                 <div
                   key={s.id}
-                  className="rounded-lg border p-3 sm:p-4 hover:bg-muted/50 transition-colors group"
+                  className="rounded-lg border p-3 hover:bg-muted/50 transition-colors group"
                 >
-                  <div className="flex items-start sm:items-center justify-between gap-2">
+                  <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                        <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                        <TrendingUp className="h-4 w-4" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
@@ -678,38 +678,24 @@ export default function StocksPage() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-                      <div className="text-right hidden sm:block">
+                    <div className="flex items-center gap-1 shrink-0">
+                      <div className="text-right">
                         {currentPricePerLot != null ? (
-                          <>
-                            <p className="text-sm font-medium">{formatIDR(s.currentPrice!)}</p>
-                            <p className="text-xs text-muted-foreground">/share</p>
-                          </>
+                          <p className="text-xs font-medium">{formatIDR(s.currentPrice!)}</p>
                         ) : (
-                          <>
-                            <p className="text-sm text-muted-foreground">—</p>
-                            <p className="text-xs text-muted-foreground">No price</p>
-                          </>
+                          <p className="text-xs text-muted-foreground">—</p>
                         )}
                       </div>
                       <div className="text-right">
                         {pnl != null ? (
-                          <>
-                            <p className={`text-xs sm:text-sm font-semibold ${pnl >= 0 ? "text-emerald-500" : "text-red-500"}`}>
-                              {formatIDR(pnl)}
-                            </p>
-                            <p className={`text-[10px] sm:text-xs ${pnl >= 0 ? "text-emerald-500" : "text-red-500"}`}>
-                              {pnlPercent != null ? `${pnlPercent >= 0 ? "+" : ""}${pnlPercent.toFixed(1)}%` : ""}
-                            </p>
-                          </>
+                          <p className={`text-xs font-semibold ${pnl >= 0 ? "text-emerald-500" : "text-red-500"}`}>
+                            {formatIDR(pnl)}
+                          </p>
                         ) : (
-                          <>
-                            <p className="text-xs sm:text-sm font-semibold">{formatIDR(totalCost)}</p>
-                            <p className="text-[10px] sm:text-xs text-muted-foreground">Cost</p>
-                          </>
+                          <p className="text-xs text-muted-foreground">{formatIDR(totalCost)}</p>
                         )}
                       </div>
-                      <div className="flex gap-0.5 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button variant="ghost" size="icon-sm" onClick={() => openEdit(s)} className="min-w-9 min-h-9" aria-label="Edit stock">
                           <Edit2 className="h-3.5 w-3.5" />
                         </Button>
@@ -728,6 +714,19 @@ export default function StocksPage() {
                         </Button>
                       </div>
                     </div>
+                  </div>
+                  <div className="mt-1 flex items-center gap-3 text-[10px] text-muted-foreground">
+                    {currentPricePerLot != null && (
+                      <span>{formatIDR(currentPricePerLot)} / lot</span>
+                    )}
+                    {pnlPercent != null && (
+                      <span className={pnlPercent >= 0 ? "text-emerald-500" : "text-red-500"}>
+                        {pnlPercent >= 0 ? "+" : ""}{pnlPercent.toFixed(1)}%
+                      </span>
+                    )}
+                    {pnl != null && (
+                      <span>Cost: {formatIDR(totalCost)}</span>
+                    )}
                   </div>
                 </div>
               )

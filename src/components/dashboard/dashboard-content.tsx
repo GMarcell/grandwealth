@@ -220,15 +220,17 @@ export function DashboardContent() {
   if (isLoading) {
     return (
       <>
-        {/* Hero card skeleton — matches the server-rendered header */}
-        <div className="flex items-center justify-between gap-4 rounded-xl border bg-muted/30 p-5">
-          <div className="flex-1 space-y-3">
-            <Skeleton className="h-5 w-40" />
-            <Skeleton className="h-12 w-44" />
-            <Skeleton className="h-4 w-32" />
-          </div>
-          <div className="shrink-0 h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center">
-            <Skeleton className="h-8 w-8" />
+        {/* Hero card skeleton */}
+        <div className="rounded-xl border bg-muted/30 p-5 animate-pulse">
+          <div className="flex items-center gap-4">
+            <div className="flex-1 space-y-3">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-12 w-48" />
+              <Skeleton className="h-4 w-36" />
+            </div>
+            <div className="shrink-0 h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center">
+              <Skeleton className="h-8 w-8" />
+            </div>
           </div>
         </div>
 
@@ -246,94 +248,99 @@ export function DashboardContent() {
     );
   }
 
+  const hasAnyData = data && (data.totalIncome > 0 || data.totalExpenses > 0 || data.totalWealth > 0);
+
   return (
     <>
-      {/* Refresh button — positioned inline with the server-rendered header on desktop */}
-      <div className="flex w-full items-center justify-end gap-2">
+      {/* Quick Actions + Refresh */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Quick Actions</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+              <Link href="/transactions?add=1" className="block">
+                <Button variant="outline" className="w-full justify-start h-auto p-3" size="sm">
+                  <ArrowLeftRight className="mr-2 h-4 w-4 shrink-0" />
+                  <span className="text-sm">Add Transaction</span>
+                </Button>
+              </Link>
+              <Link href="/budgets" className="block">
+                <Button variant="outline" className="w-full justify-start h-auto p-3" size="sm">
+                  <PiggyBank className="mr-2 h-4 w-4 shrink-0" />
+                  <span className="text-sm">Set Budgets</span>
+                </Button>
+              </Link>
+              <Link href="/gold" className="block">
+                <Button variant="outline" className="w-full justify-start h-auto p-3" size="sm">
+                  <CircleDollarSign className="mr-2 h-4 w-4 shrink-0" />
+                  <span className="text-sm">Record Gold</span>
+                </Button>
+              </Link>
+              <Link href="/stocks" className="block">
+                <Button variant="outline" className="w-full justify-start h-auto p-3" size="sm">
+                  <TrendingUp className="mr-2 h-4 w-4 shrink-0" />
+                  <span className="text-sm">Add Stock</span>
+                </Button>
+              </Link>
+              <Link href="/savings" className="block">
+                <Button variant="outline" className="w-full justify-start h-auto p-3" size="sm">
+                  <Landmark className="mr-2 h-4 w-4 shrink-0" />
+                  <span className="text-sm">Record Savings</span>
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
         <Button
           variant="outline"
           size="sm"
           onClick={() => refetch()}
-          className="w-auto"
+          className="shrink-0"
         >
           <RefreshCw className="h-4 w-4 mr-1" />
           Refresh
         </Button>
       </div>
 
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
-            <Link href="/transactions?add=1" className="block">
-              <Button variant="outline" className="w-full justify-start" size="sm">
-                <ArrowLeftRight className="mr-2 h-4 w-4 shrink-0" />
-                <span className="truncate">Add Transaction</span>
-              </Button>
-            </Link>
-            <Link href="/budgets" className="block">
-              <Button variant="outline" className="w-full justify-start" size="sm">
-                <PiggyBank className="mr-2 h-4 w-4 shrink-0" />
-                <span className="truncate">Set Budgets</span>
-              </Button>
-            </Link>
-            <Link href="/gold" className="block">
-              <Button variant="outline" className="w-full justify-start" size="sm">
-                <CircleDollarSign className="mr-2 h-4 w-4 shrink-0" />
-                <span className="truncate">Record Gold</span>
-              </Button>
-            </Link>
-            <Link href="/stocks" className="block">
-              <Button variant="outline" className="w-full justify-start" size="sm">
-                <TrendingUp className="mr-2 h-4 w-4 shrink-0" />
-                <span className="truncate">Add Stock</span>
-              </Button>
-            </Link>
-            <Link href="/savings" className="block">
-              <Button variant="outline" className="w-full justify-start" size="sm">
-                <Landmark className="mr-2 h-4 w-4 shrink-0" />
-                <span className="truncate">Record Savings</span>
-              </Button>
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Total Wealth Hero */}
       <Card className="bg-linear-to-br from-primary/5 via-primary/5 to-transparent border-primary/10">
         <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex items-center gap-4">
+            <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <Wallet className="h-7 w-7 text-primary" />
+            </div>
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-muted-foreground mb-1">
                 Total Net Wealth
               </p>
-              <p className="text-4xl font-bold tracking-tight">
+              <p className="text-3xl sm:text-4xl font-bold tracking-tight">
                 {formatCompactIDR(data?.totalWealth ?? 0)}
               </p>
-              <p className="text-xs text-muted-foreground mt-2">
-                All-time net cash flow + gold + stocks + bank savings
-                {data && data.totalDebt > 0
-                  ? ` - ${formatCompactIDR(data.totalDebt)} debt`
-                  : ""}
-              </p>
-            </div>
-            <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-              <Wallet className="h-8 w-8 text-primary" />
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                <p className="text-xs text-muted-foreground">
+                  All-time net cash flow + gold + stocks + savings
+                </p>
+                {data && data.totalDebt > 0 && (
+                  <Badge variant="loss" className="text-[10px]">
+                    {formatCompactIDR(data.totalDebt)} debt
+                  </Badge>
+                )}
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Stat Cards — 5 KPIs. Three per row on laptops/desktops (the sidebar
-          eats ~256px, so five would be cramped); five only on wide 2xl screens. */}
+      {/* Stat Cards — 5 KPIs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
-        <Card>
+        <Card className="hover:border-emerald-500/30 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Income</CardTitle>
-            <TrendingUp className="h-4 w-4 text-emerald-500" />
+            <CardTitle className="text-sm font-medium flex items-center gap-1.5">
+              <TrendingUp className="h-4 w-4 text-emerald-500" />
+              Income
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
@@ -343,10 +350,12 @@ export function DashboardContent() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="hover:border-red-500/30 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Expenses</CardTitle>
-            <TrendingDown className="h-4 w-4 text-red-500" />
+            <CardTitle className="text-sm font-medium flex items-center gap-1.5">
+              <TrendingDown className="h-4 w-4 text-red-500" />
+              Expenses
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-600 dark:text-red-400">
@@ -356,10 +365,12 @@ export function DashboardContent() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={`hover:border-${netPositive ? 'emerald' : 'red'}-500/30 transition-colors`}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Net Cash Flow</CardTitle>
-            <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium flex items-center gap-1.5">
+              <ArrowLeftRight className="h-4 w-4 text-muted-foreground" />
+              Net Cash Flow
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div
@@ -374,16 +385,18 @@ export function DashboardContent() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={`hover:border-${carriedPositive ? 'emerald' : 'red'}-500/30 transition-colors`}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Carried Balance</CardTitle>
-            <Scale className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium flex items-center gap-1.5">
+              <Scale className="h-4 w-4 text-muted-foreground" />
+              Carried Balance
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div
               className={`text-2xl font-bold ${carriedPositive ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
             >
-              {carriedPositive ? "+" : "−"}
+              {carriedPositive ? "+" : ""}
               {formatCompactIDR(Math.abs(data?.carriedBalance ?? 0))}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
@@ -392,12 +405,14 @@ export function DashboardContent() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="hover:border-primary/30 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Assets</CardTitle>
-            <Landmark className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium flex items-center gap-1.5">
+              <Landmark className="h-4 w-4 text-muted-foreground" />
+              Total Assets
+            </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-1">
             <div className="text-2xl font-bold">
               {formatCompactIDR(
                 (data?.totalGoldValue ?? 0) +
@@ -405,25 +420,32 @@ export function DashboardContent() {
                   (data?.totalSavings ?? 0),
               )}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {(data?.totalGoldWeight ?? 0).toFixed(2)}g gold &bull;{" "}
-              {data?.stockCount ?? 0} stocks
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <CircleDollarSign className="h-3 w-3" />
+                {(data?.totalGoldWeight ?? 0).toFixed(2)}g gold
+              </span>
+              <span className="flex items-center gap-1">
+                <TrendingUp className="h-3 w-3" />
+                {data?.stockCount ?? 0} stocks
+              </span>
               {data?.savingsAccountCount != null &&
                 data.savingsAccountCount > 0 && (
-                  <>
-                    {" "}
-                    &bull; {data.savingsAccountCount}{" "}
-                    {data.savingsAccountCount === 1 ? "account" : "accounts"}
-                  </>
-                )}
+                  <span className="flex items-center gap-1">
+                    <PiggyBank className="h-3 w-3" />
+                    {data.savingsAccountCount}{' '}
+                    {data.savingsAccountCount === 1 ? 'account' : 'accounts'}
+                  </span>
+                )
+              }
               {data?.loanCount ? (
-                <>
-                  {" "}
-                  &bull; {data.loanCount}{" "}
-                  {data.loanCount === 1 ? "loan" : "loans"}
-                </>
+                <span className="flex items-center gap-1">
+                  <Scale className="h-3 w-3" />
+                  {data.loanCount}{' '}
+                  {data.loanCount === 1 ? 'loan' : 'loans'}
+                </span>
               ) : null}
-            </p>
+            </div>
             {data && data.totalDebt > 0 && (
               <Badge variant="loss" className="mt-2">
                 {formatCompactIDR(data.totalDebt)} debt
@@ -465,30 +487,32 @@ export function DashboardContent() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
+              <div className="space-y-4">
+                {/* Needs */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <Home className="h-3.5 w-3.5 text-blue-500" />
-                      <span className="font-medium">Needs</span>
+                      <Home className="h-4 w-4 text-blue-500" />
+                      <span className="font-medium text-sm">Needs</span>
+                      <span className="text-[10px] text-muted-foreground">(50% target)</span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 text-sm">
                       <span className="text-muted-foreground">
-                        {formatCompactIDR(data.budget5050.needs.total)} /{" "}
+                        {formatCompactIDR(data.budget5050.needs.total)}
+                      </span>
+                      <span className="text-xs text-muted-foreground">/</span>
+                      <span className="text-muted-foreground">
                         {formatCompactIDR(data.budget5050.needs.target)}
                       </span>
-                      <span
-                        className={`font-semibold min-w-[3rem] text-right ${
-                          data.budget5050.needs.percent <= 50
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : "text-red-600 dark:text-red-400"
-                        }`}
+                      <Badge
+                        variant={data.budget5050.needs.percent <= 50 ? 'secondary' : 'destructive'}
+                        className="ml-1"
                       >
                         {data.budget5050.needs.percent.toFixed(1)}%
-                      </span>
+                      </Badge>
                     </div>
                   </div>
-                  <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                  <div className="h-2.5 w-full rounded-full bg-muted overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${
                         data.budget5050.needs.percent <= 50
@@ -500,43 +524,39 @@ export function DashboardContent() {
                       }}
                     />
                   </div>
-                  <div className="flex justify-between text-[10px] text-muted-foreground">
-                    <span>Target: 50%</span>
-                    {data.budget5050.needs.percent > 50 && (
-                      <span className="text-red-500">
-                        {formatCompactIDR(
-                          data.budget5050.needs.total -
-                            data.budget5050.needs.target,
-                        )}{" "}
-                        over
-                      </span>
-                    )}
-                  </div>
+                  {data.budget5050.needs.percent > 50 && (
+                    <p className="text-xs text-red-500 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3 mt-0.5" />
+                      {formatCompactIDR(data.budget5050.needs.total - data.budget5050.needs.target)} over target
+                    </p>
+                  )}
                 </div>
 
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
+                {/* Wants */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                      <span className="font-medium">Wants</span>
+                      <Sparkles className="h-4 w-4 text-amber-500" />
+                      <span className="font-medium text-sm">Wants</span>
+                      <span className="text-[10px] text-muted-foreground">(30% target)</span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 text-sm">
                       <span className="text-muted-foreground">
-                        {formatCompactIDR(data.budget5050.wants.total)} /{" "}
+                        {formatCompactIDR(data.budget5050.wants.total)}
+                      </span>
+                      <span className="text-xs text-muted-foreground">/</span>
+                      <span className="text-muted-foreground">
                         {formatCompactIDR(data.budget5050.wants.target)}
                       </span>
-                      <span
-                        className={`font-semibold min-w-[3rem] text-right ${
-                          data.budget5050.wants.percent <= 30
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : "text-red-600 dark:text-red-400"
-                        }`}
+                      <Badge
+                        variant={data.budget5050.wants.percent <= 30 ? 'secondary' : 'destructive'}
+                        className="ml-1"
                       >
                         {data.budget5050.wants.percent.toFixed(1)}%
-                      </span>
+                      </Badge>
                     </div>
                   </div>
-                  <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                  <div className="h-2.5 w-full rounded-full bg-muted overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${
                         data.budget5050.wants.percent <= 30
@@ -548,43 +568,39 @@ export function DashboardContent() {
                       }}
                     />
                   </div>
-                  <div className="flex justify-between text-[10px] text-muted-foreground">
-                    <span>Target: 30%</span>
-                    {data.budget5050.wants.percent > 30 && (
-                      <span className="text-red-500">
-                        {formatCompactIDR(
-                          data.budget5050.wants.total -
-                            data.budget5050.wants.target,
-                        )}{" "}
-                        over
-                      </span>
-                    )}
-                  </div>
+                  {data.budget5050.wants.percent > 30 && (
+                    <p className="text-xs text-red-500 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3 mt-0.5" />
+                      {formatCompactIDR(data.budget5050.wants.total - data.budget5050.wants.target)} over target
+                    </p>
+                  )}
                 </div>
 
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
+                {/* Savings */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <PiggyBank className="h-3.5 w-3.5 text-emerald-500" />
-                      <span className="font-medium">Savings</span>
+                      <PiggyBank className="h-4 w-4 text-emerald-500" />
+                      <span className="font-medium text-sm">Savings</span>
+                      <span className="text-[10px] text-muted-foreground">(20% target)</span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 text-sm">
                       <span className="text-muted-foreground">
-                        {formatCompactIDR(data.budget5050.savings.total)} /{" "}
+                        {formatCompactIDR(data.budget5050.savings.total)}
+                      </span>
+                      <span className="text-xs text-muted-foreground">/</span>
+                      <span className="text-muted-foreground">
                         {formatCompactIDR(data.budget5050.savings.target)}
                       </span>
-                      <span
-                        className={`font-semibold min-w-[3rem] text-right ${
-                          data.budget5050.savings.percent >= 20
-                            ? "text-emerald-600 dark:text-emerald-400"
-                            : "text-red-600 dark:text-red-400"
-                        }`}
+                      <Badge
+                        variant={data.budget5050.savings.percent >= 20 ? 'secondary' : 'destructive'}
+                        className="ml-1"
                       >
                         {data.budget5050.savings.percent.toFixed(1)}%
-                      </span>
+                      </Badge>
                     </div>
                   </div>
-                  <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                  <div className="h-2.5 w-full rounded-full bg-muted overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${
                         data.budget5050.savings.percent >= 20
@@ -596,33 +612,29 @@ export function DashboardContent() {
                       }}
                     />
                   </div>
-                  <div className="flex justify-between text-[10px] text-muted-foreground">
-                    <span>Target: 20%</span>
-                    {data.budget5050.savings.percent < 20 && (
-                      <span className="text-red-500">
-                        {formatCompactIDR(
-                          data.budget5050.savings.target -
-                            data.budget5050.savings.total,
-                        )}{" "}
-                        short
-                      </span>
-                    )}
-                  </div>
+                  {data.budget5050.savings.percent < 20 && (
+                    <p className="text-xs text-red-500 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3 mt-0.5" />
+                      {formatCompactIDR(data.budget5050.savings.target - data.budget5050.savings.total)} short of target
+                    </p>
+                  )}
                 </div>
               </div>
 
               {data.budget5050.uncategorized.total > 0 && (
-                <div className="flex items-start gap-2 rounded-md bg-amber-500/5 border border-amber-500/20 px-3 py-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
-                      {formatCompactIDR(data.budget5050.uncategorized.total)}{" "}
-                      uncategorized
-                    </p>
-                    <p className="text-[10px] text-amber-700 dark:text-amber-400">
-                      Assign rule types to all expense categories in Settings
-                      for an accurate breakdown.
-                    </p>
+                <div className="rounded-md bg-amber-500/5 border border-amber-500/20 px-3 py-2">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
+                        {formatCompactIDR(data.budget5050.uncategorized.total)}{" "}
+                        uncategorized expenses
+                      </p>
+                      <p className="text-[10px] text-amber-700 dark:text-amber-400">
+                        Assign rule types to all expense categories in Settings
+                        for an accurate 50/30/20 breakdown.
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
@@ -873,71 +885,95 @@ export function DashboardContent() {
       )}
 
       {/* Recent Transactions */}
-      <div>
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Transactions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {data?.recentTransactions &&
-              data.recentTransactions.length > 0 ? (
-                data.recentTransactions.map((tx) => (
-                  <div
-                    key={tx.id}
-                    className="flex items-center justify-between rounded-lg border p-3"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`flex h-9 w-9 items-center justify-center rounded-full ${
-                          tx.type === "INCOME"
-                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                            : "bg-red-500/10 text-red-600 dark:text-red-400"
-                        }`}
-                      >
-                        {tx.type === "INCOME" ? (
-                          <TrendingUp className="h-4 w-4" />
-                        ) : (
-                          <TrendingDown className="h-4 w-4" />
-                        )}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">{tx.description}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {tx.category.replace("_", " ")} &bull;{" "}
-                          {new Date(tx.date).toLocaleDateString("en-US")}
-                        </p>
-                      </div>
-                    </div>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Recent Transactions</CardTitle>
+          <Link href="/transactions">
+            <Button variant="link" size="sm" className="text-xs h-auto p-0">
+              View all
+            </Button>
+          </Link>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {data?.recentTransactions && data.recentTransactions.length > 0 ? (
+            <div className="space-y-2">
+              {data.recentTransactions.map((tx) => (
+                <div
+                  key={tx.id}
+                  className="flex items-center justify-between rounded-lg border p-3 hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
                     <div
-                      className={`text-sm font-semibold ${
+                      className={`flex h-9 w-9 items-center justify-center rounded-full shrink-0 ${
                         tx.type === "INCOME"
-                          ? "text-emerald-600 dark:text-emerald-400"
-                          : "text-red-600 dark:text-red-400"
+                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          : "bg-red-500/10 text-red-600 dark:text-red-400"
                       }`}
                     >
-                      {tx.type === "INCOME" ? "+" : "-"}
-                      {formatIDR(tx.amount)}
+                      {tx.type === "INCOME" ? (
+                        <TrendingUp className="h-4 w-4" />
+                      ) : (
+                        <TrendingDown className="h-4 w-4" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{tx.description}</p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span className="truncate">{tx.category.replace("_", " ")}</span>
+                        <span>&bull;</span>
+                        <span>{new Date(tx.date).toLocaleDateString("en-US", {
+                          month: 'short',
+                          day: 'numeric',
+                        })}</span>
+                      </div>
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-sm text-muted-foreground mb-3">
-                    No transactions yet.
-                  </p>
-                  <Link href="/transactions">
-                    <Button variant="outline" size="sm">
-                      <Plus className="h-4 w-4 mr-1" />
-                      Add your first transaction
-                    </Button>
-                  </Link>
+                  <div
+                    className={`text-sm font-semibold shrink-0 ${
+                      tx.type === "INCOME"
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-red-600 dark:text-red-400"
+                    }`}
+                  >
+                    {tx.type === "INCOME" ? "+" : "-"}
+                    {formatIDR(tx.amount)}
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          ) : hasAnyData ? (
+            <div className="text-center py-6">
+              <p className="text-sm text-muted-foreground mb-3">
+                No recent transactions this month.
+              </p>
+              <Link href="/transactions?add=1">
+                <Button variant="outline" size="sm">
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add transaction
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <div className="flex h-12 w-12 mx-auto rounded-full bg-muted/50 items-center justify-center mb-3">
+                <Plus className="h-6 w-6 text-muted-foreground/50" />
+              </div>
+              <p className="text-sm text-muted-foreground mb-1">
+                Get started by adding your first transaction
+              </p>
+              <p className="text-xs text-muted-foreground mb-3">
+                Track income and expenses to see your financial overview
+              </p>
+              <Link href="/transactions?add=1">
+                <Button variant="outline" size="sm">
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add your first transaction
+                </Button>
+              </Link>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </>
   );
 }
