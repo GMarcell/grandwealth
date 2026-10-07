@@ -623,84 +623,14 @@ export default function BudgetsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Budgets</h1>
-          <p className="text-sm text-muted-foreground">
-            Set monthly spending limits for each expense category
-          </p>
-        </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="w-full sm:w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MONTHS.map((m, index) => (
-                <SelectItem key={`${m}-${index}`} value={m}>
-                  {getBudgetMonthLabel(m, startDay)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {canUseAiPlanner ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={openAiPlan}
-              disabled={aiPlanMutation.isPending || aiApplyMutation.isPending}
-              className="w-full sm:w-auto"
-              title="Pro+ feature: let AI plan this month's budget from last month's actual spending"
-            >
-              {aiPlanMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-1" />
-              ) : (
-                <Sparkles className="h-4 w-4 mr-1" />
-              )}
-              AI Plan
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => router.push("/upgrade")}
-              className="w-full text-muted-foreground sm:w-auto"
-              title="AI budget planning is a Pro+ feature — see what's included"
-            >
-              <Lock className="h-4 w-4 mr-1" />
-              AI Plan · Pro+
-            </Button>
-          )}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => planMutation.mutate()}
-            disabled={planMutation.isPending || applyPlanMutation.isPending}
-            className="w-full sm:w-auto"
-            title="Build this month's budget from last month's spending using the 50/30/20 rule"
-          >
-            {planMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-1" />
-            ) : (
-              <CalendarRange className="h-4 w-4 mr-1" />
-            )}
-            Plan Last Month
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => templateMutation.mutate()}
-            disabled={templateMutation.isPending}
-            className="w-full sm:w-auto"
-            title="Auto-generate budgets for this month using the 50/30/20 rule based on your income and category classifications"
-          >
-            {templateMutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-1" />
-            ) : (
-              <Wand2 className="h-4 w-4 mr-1" />
-            )}
-            50/30/20
-          </Button>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Budgets</h1>
+            <p className="text-sm text-muted-foreground">
+              Set monthly spending limits for each expense category
+            </p>
+          </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button
@@ -709,7 +639,6 @@ export default function BudgetsPage() {
                 disabled={
                   categoriesWithoutBudget.length === 0 && !editingBudget
                 }
-                className="w-full sm:w-auto"
               >
                 <Plus className="h-4 w-4 mr-1" />
                 Add Budget
@@ -813,6 +742,77 @@ export default function BudgetsPage() {
             </DialogContent>
           </Dialog>
         </div>
+
+        {/* Action bar - responsive stack on mobile */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="w-full sm:w-[160px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MONTHS.map((m, index) => (
+                <SelectItem key={`${m}-${index}`} value={m}>
+                  {getBudgetMonthLabel(m, startDay)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {canUseAiPlanner ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={openAiPlan}
+              disabled={aiPlanMutation.isPending || aiApplyMutation.isPending}
+              title="Pro+ feature: let AI plan this month's budget from last month's actual spending"
+            >
+              {aiPlanMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+              ) : (
+                <Sparkles className="h-4 w-4 mr-1" />
+              )}
+              AI Plan
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => router.push("/upgrade")}
+              className="text-muted-foreground"
+              title="AI budget planning is a Pro+ feature — see what's included"
+            >
+              <Lock className="h-4 w-4 mr-1" />
+              AI Plan · Pro+
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => planMutation.mutate()}
+            disabled={planMutation.isPending || applyPlanMutation.isPending}
+            title="Build this month's budget from last month's spending using the 50/30/20 rule"
+          >
+            {planMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-1" />
+            ) : (
+              <CalendarRange className="h-4 w-4 mr-1" />
+            )}
+            Plan Last Month
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => templateMutation.mutate()}
+            disabled={templateMutation.isPending}
+            title="Auto-generate budgets for this month using the 50/30/20 rule based on your income and category classifications"
+          >
+            {templateMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-1" />
+            ) : (
+              <Wand2 className="h-4 w-4 mr-1" />
+            )}
+            50/30/20
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -893,7 +893,11 @@ export default function BudgetsPage() {
       </div>
 
       {/* Budget Breakdown Chart — dynamically loaded */}
-      {pieData.length > 0 && <BudgetAllocationChart data={pieData} />}
+      {pieData.length > 0 && (
+        <div className="overflow-hidden">
+          <BudgetAllocationChart data={pieData} />
+        </div>
+      )}
 
       <Card>
         <CardHeader>
@@ -902,20 +906,20 @@ export default function BudgetsPage() {
             Set or update the budget for every expense category in this budget period.
           </p>
         </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {uniqueCategories.map((category) => {
             const existingBudget = monthBudgets.find((b) => b.categoryName === category);
             const canReduce = existingBudget?.canReduce ?? true;
             return (
               <div key={category} className="rounded-lg border p-3">
                 <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <Label htmlFor={`quick-${category}`} className="truncate text-xs">
                       {formatCategoryName(category)}
                     </Label>
                     <button
                       type="button"
-                      className={`text-xs flex items-center gap-1 ${canReduce ? "text-muted-foreground" : "text-primary"}`}
+                      className={`text-xs flex items-center gap-1 shrink-0 ${canReduce ? "text-muted-foreground" : "text-primary"}`}
                       onClick={() => toggleCanReduce(existingBudget!)}
                       title={canReduce ? "Click to lock - AI cannot reduce" : "Click to unlock - AI can reduce"}
                     >
@@ -933,6 +937,7 @@ export default function BudgetsPage() {
                     placeholder="0"
                     value={quickAmounts[category] ?? ""}
                     onChange={(event) => setQuickAmounts((current) => ({ ...current, [category]: event.target.value }))}
+                    className="w-full"
                   />
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-2">
@@ -942,7 +947,7 @@ export default function BudgetsPage() {
                       spentByMonthCategory.get(selectedMonth)?.get(category) ?? 0,
                     )}
                   </span>
-                  <Button size="sm" variant="outline" onClick={() => saveQuickBudget(category)} disabled={createMutation.isPending}>
+                  <Button size="sm" variant="outline" onClick={() => saveQuickBudget(category)} disabled={createMutation.isPending} className="shrink-0">
                     Save
                   </Button>
                 </div>
@@ -973,8 +978,8 @@ export default function BudgetsPage() {
                 <Skeleton className="h-10 w-full" />
               </div>
             ) : rolloverHistory ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+              <div className="overflow-x-auto -mx-4 sm:mx-0 sm:overflow-visible">
+                <table className="w-full text-xs min-w-[400px]">
                   <thead>
                     <tr className="border-b">
                       <th className="text-left font-medium text-muted-foreground py-2 pr-4 sticky left-0 bg-background">
@@ -1093,9 +1098,9 @@ export default function BudgetsPage() {
                   key={b.id}
                   className="rounded-lg border p-4 hover:bg-muted/50 transition-colors group"
                 >
-                  <div className="flex items-start sm:items-center justify-between mb-2 gap-2">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <h4 className="text-sm font-medium">
+                  <div className="flex items-start sm:items-center justify-between gap-2 mb-2">
+                    <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                      <h4 className="text-sm font-medium truncate">
                         {b.categoryName.replace("_", " ")}
                       </h4>
                       <div className="flex flex-wrap items-center gap-1">
@@ -1127,7 +1132,7 @@ export default function BudgetsPage() {
                       )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                       <Button
                         variant="ghost"
                         size="icon-sm"
