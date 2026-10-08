@@ -5,6 +5,9 @@ import { NextResponse } from "next/server"
 
 const mockRequireProPlus = vi.hoisted(() => vi.fn())
 const mockRateLimit = vi.hoisted(() => vi.fn())
+const mockGetAccessRecord = vi.hoisted(() => vi.fn())
+const mockQuotaCount = vi.hoisted(() => vi.fn())
+const mockQuotaCreate = vi.hoisted(() => vi.fn())
 
 const mocks = vi.hoisted(() => {
   // Real class shape so `instanceof GoalAiError` works in the route.
@@ -24,6 +27,14 @@ vi.mock("@/lib/rate-limit", () => ({ rateLimit: mockRateLimit }))
 vi.mock("@/lib/goal-ai", () => ({
   generateAiGoalPlanForUser: mocks.generate,
   GoalAiError: mocks.GoalAiError,
+}))
+vi.mock("@/lib/account-access", () => ({
+  getAccessRecord: mockGetAccessRecord,
+}))
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    aiUsage: { count: mockQuotaCount, create: mockQuotaCreate },
+  },
 }))
 
 const { POST } = await import("../route")
@@ -65,6 +76,14 @@ describe("POST /api/goals/ai-plan (Pro+/admin only)", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockRequireProPlus.mockResolvedValue("user-1")
+    mockGetAccessRecord.mockResolvedValue({
+      role: "USER",
+      plan: "PRO_PLUS",
+      subscriptionStatus: "ACTIVE",
+      currentPeriodEnd: null,
+      suspended: false,
+    })
+    mockQuotaCount.mockResolvedValue(0)
     mockRateLimit.mockResolvedValue({
       allowed: true,
       remaining: 4,

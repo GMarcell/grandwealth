@@ -82,8 +82,9 @@ model User {
   sessions              Session[]
   trialRequests         TrialRequest[]
   widgetTokens          WidgetToken[]
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  aiUsages              AiUsage[]
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
 }
 
 /// A read-only credential a phone home-screen widget uses to fetch summary
@@ -378,6 +379,17 @@ model Dividend {
 
   @@index([userId, date])
   @@index([stockId])
+}
+
+model AiUsage {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  monthKey String   // format "YYYY-MM"
+  createdAt DateTime @default(now())
+
+  @@unique([userId, monthKey])
+  @@index([userId, monthKey])
 }
 
 model MonthlyAnalysis {

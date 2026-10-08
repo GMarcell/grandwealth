@@ -7,6 +7,9 @@ const mockRequireProPlus = vi.hoisted(() => vi.fn())
 const mockRateLimit = vi.hoisted(() => vi.fn())
 const mockBudgetFindMany = vi.hoisted(() => vi.fn())
 const mockBudgetUpsert = vi.hoisted(() => vi.fn())
+const mockGetAccessRecord = vi.hoisted(() => vi.fn())
+const mockQuotaCount = vi.hoisted(() => vi.fn())
+const mockQuotaCreate = vi.hoisted(() => vi.fn())
 
 const mocks = vi.hoisted(() => {
   // Real class shape so `instanceof BudgetAiError` works in the route.
@@ -24,11 +27,17 @@ const mocks = vi.hoisted(() => {
 vi.mock("@/lib/api-access", () => ({ requireAdminOrProPlusUser: mockRequireProPlus }))
 vi.mock("@/lib/rate-limit", () => ({ rateLimit: mockRateLimit }))
 vi.mock("@/lib/prisma", () => ({
-  prisma: { budget: { findMany: mockBudgetFindMany, upsert: mockBudgetUpsert } },
+  prisma: {
+    budget: { findMany: mockBudgetFindMany, upsert: mockBudgetUpsert },
+    aiUsage: { count: mockQuotaCount, create: mockQuotaCreate },
+  },
 }))
 vi.mock("@/lib/budget-ai", () => ({
   generateAiBudgetPlanForUser: mocks.generate,
   BudgetAiError: mocks.BudgetAiError,
+}))
+vi.mock("@/lib/account-access", () => ({
+  getAccessRecord: mockGetAccessRecord,
 }))
 
 const { POST } = await import("../route")
@@ -57,6 +66,14 @@ describe("POST /api/budgets/ai-plan (Pro+/admin only)", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockRequireProPlus.mockResolvedValue("user-1")
+    mockGetAccessRecord.mockResolvedValue({
+      role: "USER",
+      plan: "PRO_PLUS",
+      subscriptionStatus: "ACTIVE",
+      currentPeriodEnd: null,
+      suspended: false,
+    })
+    mockQuotaCount.mockResolvedValue(0)
     mockRateLimit.mockResolvedValue({
       allowed: true,
       remaining: 4,

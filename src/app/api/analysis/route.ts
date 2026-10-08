@@ -4,6 +4,12 @@ import { prisma } from "@/lib/prisma"
 import { generateAnalysisForUserAndMonth } from "@/lib/analysis-generator"
 import { getLastCompletedBudgetMonthKey } from "@/lib/budget-months"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
+import {
+  checkGroqQuota,
+  consumeGroqQuota,
+  PRO_GROQ_MONTHLY_LIMIT,
+  serializeQuotaRemaining,
+} from "@/lib/ai-usage-quota"
 
 export async function GET(req: Request) {
   const userId = await requireProUser()
@@ -139,21 +145,15 @@ export async function POST(req: Request) {
     )
   }
 
-  // Rate limit: max 3 regenerations per 60 seconds per user
+  // Short-term rate limit: max 3 regenerations per 60 seconds per user.
   const rateLimitKey = `analysis:regenerate:${getRateLimitKey(req)}:${userId}`
-  const { allowed, remaining, resetTime } = await rateLimit(rateLimitKey, {
+  const shortLimit = await rateLimit(rateLimitKey, {
     limit: 3,
     windowMs: 60_000,
   })
 
-  const rateLimitHeaders = {
-    "X-RateLimit-Limit": "3",
-    "X-RateLimit-Remaining": String(remaining),
-    "X-RateLimit-Reset": String(resetTime),
-  }
-
-  if (!allowed) {
-    const retryAfter = Math.ceil((resetTime - Date.now()) / 1000)
+  if (!shortLimit.allowed) {
+    const retryAfter = Math.ceil((shortLimit.resetTime - Date.now()) / 1000)
     return NextResponse.json(
       {
         error: `Too many regeneration requests. Please try again in ${retryAfter} seconds.`,
@@ -163,22 +163,67 @@ export async function POST(req: Request) {
         status: 429,
         headers: {
           "Retry-After": String(retryAfter),
-          ...rateLimitHeaders,
+          "X-RateLimit-Limit": "3",
+          "X-RateLimit-Remaining": String(0),
+          "X-RateLimit-Reset": String(shortLimit.resetTime),
         },
       }
+    )
+  }
+
+  // Monthly Groq AI usage quota. Pro accounts are capped at
+  // PRO_GROQ_MONTHLY_LIMIT Groq invocations per calendar month; Pro+ and admin
+  // accounts are not capped.
+  const quota = await checkGroqQuota(userId)
+  if (!quota.allowed) {
+    return NextResponse.json(
+      {
+        error: `You have reached your monthly Groq AI limit. You can generate ${PRO_GROQ_MONTHLY_LIMIT} AI analyses per month on the Pro plan. Your quota resets at the start of the next month.`,
+        retryAfter: Math.ceil(
+          (new Date(quota.resetAt).getTime() - Date.now()) / 1000,
+        ),
+        resetAt: quota.resetAt,
+      },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(Math.ceil(
+            (new Date(quota.resetAt).getTime() - Date.now()) / 1000,
+          )),
+          "X-GroqQuota-Limit": String(quota.limit),
+          "X-GroqQuota-Remaining": String(quota.remaining),
+          "X-GroqQuota-Reset": quota.resetAt,
+        },
+      },
     )
   }
 
   try {
     const result = await generateAnalysisForUserAndMonth(userId, month)
 
+    // Burn one monthly Groq quota token after the Groq call succeeds, so a
+    // request that fails before reaching Groq does not consume quota.
+    const remaining = await consumeGroqQuota(userId)
+
     return NextResponse.json(
       {
         message: "Analysis regenerated successfully",
         analysis: result,
+        quota: {
+          remaining: serializeQuotaRemaining(remaining),
+          resetAt: new Date(quota.resetAt).toISOString(),
+          limit: quota.limit,
+        },
       },
       {
-        headers: rateLimitHeaders,
+        headers: {
+          "X-RateLimit-Limit": "3",
+          "X-RateLimit-Remaining": String(shortLimit.remaining - 1),
+          "X-RateLimit-Reset": String(shortLimit.resetTime),
+          "X-GroqQuota-Limit": String(quota.limit),
+          "X-GroqQuota-Remaining": String(remaining),
+          "X-GroqQuota-Reset": quota.resetAt,
+        },
       }
     )
   } catch (error) {
