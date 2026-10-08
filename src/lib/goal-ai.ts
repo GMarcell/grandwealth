@@ -138,21 +138,21 @@ export function feasibilityFrom(
   return "UNREALISTIC"
 }
 
-export const GOAL_PLAN_SYSTEM_PROMPT = `You are a personal savings coach for an Indonesian personal finance app. You are given a savings goal, a deadline, and the user's actual income and spending from last month. Produce a realistic plan to reach the goal by the deadline.
+export const GOAL_PLAN_SYSTEM_PROMPT = `You are a personal savings coach for a personal finance app. You are given a savings goal, a deadline, and the user's actual income and spending from last month. Produce a realistic plan to reach the goal by the deadline.
 
 Return ONLY a JSON object (no prose, no markdown fences) with this exact shape:
 {
-  "summary": "two or three sentences in Bahasa Indonesia assessing whether the goal is reachable and why",
+  "summary": "two or three sentences assessing whether the goal is reachable and why",
   "feasibility": "ON_TRACK" | "TIGHT" | "UNREALISTIC",
-  "actions": ["concrete step in Bahasa Indonesia", "..."],
+  "actions": ["concrete step", "..."],
   "categoryCuts": [
-    { "category": "CATEGORY_NAME", "monthlySaving": 300000, "reason": "short reason in Bahasa Indonesia" }
+    { "category": "CATEGORY_NAME", "monthlySaving": 300000, "reason": "short reason" }
   ]
 }
 
 Rules:
 - "feasibility" must be exactly one of ON_TRACK, TIGHT, UNREALISTIC. Use TIGHT when the required monthly saving is close to what the user can afford, UNREALISTIC when it is far beyond their capacity.
-- "actions": 3 to 5 specific, actionable steps. Reference real numbers where useful (e.g. how much to set aside each month). Write in Bahasa Indonesia.
+- "actions": 3 to 5 specific, actionable steps. Reference real numbers where useful (e.g. how much to set aside each month). Write in English.
 - "categoryCuts": only categories listed in the user's last-month spending. Never invent categories. "monthlySaving" is a whole number in IDR, greater than 0 and never more than the amount actually spent in that category last month.
 - Suggest cuts that add up to cover the shortfall when there is one. If the goal is comfortably affordable, few or no cuts are needed.
 - Base your advice on the real figures provided. Do not promise investment returns.
@@ -178,24 +178,24 @@ export function buildGoalPlanPrompt(input: GoalPlanPromptInput): string {
   const idr = (n: number) => `Rp ${Math.round(n).toLocaleString("id-ID")}`
   const lines = input.categories.map((c) => `- ${c.name}: ${idr(c.spent)}`)
 
-  return `Bantu saya mencapai target tabungan berikut.
+  return `Help me reach the following savings target.
 
 Target: ${input.goalName}
-Jumlah target: ${idr(input.targetAmount)}
-Sudah terkumpul: ${idr(input.savedAmount)}
-Sisa yang dibutuhkan: ${idr(input.remaining)}
-Tenggat: ${input.deadlineLabel} (sekitar ${input.monthsRemaining} bulan lagi)
-Tabungan per bulan yang dibutuhkan: ${idr(input.requiredMonthlySaving)}
+Target amount: ${idr(input.targetAmount)}
+Already saved: ${idr(input.savedAmount)}
+Amount still needed: ${idr(input.remaining)}
+Deadline: ${input.deadlineLabel} (about ${input.monthsRemaining} months away)
+Amount to save per month: ${idr(input.requiredMonthlySaving)}
 
-Data keuangan bulan lalu (${input.sourceMonthLabel}):
-- Pendapatan: ${idr(input.income)}
-- Pengeluaran: ${idr(input.expenses)}
-- Sisa bersih per bulan: ${idr(input.netSaving)}
+Last month's finances (${input.sourceMonthLabel}):
+- Income: ${idr(input.income)}
+- Expenses: ${idr(input.expenses)}
+- Net saving per month: ${idr(input.netSaving)}
 
-Pengeluaran per kategori bulan lalu:
-${lines.join("\n") || "Tidak ada data pengeluaran."}
+Spending by category last month:
+${lines.join("\n") || "No spending data."}
 
-Gunakan hanya nama kategori di atas untuk categoryCuts. Kembalikan JSON sesuai format yang diminta.`
+Use only the category names above for categoryCuts. Return JSON in the requested format.`
 }
 
 const rawPlanSchema = z.object({
@@ -470,18 +470,18 @@ export async function generateAiGoalPlanForUser(
   if (includeSavings) {
     investmentOptions.push({
       type: "SAVINGS",
-      title: "Tabungan Berjangka / Deposito",
-      description: `Kumpulkan ${formatIDR(requiredMonthlySaving)} per bulan dari pemotongan pengeluaran untuk mendanai tujuan Anda.`,
+      title: "Term Savings / Deposit",
+      description: `Set aside ${formatIDR(requiredMonthlySaving)} per month from reduced spending to fund your goal.`,
       pros: [
-        "Mudah dilakukan — bisa otomatis melalui transfer bulanan",
-        "Tidak ada risiko kerugian modal",
-        "Cairan fleksibel sesuai tenor",
-        "Bunga deposito bisa lebih tinggi daripada tabungan biasa",
+        "Easy to do — can be automated via monthly transfers",
+        "No risk of capital loss",
+        "Flexible withdrawals depending on tenor",
+        "Deposit interest can be higher than ordinary savings",
       ],
       cons: [
-        "Bunga biasanya lebih rendah daripada investasi lain",
-        "Mungkin sulit mencapai target jika perbedaannya besar",
-        "Bunga subject to pajak",
+        "Interest is usually lower than other investments",
+        "May be hard to reach the target if the gap is large",
+        "Interest is subject to tax",
       ],
       relevantData: {
         requiredMonthlySaving,
@@ -494,18 +494,18 @@ export async function generateAiGoalPlanForUser(
   if (includeGold && totalGoldWeight > 0) {
     investmentOptions.push({
       type: "GOLD",
-      title: "Jual/emas untuk Mendanai Goal",
-      description: `Anda memiliki ${totalGoldWeight.toFixed(2)} gram emas dengan nilai saat ini sekitar ${formatIDR(currentGoldValue)}.`,
+      title: "Sell Gold to Fund the Goal",
+      description: `You have ${totalGoldWeight.toFixed(2)} grams of gold worth about ${formatIDR(currentGoldValue)} at current prices.`,
       pros: [
-        "Emas mudah dicairkan dan likuid",
-        "Nilai emas bisa lebih tinggi jika harga naik",
-        "Emas dianggap sebagai lindung nilai inflasi",
+        "Gold is easy to liquidate and is highly liquid",
+        "Gold value may be higher if prices rise",
+        "Gold is often seen as an inflation hedge",
       ],
       cons: [
-        "Harga emas fluktuatif — bisa turun saat Anda menjual",
-        "Mungkin incur biaya transaksi saat menjual",
-        "Kehilangan aset investasi jangka panjang",
-        "Tidak ada pendapatan pasif seperti dividen",
+        "Gold prices are volatile — they can fall when you sell",
+        "You may incur transaction fees when selling",
+        "You lose a long-term investment asset",
+        "No passive income such as dividends",
       ],
       relevantData: {
         totalGoldWeight: Math.round(totalGoldWeight * 100) / 100,
@@ -523,18 +523,18 @@ export async function generateAiGoalPlanForUser(
 
     investmentOptions.push({
       type: "SELL_STOCKS",
-      title: "Jual Saham untuk Mendanai Goal",
-      description: `Anda memiliki ${profitableStocks.length} saham dengan unrealised profit. Total nilai portofolio saat ini sekitar ${formatIDR(totalStockValue)}.`,
+      title: "Sell Stocks to Fund the Goal",
+      description: `You have ${profitableStocks.length} stocks with unrealised profit. Your total portfolio value is about ${formatIDR(totalStockValue)}.`,
       pros: [
-        "Potensi profit instant jika harga sudah mahal",
-        "Diversifikasi yang baik — tidak semua telur di satu keranjang",
-        "Modal bisa langsung digunakan untuk goal",
+        "Potential instant profit if prices are already high",
+        "Good diversification — not all eggs in one basket",
+        "Proceeds can be used for the goal right away",
       ],
       cons: [
-        "Pertumbuhan saham jangka panjang bisa lebih besar daripada menggunakan modal sekarang",
-        "Pajak Capital Gains (PPH final 0.1% untuk saham umum)",
-        "Kehilangan potensi dividen di masa depan",
-        "Timing pasar sulit — jual saat harga rendah bisa merugikan",
+        "Long-term stock growth may be greater than using the capital now",
+        "Capital gains tax (final 0.1% PPH for ordinary shares)",
+        "Loss of future dividend potential",
+        "Market timing is hard — selling at a low price can hurt",
       ],
       relevantData: {
         stockCount: stocksWithProfit.length,

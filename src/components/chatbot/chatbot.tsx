@@ -13,9 +13,10 @@ type MessageRole = "user" | "assistant"
 interface Message {
   role: MessageRole
   content: string
-  kind?: "text" | "feature" | "upgrade" | "help"
+  kind?: "text" | "feature" | "upgrade" | "help" | "prompt"
   suggestions?: string[]
   action?: { label: string; href: string; proOnly?: boolean }
+  field?: string
 }
 
 const SUGGESTION_MAX = 4
@@ -86,6 +87,7 @@ export function Chatbot() {
         kind: result.kind,
         suggestions: result.suggestions,
         action: result.action,
+        field: result.field,
       }
       setMessages([...next, assistant])
     } catch (error) {
@@ -271,6 +273,42 @@ function ChatMessage({
             {message.action.label}
             <span className="ml-1 text-[10px] opacity-70">→</span>
           </Link>
+        </div>
+      )}
+
+      {/* Prompt field */}
+      {message.kind === "prompt" && message.field && (
+        <div className="mt-2">
+          <p className="text-[11px] text-muted-foreground mb-1">
+            {message.field === "type"
+              ? "Income or expense?"
+              : message.field === "amount"
+              ? "Amount (e.g. 10000 or -5000)"
+              : message.field === "category"
+              ? "Category name"
+              : message.field === "notes"
+              ? "Note (optional)"
+              : ""}
+          </p>
+          <div className="flex gap-1.5">
+            <Input
+              value={""}
+              readOnly
+              aria-label={`Waiting for ${message.field} reply`}
+              className="flex-1 bg-muted/50"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onSuggestionClick("skip")}
+            >
+              Skip
+            </Button>
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Reply in the chat with your answer — the bot will continue from there.
+          </p>
         </div>
       )}
 

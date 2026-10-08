@@ -728,7 +728,7 @@ export default function GoalsPage() {
                   />
                   <div>
                     <div className="text-sm font-medium">💰 Tabungan / Deposito</div>
-                    <div className="text-xs text-muted-foreground">Kurangi pengeluaran untuk menabung mencapai tujuan</div>
+                    <div className="text-xs text-muted-foreground">Reduce spending to save toward the goal</div>
                   </div>
                 </label>
                 <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
@@ -740,7 +740,7 @@ export default function GoalsPage() {
                   />
                   <div>
                     <div className="text-sm font-medium">🥇 Emas (Gold)</div>
-                    <div className="text-xs text-muted-foreground">Jual emas untuk mendanai tujuan jika Anda punya</div>
+                    <div className="text-xs text-muted-foreground">Sell gold to fund the goal if you have any</div>
                   </div>
                 </label>
                 <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
@@ -751,13 +751,13 @@ export default function GoalsPage() {
                     className="h-4 w-4 rounded border-muted-foreground accent-emerald-500"
                   />
                   <div>
-                    <div className="text-sm font-medium">📈 Saham (Stocks)</div>
-                    <div className="text-xs text-muted-foreground">Jual saham untung untuk mendanai tujuan</div>
+                    <div className="text-sm font-medium">📈 Stocks</div>
+                    <div className="text-xs text-muted-foreground">Sell profitable stocks to fund the goal</div>
                   </div>
                 </label>
               </div>
               <p className="text-xs text-muted-foreground">
-                Pilih opsi yang ingin Anda pertimbangkan dalam rencana. AI akan menunjukkan kelebihan dan kekurangan masing-masing.
+                Choose the options you want the plan to consider. AI will show the pros and cons of each.
               </p>
             </div>
 
@@ -922,7 +922,7 @@ export default function GoalsPage() {
                         <div className="grid grid-cols-2 gap-4 text-sm">
                           <div>
                             <div className="text-xs font-medium text-emerald-600 dark:text-emerald-400 mb-1">
-                              ✅ Kelebihan (Pros)
+                              ✅ Pros
                             </div>
                             <ul className="space-y-1">
                               {option.pros.map((pro, i) => (
@@ -935,7 +935,7 @@ export default function GoalsPage() {
                           </div>
                           <div>
                             <div className="text-xs font-medium text-rose-600 dark:text-rose-400 mb-1">
-                              ⚠️ Kekurangan (Cons)
+                              ⚠️ Cons
                             </div>
                             <ul className="space-y-1">
                               {option.cons.map((con, i) => (
@@ -950,7 +950,7 @@ export default function GoalsPage() {
 
                         {option.relevantData && (
                           <div className="mt-3 pt-3 border-t text-xs">
-                            <div className="text-muted-foreground mb-1">Data relevan:</div>
+                            <div className="text-muted-foreground mb-1">Relevant data:</div>
                             <div className="grid grid-cols-2 gap-2">
                               {Object.entries(option.relevantData).map(([key, value]) => (
                                 <div key={key} className="flex justify-between">

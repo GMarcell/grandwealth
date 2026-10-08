@@ -7,14 +7,14 @@
 **Tech Stack:** Next.js 16, React 19, TypeScript, Tailwind CSS 4, Prisma, PostgreSQL, NextAuth v5 (beta), TanStack React Query, Recharts, Radix UI, Yahoo Finance API, Groq AI SDK
 
 ### One-line Summary
-A personal wealth management dashboard for individuals (primarily in Indonesia) that tracks income/expenses, gold holdings, stock portfolios, savings accounts, loans, recurring transactions, and budgets — with an AI-powered monthly analysis and a read-only phone-widget API.
+A personal wealth management dashboard that tracks income/expenses, gold holdings, stock portfolios, savings accounts, loans, recurring transactions, and budgets — with an AI-powered monthly analysis, a smarter in-app assistant chatbot, and a read-only phone-widget API. The entire app UI and AI prompts are in English.
 
 ---
 
 ## Background
 
 ### Problem
-Personal finance tools are usually fragmented: budgeting apps don't track investments, brokerage tools don't show daily spending, and spreadsheets are cumbersome. In the Indonesian market there is no single, modern, localized (IDR, gold, IDX stocks) app that combines all of these in one place.
+Personal finance tools are usually fragmented: budgeting apps don't track investments, brokerage tools don't show daily spending, and spreadsheets are cumbersome. There is no single, modern app that combines all of these in one place and keeps everything in English with IDR-denominated assets (gold, IDX stocks).
 
 ### Why This Exists
 GrandWealth is a single-pane-of-glass for personal finances. It brings together:
@@ -27,13 +27,14 @@ GrandWealth is a single-pane-of-glass for personal finances. It brings together:
 - Monthly budgets with rollover
 - AI-generated monthly financial analysis
 - A read-only widget API for iOS/Android home-screen widgets
+- An in-app assistant chatbot for feature navigation and help
 
 ### Target Users
-- Indonesian professionals / small business owners tracking salary, freelance income, gold, and IDX stocks
+- Professionals / small business owners tracking salary, freelance income, gold, and IDX stocks
 - Budget-conscious savers who want rollover budgets, savings goals, and 50/30/20 analysis
 
 ### Scope of the PRD
-This PRD describes the **current v0.1.0 feature set** as implemented in this repository, plus areas flagged for improvement.
+This PRD describes the **current feature set** as implemented in this repository, plus areas flagged for improvement.
 
 ---
 
@@ -115,6 +116,7 @@ This PRD describes the **current v0.1.0 feature set** as implemented in this rep
 - Goal name, target amount, saved amount, target date, color
 - Linked recurring deposits can feed a goal
 - AI goal-plan endpoint (Groq) that produces a realistic plan to reach a goal by its deadline
+- English-language plan output: summary, actions, suggested category cuts, and investment options with pros/cons
 
 ### 11. Financial Reports
 - Monthly bar chart (income vs expenses) and category pie chart
@@ -126,6 +128,7 @@ This PRD describes the **current v0.1.0 feature set** as implemented in this rep
 - Includes income, expenses, net savings, savings rate, top category, over-budget count
 - **Completion guard:** only completed (ended) budget months can be analyzed; in-progress months are excluded
 - Regenerate with cancel support; inline error messages (rate limit, Pro-only, empty month, etc.)
+- English-language analysis output (prompts and report language are English)
 
 ### 13. Settings
 - Account info (name, email)
@@ -142,21 +145,45 @@ This PRD describes the **current v0.1.0 feature set** as implemented in this rep
 - Bearer token in `x-widget-token` header; read-only (no write access)
 - Documented integrations: iOS Scriptable script, Android KWGT HTTP widget, deep link to quick-add transaction
 
-### 15. Offline Queue / Resilience
+### 15. In-App Assistant Chatbot
+- Floating widget in the dashboard layout
+- Structured responses: plain text, feature card, upgrade prompt, help prompt
+- **Smarter intent detection** (English-only): greetings, help/what-can-you-do, plan/upgrade questions, direct feature navigation, and "open/go to/ke/go to …" commands
+- English keyword coverage for features (budget, gold, stocks, savings, goal, debt, recurring, report, analysis, dashboard, transactions, income, expenses)
+- Quick-reply suggestion chips per response, including follow-up hints specific to each feature
+- Feature/upgrade responses render as a tappable action card (with a "Pro" badge when proOnly)
+- Typing indicator while loading; scroll-to-bottom on new messages
+- Quick-action strip on first open (add transaction always; gold/savings/stocks when Pro)
+- Uses the same Groq-aware, quota-aware stack as the rest of the app (see Monthly Groq AI Usage Quota)
+
+### 16. Offline Queue / Resilience
 - `OfflineSyncProvider` + offline queue for mutations when the device is offline
 - Idempotency keys on writes so replayed requests don't double-apply
 - Online/offline banner and status hook
 
-### 16. Admin Features
+### 17. Admin Features
 - Admin users can view all users, reset passwords, manage trial requests
 - Admin bootstrap via `ADMIN_EMAILS` env var on first registration
 - Trial requests: users request Pro trial from Settings; admin approves/declines; trial auto-expires after `PRO_TRIAL_DAYS`
 
-### 17. Cron Jobs (Vercel Cron)
+### 18. Cron Jobs (Vercel Cron)
 - `apply-recurring` — applies recurring transactions
 - `update-prices` — refreshes stock prices across users
 - `monthly-analysis` — generates AI analysis for completed months
 - All protected by `CRON_SECRET`
+
+### 19. Monthly Groq AI Usage Quota (Pro-Capped)
+- Pro accounts are capped at **5 Groq AI invocations per calendar month** across all Groq-powered endpoints.
+- Pro+ accounts and administrators are **not capped** — they keep unlimited Groq access.
+- Quota is per-user, per-calendar-month, stored in the `aiUsage` table, so it survives serverless restarts without Redis.
+- Quota is consumed only after the Groq call succeeds, so aborted/failed requests before reaching Groq do not burn quota.
+- **Affected user-initiated Groq routes:**
+  - `POST /api/analysis` — monthly AI analysis regeneration
+  - `POST /api/budgets/ai-plan` — AI budget plan
+  - `POST /api/goals/ai-plan` — AI goal plan
+- When capped out, the route returns `429` with a clear error, `Retry-After`, and `X-GroqQuota-*` headers.
+- Successful Groq responses include a `quota` object: `{ remaining, resetAt, limit }`.
+- The cron monthly-analysis job is **not** subject to the per-user quota (it is server-initiated and generates for all eligible users).
 
 ---
 
@@ -192,12 +219,13 @@ This PRD describes the **current v0.1.0 feature set** as implemented in this rep
 ### Architecture Notes
 - Route groups: `(dashboard)` for authenticated pages sharing a shell layout
 - API routes under `src/app/api/*`
-- Business logic in `src/lib/` (prices, budget-months, budget-carry-over, monthly-balance, wealth-history, gold, dividends, analysis-generator, subscription, trial, widget-token, rate-limit, offline-queue, api-mutate, idempotency, etc.)
+- Business logic in `src/lib/` (prices, budget-months, budget-carry-over, monthly-balance, wealth-history, gold, dividends, analysis-generator, subscription, trial, widget-token, rate-limit, offline-queue, api-mutate, idempotency, ai-usage-quota, etc.)
 - UI components in `src/components/` (ui primitives, layout, charts, auth, chatbot, stocks, settings, offline)
 - Prisma schema in `prisma/schema.prisma` with migrations in `prisma/migrations/`
 
 ### Data Model Highlights
-- `User`: id, name, email, password, role, plan, subscriptionStatus, currentPeriodEnd, isTrial, suspended, budgetStartDay, carryOverEnabled, carryDeficitEnabled; relations to transactions, goldDeposits, stocks, categories, budgets, recurringTransactions, monthlyAnalyses, bankSavings, savingsGoals, loans, dividends, accounts, sessions, trialRequests, widgetTokens
+- `User`: id, name, email, password, role, plan, subscriptionStatus, currentPeriodEnd, isTrial, suspended, budgetStartDay, carryOverEnabled, carryDeficitEnabled; relations to transactions, goldDeposits, stocks, categories, budgets, recurringTransactions, monthlyAnalyses, bankSavings, savingsGoals, loans, dividends, accounts, sessions, trialRequests, widgetTokens, aiUsages
+- `AiUsage`: userId, monthKey (YYYY-MM), createdAt; unique on (userId, monthKey); used for the Pro monthly Groq quota
 - `Transaction`: type (INCOME/EXPENSE), category, amount, description, date; indexed on (userId, date), (userId, type, date)
 - `GoldDeposit`: type (BUY/SELL), weightGram, pricePerGram, totalAmount, date, notes
 - `Stock`: symbol, name, quantity, buyPrice, currentPrice, lastPriceUpdated, date, notes; has many dividends
@@ -224,6 +252,7 @@ This PRD describes the **current v0.1.0 feature set** as implemented in this rep
 - **Accessibility:** Radix primitives help, but some interactive cards/links mix button and link semantics; verify keyboard navigation, focus traps in dialogs, and ARIA labels on icon-only buttons.
 - **Confirm dialogs:** some deletes use `window.confirm`; standardizing on Radix dialogs with clear undo would improve consistency.
 - **Error messaging:** most errors surface via toast, but a few paths fall back to generic messages; enriching server error shapes and mapping them client-side would help.
+- **Chat:** the chatbot is English-only and intent-based; it is not an LLM agent and cannot take actions on behalf of the user. If a conversational agent is wanted later, it can be layered on top of the current structured-response backend.
 
 ### Data Integrity / Accounting
 - **Double-entry / audit trail:** transactions are single-entry; a true double-entry ledger or at least an immutable audit log would strengthen correctness for gold sells, savings withdrawals, and loan payments.
@@ -242,6 +271,7 @@ This PRD describes the **current v0.1.0 feature set** as implemented in this rep
 - **Rate limit fallback:** in-memory fallback is fine for dev but doesn't share state across instances; document that production rate limiting depends on Upstash Redis being configured.
 - **AI analysis dependencies:** Groq API key, rate limits, and model availability affect a user-facing feature; the UI already surfaces Pro-only and rate-limit errors — add retry/backoff guidance and a cached last-good analysis where possible.
 - **Price staleness:** stock/gold prices are cached in DB with `lastPriceUpdated`; surfaces should indicate staleness (e.g., "price from ... ago") so users don't misread live value.
+- **Groq quota edge cases:** the quota is enforced on the three user-initiated Groq routes, but it is a soft operational limit (stored in the app DB, not a billing system). If a hard limit is needed for billing/compliance, wire it to the subscription/billing layer.
 
 ### Security
 - **Password policy:** `PASSWORD_MIN_LENGTH = 6` is very weak; raise the minimum and consider basic strength checks.
@@ -250,7 +280,7 @@ This PRD describes the **current v0.1.0 feature set** as implemented in this rep
 - **Admin bootstrap:** `ADMIN_EMAILS` auto-promotes first registrant; ensure this is only used for initial seed and not left active in production with broad email matching.
 
 ### Feature Gaps (commonly expected, not yet present)
-- Bank account feeds / reconciliation (Plaid or Indonesian open banking)
+- Bank account feeds / reconciliation (Plaid or open banking)
 - Multi-currency support
 - Export to PDF/Excel beyond current CSV transaction export
 - Push notifications / email alerts for budgets, price drops, recurring due dates
@@ -265,10 +295,12 @@ This PRD describes the **current v0.1.0 feature set** as implemented in this rep
 - **Auth:** every dashboard API route requires a valid session; 401 otherwise
 - **Validation:** Zod schemas on all public mutation inputs
 - **Rate limits:** per-endpoint limits on transactions GET/POST, budgets POST, savings POST, gold POST; Upstash Redis with in-memory fallback
+- **Groq quota:** Pro accounts capped at 5 Groq invocations/month; Pro+/admin unlimited; tracked in `aiUsage`
 - **Cron auth:** cron endpoints verify `CRON_SECRET`
 - **Security headers:** CSP and other headers configured in `next.config.ts`
 - **Responsive:** sidebar collapses on mobile; grids reflow across breakpoints
 - **Dark mode:** full light/dark/system theme support
+- **Language:** English-only UI and AI prompts
 - **Testing:** Vitest unit tests + Playwright E2E tests present in the repo
 
 ---
@@ -311,14 +343,15 @@ Core data
 - `ADMIN_EMAILS` / `PRO_TRIAL_DAYS` — admin bootstrap + trial config
 - `NEXT_PUBLIC_SITE_URL` — public URL for metadata + widget deep links
 - `CRON_SECRET` — protects cron endpoints
-- `GROQ_API_KEY` — AI analysis
+- `GROQ_API_KEY` — AI analysis and Groq-powered features
+- `GROQ_MODEL` — optional override for the Groq model used by AI features
 
 ---
 
 ## Notes / Assumptions
 
-- This PRD reflects the **current codebase** as of the analyzed commit; it is not a forward-looking spec beyond the "Things to improve" section.
-- The project targets Indonesian users (IDR, gold, IDX stocks), but the data model and UI are general enough to extend.
+- This PRD reflects the **current codebase**; it is not a forward-looking spec beyond the "Things to improve" section.
+- The app UI and all AI prompts are English-only.
+- The project is IDR-denominated for assets (gold, IDX stocks), but the interface language is English.
 - Some features (dividends, goals, recurring, admin, widget API) are partially implemented and may have incomplete UI or docs; verify each before relying on it in production.
-- The existing `PRD-GrandWealth.md` in the repo is an earlier draft; this document supersedes it with details drawn directly from the implementation.
-
+- The earlier `PRD-GrandWealth.md` in the repo is superseded by this document.

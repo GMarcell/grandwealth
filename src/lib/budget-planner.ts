@@ -61,9 +61,9 @@ export class BudgetPlanError extends Error {
 }
 
 const GROUP_LABEL_ID: Record<RuleType, string> = {
-  NEED: "kebutuhan",
-  WANT: "keinginan",
-  SAVINGS: "tabungan",
+  NEED: "needs",
+  WANT: "wants",
+  SAVINGS: "savings",
 }
 
 export interface PlanSummaryInput {
@@ -75,19 +75,19 @@ export interface PlanSummaryInput {
 }
 
 /**
- * Build the short Bahasa Indonesia summary shown above the plan.
+ * Build the short English summary shown above the plan.
  * Pure so it can be unit tested without a database.
  */
 export function buildPlanSummary(input: PlanSummaryInput): string {
   const idr = (n: number) => `Rp ${Math.round(n).toLocaleString("id-ID")}`
   const parts = [
-    `Rencana anggaran ${input.monthLabel} disusun dari pengeluaran ${input.sourceMonthLabel} mengikuti aturan 50/30/20 (50% kebutuhan, 30% keinginan, 20% tabungan) dengan basis pendapatan ${input.incomeMonthLabel} sebesar ${idr(input.income)}.`,
+    `The ${input.monthLabel} budget plan is based on ${input.sourceMonthLabel}'s spending and follows the 50/30/20 rule (50% needs, 30% wants, 20% savings) using ${input.incomeMonthLabel}'s income of ${idr(input.income)}.`,
   ]
 
   if (input.skippedGroups.length > 0) {
     const names = input.skippedGroups.map((g) => GROUP_LABEL_ID[g]).join(", ")
     parts.push(
-      `Belum ada kategori ${names} yang diklasifikasikan dan punya pengeluaran bulan lalu, jadi bagiannya belum dialokasikan. Atur tipe kategori di Pengaturan.`,
+      `No categories classified as ${names} had spending last month, so that portion hasn't been allocated yet. Set each category's type in Settings.`,
     )
   }
 

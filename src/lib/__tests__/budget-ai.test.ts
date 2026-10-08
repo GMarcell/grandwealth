@@ -37,16 +37,16 @@ describe("parseAiBudgetResponse", () => {
   const allowed = ["FOOD", "TRANSPORTATION", "SHOPPING"]
 
   it("parses fenced JSON and keeps only categories that were spent on", () => {
-    const raw = '```json\n{"summary":"Hemat",  "budgets":[' +
-      '{"category":"FOOD","amount":1500000.4,"reason":"naik sedikit"},' +
+    const raw = '```json\n{"summary":"Save more",  "budgets":[' +
+      '{"category":"FOOD","amount":1500000.4,"reason":"slight increase"},' +
       '{"category":"MADE_UP","amount":99999}' +
       "]}\n```"
 
     const result = parseAiBudgetResponse(raw, allowed)
 
-    expect(result.summary).toBe("Hemat")
+    expect(result.summary).toBe("Save more")
     expect(result.budgets).toEqual([
-      { categoryName: "FOOD", amount: 1500000, reason: "naik sedikit" },
+      { categoryName: "FOOD", amount: 1500000, reason: "slight increase" },
     ])
   })
 
@@ -111,7 +111,7 @@ describe("generateAiBudgetPlanForUser", () => {
     mockCreate.mockResolvedValue(
       completion(
         JSON.stringify({
-          summary: "Rencana hemat",
+          summary: "Frugal plan",
           budgets: [
             { category: "FOOD", amount: 1_400_000 },
             { category: "TRANSPORTATION", amount: 300_000 },
@@ -140,7 +140,7 @@ describe("generateAiBudgetPlanForUser", () => {
     mockCreate.mockResolvedValue(
       completion(
         JSON.stringify({
-          summary: "Dibatasi",
+          summary: "Constrained plan",
           budgets: [
             { category: "FOOD", amount: 900_000 },
           ],

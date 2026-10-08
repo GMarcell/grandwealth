@@ -17,23 +17,23 @@ const groq = new Groq({
 
 const SHARES_PER_LOT = 100
 
-const SYSTEM_PROMPT = `You are a friendly, professional personal financial analyst and savings coach. Your primary focus is helping users save more money and build wealth. Your job is to analyze a user's monthly financial data and provide insightful, actionable analysis in Indonesian/Bahasa Indonesia — with a strong emphasis on savings opportunities and recommendations.
+const SYSTEM_PROMPT = `You are a friendly, professional personal financial analyst and savings coach. Your primary focus is helping users save more money and build wealth. Your job is to analyze a user's monthly financial data and provide insightful, actionable analysis in English — with a strong emphasis on savings opportunities and recommendations.
 
 Write a monthly financial analysis report in Markdown format. The report MUST cover:
 
-1. **Ringkasan Bulanan** (Monthly Summary) — key figures: income, expenses, savings, savings rate
-2. **Skor Kesehatan Tabungan** (Savings Health Score) — assessment of their savings rate compared to the 20% target:
-   - 20%+ → "Excellent — you're building wealth!" 
+1. **Monthly Summary** — key figures: income, expenses, savings, savings rate
+2. **Savings Health Score** — assessment of their savings rate compared to the 20% target:
+   - 20%+ → "Excellent — you're building wealth!"
    - 10-20% → "Good progress — let's push higher"
    - 0-10% → "Room for improvement — here's how"
    - Negative → "Need to turn this around — urgent action needed"
-3. **Analisis Pengeluaran** (Spending Analysis) — top spending categories, where money leaks, and specific savings opportunities in each category
-4. **Potensi Penghematan** (Savings Opportunities) — CRITICAL section: calculate and present concrete saving ideas
-5. **Kinerja Anggaran** (Budget Performance) — how well budgets were followed, overruns
-6. **Tabungan & Investasi** (Savings & Investments) — savings rate, stock & gold holdings, how to rebalance for better returns
-7. **Rekomendasi Tabungan** (Savings Recommendations) — 3-4 SPECIFIC, actionable tips
+3. **Spending Analysis** — top spending categories, where money leaks, and specific savings opportunities in each category
+4. **Savings Opportunities** — CRITICAL section: calculate and present concrete saving ideas
+5. **Budget Performance** — how well budgets were followed, overruns
+6. **Savings & Investments** — savings rate, stock & gold holdings, how to rebalance for better returns
+7. **Savings Recommendations** — 3-4 SPECIFIC, actionable tips
 
-CRITICAL: At least 40% of the report must focus on actionable savings strategies. Use Indonesian language (Bahasa). Format with Markdown headings and bullet points. Keep the whole report concise (roughly 600-800 words) and ALWAYS deliver every section in full — never stop mid-section or mid-sentence.`
+CRITICAL: At least 40% of the report must focus on actionable savings strategies. Use English. Format with Markdown headings and bullet points. Keep the whole report concise (roughly 600-800 words) and ALWAYS deliver every section in full — never stop mid-section or mid-sentence.`
 
 export interface AnalysisResult {
   summary: string
@@ -254,49 +254,49 @@ export async function generateAnalysisForUserAndMonth(
 
   // ── Generate analysis with Groq AI ──
 
-  const userPrompt = `Buat analisis keuangan bulanan untuk ${user.name || "pengguna"} untuk bulan ${getBudgetMonthLabel(monthKey, user.budgetStartDay)}. FOKUS pada rekomendasi tabungan dan cara menghemat lebih banyak.
+  const userPrompt = `Write a monthly financial analysis for ${user.name || "the user"} for ${getBudgetMonthLabel(monthKey, user.budgetStartDay)}. FOCUS on savings recommendations and ways to save more.
 
-Data keuangan bulan ini:
-- Total Pendapatan: Rp ${totalIncome.toLocaleString("id-ID")}
-- Total Pengeluaran: Rp ${totalExpenses.toLocaleString("id-ID")}
-- Tabungan Bersih: Rp ${netSavings.toLocaleString("id-ID")}
-- Rasio Tabungan: ${savingsRate.toFixed(1)}%
-- Jumlah Transaksi: ${transactions.length} (${incomeTxs.length} pemasukan, ${expenseTxs.length} pengeluaran)
+This month's finances:
+- Total Income: Rp ${totalIncome.toLocaleString("id-ID")}
+- Total Expenses: Rp ${totalExpenses.toLocaleString("id-ID")}
+- Net Savings: Rp ${netSavings.toLocaleString("id-ID")}
+- Savings Rate: ${savingsRate.toFixed(1)}%
+- Number of Transactions: ${transactions.length} (${incomeTxs.length} income, ${expenseTxs.length} expenses)
 
-Pengeluaran per Kategori (dari terbesar ke terkecil):
+Expenses by Category (largest to smallest):
 ${sortedSpending
   .map(
     (s) =>
-      `- ${s.category}: Rp ${s.total.toLocaleString("id-ID")} (${totalExpenses > 0 ? ((s.total / totalExpenses) * 100).toFixed(1) : 0}% dari total)`
+      `- ${s.category}: Rp ${s.total.toLocaleString("id-ID")} (${totalExpenses > 0 ? ((s.total / totalExpenses) * 100).toFixed(1) : 0}% of total)`
   )
   .join("\n")}
 
-Pendapatan per Kategori:
+Income by Category:
 ${sortedIncome.map((s) => `- ${s.category}: Rp ${s.total.toLocaleString("id-ID")}`).join("\n")}
 
-Anggaran Bulanan (termasuk rollover dari bulan sebelumnya):
+Monthly Budgets (including rollover from previous month):
 ${budgetDetails
   .map(
     (b) =>
-      `- ${b.category}: anggaran Rp ${b.budgeted.toLocaleString("id-ID")}${b.rollover > 0 ? ` + rollover Rp ${b.rollover.toLocaleString("id-ID")} = Rp ${b.effective.toLocaleString("id-ID")}` : ""}, terpakai Rp ${b.spent.toLocaleString("id-ID")}, sisa Rp ${b.remaining.toLocaleString("id-ID")}${b.remaining < 0 ? " (OVER BUDGET!)" : ""}`
+      `- ${b.category}: budget Rp ${b.budgeted.toLocaleString("id-ID")}${b.rollover > 0 ? ` + rollover Rp ${b.rollover.toLocaleString("id-ID")} = Rp ${b.effective.toLocaleString("id-ID")}` : ""}, spent Rp ${b.spent.toLocaleString("id-ID")}, remaining Rp ${b.remaining.toLocaleString("id-ID")}${b.remaining < 0 ? " (OVER BUDGET!)" : ""}`
   )
-  .join("\n") || "Tidak ada anggaran yang ditetapkan."}
+  .join("\n") || "No budgets set."}
 
-Portofolio Saham:
+Stock Portfolio:
 ${stockDetails
   .map(
     (s) =>
-      `- ${s.symbol} (${s.name}): ${s.quantity} lot (${(s.quantity * SHARES_PER_LOT).toLocaleString("id-ID")} lembar) @ Rp ${s.currentPrice?.toLocaleString("id-ID") ?? (s.buyPrice / SHARES_PER_LOT).toLocaleString("id-ID")}/saham = Rp ${s.value.toLocaleString("id-ID")}`
+      `- ${s.symbol} (${s.name}): ${s.quantity} lots (${(s.quantity * SHARES_PER_LOT).toLocaleString("id-ID")} shares) @ Rp ${s.currentPrice?.toLocaleString("id-ID") ?? (s.buyPrice / SHARES_PER_LOT).toLocaleString("id-ID")}/share = Rp ${s.value.toLocaleString("id-ID")}`
   )
-  .join("\n") || "Tidak ada kepemilikan saham."}
+  .join("\n") || "No stock holdings."}
 
 ${
   totalGoldWeight > 0
-    ? `Emas: ${totalGoldWeight.toFixed(2)} gram, nilai Rp ${totalGoldValue.toLocaleString("id-ID")}`
-    : "Tidak ada kepemilikan emas."
+    ? `Gold: ${totalGoldWeight.toFixed(2)} grams, worth Rp ${totalGoldValue.toLocaleString("id-ID")}`
+    : "No gold holdings."
 }
 
-BERIKAN LANGKAH-LANGKAH HEMAT YANG SPESIFIK DAN BISA DILAKUKAN. Hitung potensi penghematan dalam Rupiah. Beri saran tabungan yang konkret. Gunakan Bahasa Indonesia dengan format Markdown.`
+GIVE SPECIFIC, ACTIONABLE MONEY-SAVING STEPS. Estimate potential savings in Rupiah. Give concrete savings advice. Use English with Markdown formatting.`
 
   // Groq deprecated llama-3.3-70b-versatile for non-enterprise access.
   // Allow deployments to override this as Groq's model catalog changes.

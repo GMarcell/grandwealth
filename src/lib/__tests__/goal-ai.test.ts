@@ -62,11 +62,11 @@ describe("feasibilityFrom", () => {
 describe("parseAiGoalPlanResponse", () => {
   it("keeps only real categories and caps cuts at what was spent", () => {
     const raw = JSON.stringify({
-      summary: "Bisa tercapai",
+      summary: "Achievable",
       feasibility: "tight",
-      actions: ["Kurangi jajan", "  ", "Setor otomatis"],
+      actions: ["Cut snack spending", "  ", "Auto-deposit monthly"],
       categoryCuts: [
-        { category: "FOOD", monthlySaving: 9_000_000, reason: "masak sendiri" },
+        { category: "FOOD", monthlySaving: 9_000_000, reason: "cook at home" },
         { category: "ENTERTAINMENT", monthlySaving: 300_000 },
         { category: "MADE_UP", monthlySaving: 500_000 },
         { category: "FOOD", monthlySaving: -100 },
@@ -76,10 +76,10 @@ describe("parseAiGoalPlanResponse", () => {
     const result = parseAiGoalPlanResponse(raw, SPENDING)
 
     expect(result.feasibility).toBe("TIGHT")
-    expect(result.actions).toEqual(["Kurangi jajan", "Setor otomatis"])
+    expect(result.actions).toEqual(["Cut snack spending", "Auto-deposit monthly"])
     // FOOD capped at its 3M spend; unknown category dropped.
     expect(result.categoryCuts).toEqual([
-      { category: "FOOD", monthlySaving: 3_000_000, reason: "masak sendiri" },
+      { category: "FOOD", monthlySaving: 3_000_000, reason: "cook at home" },
       { category: "ENTERTAINMENT", monthlySaving: 300_000, reason: null },
     ])
   })
@@ -125,11 +125,11 @@ describe("generateAiGoalPlanForUser", () => {
     mockCreate.mockResolvedValue(
       completion(
         JSON.stringify({
-          summary: "Bisa tercapai",
+          summary: "Achievable",
           feasibility: "ON_TRACK",
-          actions: ["Setor otomatis bulanan"],
+          actions: ["Auto-deposit monthly"],
           categoryCuts: [
-            { category: "ENTERTAINMENT", monthlySaving: 300_000, reason: "batasi hiburan" },
+            { category: "ENTERTAINMENT", monthlySaving: 300_000, reason: "limit entertainment" },
           ],
         }),
       ),
@@ -156,7 +156,7 @@ describe("generateAiGoalPlanForUser", () => {
     expect(plan.lastMonth.netSaving).toBe(3_000_000)
 
     expect(plan.categoryCuts).toEqual([
-      { category: "ENTERTAINMENT", monthlySaving: 300_000, reason: "batasi hiburan" },
+      { category: "ENTERTAINMENT", monthlySaving: 300_000, reason: "limit entertainment" },
     ])
     expect(plan.projectedMonthlySaving).toBe(3_300_000)
     expect(plan.shortfall).toBe(0)

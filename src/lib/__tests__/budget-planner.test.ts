@@ -44,7 +44,7 @@ describe("buildPlanSummary", () => {
     expect(summary).not.toMatch(/belum dialokasikan/i)
   })
 
-  it("names the skipped group in Bahasa Indonesia", () => {
+  it("names the skipped group in English", () => {
     const summary = buildPlanSummary({
       monthLabel: "Sep 2026",
       sourceMonthLabel: "Aug 2026",
@@ -53,7 +53,7 @@ describe("buildPlanSummary", () => {
       skippedGroups: ["WANT"],
     })
 
-    expect(summary).toContain("keinginan")
+    expect(summary).toContain("wants")
   })
 })
 

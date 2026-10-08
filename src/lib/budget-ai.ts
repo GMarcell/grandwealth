@@ -56,13 +56,13 @@ export class BudgetAiError extends Error {
   }
 }
 
-export const AI_BUDGET_PLAN_SYSTEM_PROMPT = `You are a personal budgeting assistant for an Indonesian personal finance app. You produce a practical monthly budget from the user's ACTUAL spending in the previous month.
+export const AI_BUDGET_PLAN_SYSTEM_PROMPT = `You are a personal budgeting assistant for a personal finance app. You produce a practical monthly budget from the user's ACTUAL spending in the previous month.
 
 Return ONLY a JSON object (no prose, no markdown fences) with this exact shape:
 {
-  "summary": "one or two sentences in Bahasa Indonesia explaining the strategy",
+  "summary": "one or two sentences explaining the strategy",
   "budgets": [
-    { "category": "CATEGORY_NAME", "amount": 1500000, "reason": "short reason in Bahasa Indonesia" }
+    { "category": "CATEGORY_NAME", "amount": 1500000, "reason": "short reason" }
   ]
 }
 
@@ -73,7 +73,7 @@ Rules:
 - Keep the total across all categories within the user's monthly income when income is provided. If last month's total spending exceeded income, propose a total that moves spending toward the income.
 - Prefer a lean but realistic plan. Do not pad every category.
 - Cover every category that had meaningful spending last month. You may omit a trivial category.
-- Write "summary" and "reason" in Bahasa Indonesia. Keep reasons under 12 words.
+- Write "summary" and "reason" in English. Keep reasons under 12 words.
 - Respond with JSON only.`
 
 export interface BudgetPlanSourceData {
@@ -103,23 +103,23 @@ export function buildAiBudgetPlanPrompt(data: BudgetPlanSourceData): string {
       }`,
   )
 
-  let constraints = `\n\nSetiap kategori di atas adalah nama kategori yang harus dipakai apa adanya. Kembalikan JSON sesuai format yang diminta.`
+  let constraints = `\n\nThe categories above are the exact category names to use. Return JSON in the requested format.`
 
   // Add constrained categories (cannot reduce)
   if (data.cannotReduceCategories.length > 0) {
-    constraints = `\n\n KATEGORI TIDAK BOLEH DITURUNKAN: ${data.cannotReduceCategories.join(", ")}. JANGAN PERNAH menurunkan anggaran kategori ini dibandingkan pengeluaran bulan lalu. Jika perlu, boleh ditambah atau tetap sama.\n\n${constraints}`
+    constraints = `\n\n CATEGORIES THAT MUST NOT BE REDUCED: ${data.cannotReduceCategories.join(", ")}. NEVER lower this category's budget compared with last month's spending. If needed, keep it the same or increase it.\n\n${constraints}`
   }
 
   if (data.maxTotalBudget != null) {
-    constraints = `\n\n BATASAN: Total anggaran semua kategori GABUNGAN tidak boleh melebihi ${idr(data.maxTotalBudget)}. Sesuaikan anggaran setiap kategori (kecuali yang tidak boleh diturunkan) agar totalnya di bawah batas ini.\n\n${constraints}`
+    constraints = `\n\n CONSTRAINT: The total budget across all categories must not exceed ${idr(data.maxTotalBudget)}. Adjust each category's budget (except the ones that must not be reduced) so the total stays under this limit.\n\n${constraints}`
   }
 
-  return `Buat rencana anggaran untuk bulan ${data.monthLabel} berdasarkan pengeluaran nyata bulan lalu (${data.sourceMonthLabel}).
+  return `Create a budget plan for ${data.monthLabel} based on last month's actual spending (${data.sourceMonthLabel}).
 
-Pendapatan bulan ${data.sourceMonthLabel}: ${idr(data.totalIncome)}
-Total pengeluaran bulan ${data.sourceMonthLabel}: ${idr(data.totalExpenses)}${data.maxTotalBudget != null ? `\n\nAnggaran maksimum yang diinginkan: ${idr(data.maxTotalBudget)}` : ""}
+Income for ${data.sourceMonthLabel}: ${idr(data.totalIncome)}
+Total spending for ${data.sourceMonthLabel}: ${idr(data.totalExpenses)}${data.maxTotalBudget != null ? `\n\nMaximum budget requested: ${idr(data.maxTotalBudget)}` : ""}
 
-Pengeluaran per kategori bulan lalu:
+Spending by category last month:
 ${lines.join("\n")}${constraints}`
 }
 
