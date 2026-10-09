@@ -48,7 +48,7 @@ export const updateCategorySchema = createCategorySchema.partial()
 // ─── Budgets ─────────────────────────────────
 export const createBudgetSchema = z.object({
   categoryName: z.string().min(1, "Category is required").max(100),
-  amount: z.number().positive("Budget amount must be greater than 0").finite(),
+  amount: z.number().nonnegative("Budget amount must be 0 or greater").finite(),
   month: z.string().regex(/^\d{4}-\d{2}$/, "Month must be in YYYY-MM format"),
   rolloverCap: z.number().nonnegative("Rollover cap must be >= 0").finite().nullable().optional(),
   canReduce: z.boolean().optional().default(true),
@@ -270,7 +270,7 @@ export const budgetFormSchema = z.object({
   categoryName: z.string().min(1, "Category is required"),
   amount: z.string()
     .min(1, "Amount is required")
-    .refine((v) => !isNaN(Number(v)) && Number(v) > 0, "Amount must be a positive number"),
+    .refine((v) => !isNaN(Number(v)) && Number(v) >= 0, "Amount must be 0 or greater"),
   rolloverCap: z.string().optional(),
   canReduce: z.boolean().optional(),
 })

@@ -86,13 +86,20 @@ test.describe("Budgets Page — Form Validation", () => {
     await expect(page.getByText("Category is required")).toBeVisible()
   })
 
-  test("shows error for zero amount", async ({ page }) => {
+  test("accepts a zero amount", async ({ page }) => {
     const addButton = page.locator("button").filter({ hasText: "Add Budget" }).first()
     test.skip(await addButton.isDisabled(), "No categories available to add budget")
     await addButton.click()
 
     const dialog = page.getByRole("dialog")
     await expect(dialog).toBeVisible()
+
+    // Pick a category so only the amount is under test
+    const categorySelect = dialog.getByRole("combobox")
+    await categorySelect.click()
+    const firstOption = page.getByRole("option").first()
+    await expect(firstOption).toBeVisible({ timeout: 5000 })
+    await firstOption.click()
 
     // Enter zero as amount
     const amountInput = page.getByLabel("Monthly Budget (Rp)")
@@ -103,8 +110,9 @@ test.describe("Budgets Page — Form Validation", () => {
       form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }))
     )
 
-    // Should show positive number error
-    await expect(page.getByText("Amount must be a positive number")).toBeVisible({ timeout: 5000 })
+    // Zero is a valid budget, so it should save without a validation error
+    await expect(page.getByText("Budget saved")).toBeVisible({ timeout: 10000 })
+    await expect(page.getByText("Amount must be a positive number")).toHaveCount(0)
   })
 
   test("shows the rollover cap but no per-category toggle", async ({ page }) => {

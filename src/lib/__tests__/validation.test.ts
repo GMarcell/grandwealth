@@ -333,6 +333,15 @@ describe("createBudgetSchema", () => {
     expect(result.success).toBe(true)
   })
 
+  it("accepts a zero amount (spend nothing on a category)", () => {
+    const result = createBudgetSchema.safeParse({
+      categoryName: "Food",
+      amount: 0,
+      month: "2026-07",
+    })
+    expect(result.success).toBe(true)
+  })
+
   it("rejects negative amount", () => {
     const result = createBudgetSchema.safeParse({
       categoryName: "Food",
@@ -379,6 +388,11 @@ describe("updateBudgetSchema", () => {
       amount: 2000000,
       rolloverCap: 250000,
     })
+    expect(result.success).toBe(true)
+  })
+
+  it("accepts setting the amount to zero", () => {
+    const result = updateBudgetSchema.safeParse({ amount: 0 })
     expect(result.success).toBe(true)
   })
 

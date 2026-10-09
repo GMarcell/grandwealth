@@ -10,7 +10,7 @@ const testFormSchema = z.object({
   categoryName: z.string().min(1, "Category is required"),
   amount: z.string()
     .min(1, "Amount is required")
-    .refine((v) => !isNaN(Number(v)) && Number(v) > 0, "Amount must be a positive number"),
+    .refine((v) => !isNaN(Number(v)) && Number(v) >= 0, "Amount must be 0 or greater"),
   rolloverCap: z.string().optional(),
 })
 
@@ -125,7 +125,7 @@ describe("Budget form validation integration", () => {
     })
   })
 
-  it("shows error for invalid amount (zero)", async () => {
+  it("accepts a zero amount", async () => {
     const onSubmit = vi.fn()
     render(<TestForm onSubmit={onSubmit} />)
 
@@ -138,11 +138,14 @@ describe("Budget form validation integration", () => {
 
     fireEvent.submit(screen.getByRole("form"))
 
-    // "0" passes .min(1) (length 1) but fails .refine() (not > 0)
+    // Zero is a valid budget amount
     await waitFor(() => {
-      expect(screen.getByText("Amount must be a positive number")).toBeDefined()
+      expect(onSubmit).toHaveBeenCalledTimes(1)
     })
-    expect(onSubmit).not.toHaveBeenCalled()
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({
+      categoryName: "FOOD",
+      amount: "0",
+    })
   })
 
   it("shows error for invalid amount (negative)", async () => {
@@ -159,7 +162,7 @@ describe("Budget form validation integration", () => {
     fireEvent.submit(screen.getByRole("form"))
 
     await waitFor(() => {
-      expect(screen.getByText("Amount must be a positive number")).toBeDefined()
+      expect(screen.getByText("Amount must be 0 or greater")).toBeDefined()
     })
     expect(onSubmit).not.toHaveBeenCalled()
   })
