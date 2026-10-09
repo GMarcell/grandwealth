@@ -7,6 +7,7 @@ export interface TransactionInterface {
   category: string;
   amount: number;
   description: string;
+  notes?: string | null;
   date: string;
 }
 

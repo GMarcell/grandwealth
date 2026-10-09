@@ -17,6 +17,9 @@ interface Message {
   suggestions?: string[]
   action?: { label: string; href: string; proOnly?: boolean }
   field?: string
+  /** Server-side conversation state, echoed back on the next request so
+   *  multi-step flows (like add-transaction) can resume. */
+  _state?: unknown
 }
 
 const SUGGESTION_MAX = 4
@@ -60,9 +63,10 @@ export function Chatbot() {
 
   async function sendMessage(
     event: React.FormEvent<HTMLFormElement> | undefined,
+    overrideContent?: string,
   ) {
     if (event) event.preventDefault()
-    const content = input.trim()
+    const content = (overrideContent ?? input).trim()
     if (!content || loading) return
 
     const userMessage: Message = { role: "user", content }
@@ -88,6 +92,7 @@ export function Chatbot() {
         suggestions: result.suggestions,
         action: result.action,
         field: result.field,
+        _state: result._state,
       }
       setMessages([...next, assistant])
     } catch (error) {
@@ -105,8 +110,9 @@ export function Chatbot() {
   }
 
   function handleSuggestionClick(text: string) {
-    setInput(text)
-    formRef.current?.requestSubmit()
+    // Send the clicked suggestion directly: submitting via setInput + requestSubmit
+    // would read the stale `input` closure and drop the text.
+    void sendMessage(undefined, text)
   }
 
   function handleQuickAction(href: string) {
@@ -297,13 +303,23 @@ function ChatMessage({
               aria-label={`Waiting for ${message.field} reply`}
               className="flex-1 bg-muted/50"
             />
+            {message.field === "notes" && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onSuggestionClick("skip")}
+              >
+                Skip
+              </Button>
+            )}
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
-              onClick={() => onSuggestionClick("skip")}
+              onClick={() => onSuggestionClick("cancel")}
             >
-              Skip
+              Cancel
             </Button>
           </div>
           <p className="text-[10px] text-muted-foreground mt-1">

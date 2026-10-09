@@ -638,6 +638,12 @@ export default function TransactionsPage() {
                               <span className="truncate">
                                 {tx.category.replace("_", " ")}
                               </span>
+                              {tx.notes && (
+                                <>
+                                  <span aria-hidden="true">&bull;</span>
+                                  <span className="truncate">{tx.notes}</span>
+                                </>
+                              )}
                               <span aria-hidden="true">&bull;</span>
                               <span className="whitespace-nowrap">
                                 {formatDate(tx.date)}

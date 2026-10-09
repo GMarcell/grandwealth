@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/api-access"
 import { getAccessRecord } from "@/lib/account-access"
 import { isAdminUser, isProUser, planLabel } from "@/lib/subscription"
 import { prisma } from "@/lib/prisma"
+import { PREDEFINED_INCOME, PREDEFINED_EXPENSE } from "@/const/transaction"
 
 /** Structured response types for the chatbot frontend. */
 export interface ChatResponse {
@@ -23,7 +24,7 @@ export interface ChatState {
   data?: Record<string, unknown>
   field?: string
   suggestions?: string[]
-  userCategories?: string[]
+  userCategories?: UserCategory[]
 }
 
 const FREE_FEATURES = [
@@ -101,6 +102,14 @@ const PLAN_PATTERNS = [
   /package/i,
 ]
 
+const CANCEL_PATTERNS = [
+  /^(cancel|never\s?mind|stop|quit|exit|abort|forget it|batal(kan)?|gak jadi|ga jadi|udahan)$/i,
+]
+
+const UNDO_PATTERNS = [
+  /^(undo|undo that|undo last|undo last transaction|batalkan yang tadi|batalin yang tadi)$/i,
+]
+
 function matchesAny(text: string, patterns: RegExp[]): boolean {
   return patterns.some((p) => p.test(text))
 }
@@ -114,80 +123,243 @@ function matchesAny(text: string, patterns: RegExp[]): boolean {
  *   add income 10000
  *   add transaction 10000 expense
  *   add transaction 10000 income
- *   add transaction -10000     (negative -> expense)
+ *   add transaction 10000 food lunch with team   (category + notes)
+ *   add transaction -10000                        (negative -> expense)
  */
-// Track the command word so we can infer type even when amount comes first.
 export interface ParsedAddTransaction {
   type?: "INCOME" | "EXPENSE"
   amount?: number
+  /** Text after the amount, e.g. "Groceries lunch with team". */
+  remainder?: string
 }
 
+const TRANSACTION_TYPE_WORDS = new Set([
+  "expense",
+  "income",
+  "receipt",
+  "spending",
+  "spend",
+  "send",
+  "receive",
+  "pemasukan",
+  "pengeluaran",
+])
+
 function parseAddTransaction(text: string): ParsedAddTransaction | null {
-  const normalized = text
-    .toLowerCase()
+  const cleaned = text
     .replace(/[_\u2010-\u2015]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
 
-  const addMatch = normalized.match(
+  // A bare "add transaction" / "add another transaction" with no amount yet —
+  // start a fresh flow and ask for the details.
+  const bareMatch = cleaned.match(
+    /^(?:add|new|create|input)\s+(?:another\s+)?(transaction|expense|income|receipt|spending|spend|pemasukan|pengeluaran)$/i,
+  )
+  if (bareMatch) {
+    const noun = bareMatch[1].toLowerCase()
+    return noun === "transaction" ? {} : { type: typeWordMatch(noun) }
+  }
+
+  const addMatch = cleaned.match(
     /^(?:add|new|create|input)\s+(transaction|expense|income|receipt|spending|spend|pemasukan|pengeluaran)\s+(.+)$/i,
   )
   if (!addMatch) return null
 
   const [, commandWord, rest] = addMatch
-  const _commandType = typeWordMatch(commandWord)
-  const trimmedRest = rest.trim()
+  const command = commandWord.toLowerCase()
+  const tokens = rest.trim().split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return null
 
-  // Explicit type after command word: "add expense 10000" -> commandWord="expense", rest="10000"
-  // Here the type is already known from the command word.
-  const explicitTypeFirst = trimmedRest.match(/^(expense|income|receipt|spending|spend)\s+(.+)$/i)
-  if (explicitTypeFirst) {
-    const [, typeWord, amountRaw] = explicitTypeFirst
-    const amount = parseAmount(amountRaw)
-    if (amount == null) return null
-    return { type: typeWordMatch(typeWord), amount }
+  let type: "INCOME" | "EXPENSE" | undefined =
+    command === "transaction" ? undefined : typeWordMatch(command)
+
+  let amount: number | undefined
+  let index = 0
+
+  const firstAmount = parseAmount(tokens[0])
+  if (firstAmount != null) {
+    amount = firstAmount
+    index = 1
+  } else if (TRANSACTION_TYPE_WORDS.has(tokens[0].toLowerCase()) && tokens[1] != null) {
+    // "add transaction expense 10000"
+    type = typeWordMatch(tokens[0])
+    const afterType = parseAmount(tokens[1])
+    if (afterType == null) return null
+    amount = afterType
+    index = 2
+  } else {
+    return null
   }
 
-  const amountThenType = trimmedRest.match(
-    /^([-+]?\d[\d,\.]*)\s+(expense|income|receipt|spending|send|receive|pemasukan|pengeluaran)$/i,
-  )
-  if (amountThenType) {
-    const amount = parseAmount(amountThenType[1])
-    if (amount == null) return null
-    return { type: typeWordMatch(amountThenType[2]), amount }
+  // "add transaction -10000" infers an expense.
+  const rawNum = Number(tokens[0].replace(/[,\s]/g, ""))
+  if (Number.isFinite(rawNum) && rawNum < 0) type = "EXPENSE"
+
+  let tail = tokens.slice(index)
+
+  // A trailing type word right after the amount: "add transaction 10000 expense".
+  if (type == null && tail.length > 0 && TRANSACTION_TYPE_WORDS.has(tail[0].toLowerCase())) {
+    type = typeWordMatch(tail[0])
+    tail = tail.slice(1)
   }
 
-  // parseAmount returns the absolute value; track sign separately so
-  // "add transaction -10000" still infers expense.
-  const rawNum = Number(trimmedRest.replace(/[,\s]/g, ""))
-  const isNegative = Number.isFinite(rawNum) && rawNum < 0
-  const bareAmount = parseAmount(trimmedRest)
-  if (bareAmount != null) {
-    if (isNegative) return { type: "EXPENSE", amount: bareAmount }
-    // Bare amount after an explicit type word infers that type.
-    // "add transaction 10000" must still ask for type.
-    if (commandWord.toLowerCase() === "expense") return { type: "EXPENSE", amount: bareAmount }
-    if (commandWord.toLowerCase() === "income") return { type: "INCOME", amount: bareAmount }
-    if (commandWord.toLowerCase() === "receipt" || commandWord.toLowerCase() === "spend") {
-      return { type: typeWordMatch(commandWord), amount: bareAmount }
-    }
-    return { amount: bareAmount }
+  const remainder = tail.join(" ").trim()
+  return {
+    ...(type ? { type } : {}),
+    ...(amount != null ? { amount } : {}),
+    ...(remainder ? { remainder } : {}),
   }
-
-  return null
 }
 
 function typeWordMatch(word: string): "INCOME" | "EXPENSE" {
   const w = word.toLowerCase()
-  if (w === "income" || w === "receipt" || w === "spend" || w === "receive" || w === "pemasukan") return "INCOME"
+  if (w === "income" || w === "receipt" || w === "receive" || w === "pemasukan") return "INCOME"
   return "EXPENSE"
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+/**
+ * Interpret text after the amount as "<category> [notes]", using the user's
+ * existing categories for the transaction type. Returns null when the text
+ * doesn't begin with a known category name.
+ */
+function resolveCategoryFromRemainder(
+  remainder: string,
+  options: string[],
+): { category: string; notes?: string } | null {
+  const trimmed = remainder.trim()
+  if (!trimmed) return null
+
+  // Prefer the longest matching category so "other expense" beats "other".
+  const longestFirst = [...options].sort(
+    (a, b) => normalizeCategoryName(b).length - normalizeCategoryName(a).length,
+  )
+  for (const option of longestFirst) {
+    const pattern = option.split(/[_\s]+/).map(escapeRegExp).join("[_\\s]+")
+    const match = trimmed.match(new RegExp(`^${pattern}(?=$|[_\\s])`, "i"))
+    if (match) {
+      const notes = trimmed.slice(match[0].length).trim()
+      return { category: option, ...(notes ? { notes } : {}) }
+    }
+  }
+  return null
+}
+
+/**
+ * Resolve the "category [notes]" tail of a one-shot command once the type is
+ * known. No-op when there's nothing to resolve or the category isn't found.
+ */
+function applyRemainder(
+  data: Record<string, unknown>,
+  userCategories: UserCategory[],
+): void {
+  const remainder = typeof data.remainder === "string" ? data.remainder : undefined
+  if (!remainder || data.category != null) return
+
+  const type =
+    data.type === "INCOME" ? "INCOME" : data.type === "EXPENSE" ? "EXPENSE" : undefined
+  if (!type) return
+
+  const resolved = resolveCategoryFromRemainder(
+    remainder,
+    categoryOptionsForType(userCategories, type),
+  )
+  if (!resolved) return
+
+  data.category = resolved.category
+  if (resolved.notes && data.notes == null) data.notes = resolved.notes
+  data.oneShot = true
+  delete data.remainder
+}
+
+/**
+ * Normalize a user-typed amount to a plain number string. Handles both the
+ * Indonesian format ("10.000" -> "10000", "1.500,50" -> "1500.50") and the
+ * English one ("10,000" -> "10000", "1,500.50" -> "1500.50").
+ */
+function normalizeAmountString(raw: string): string | null {
+  // Strip currency symbols/spaces, keep digits, separators and a sign.
+  const value = raw.trim().replace(/[^\d.,+-]/g, "")
+  if (!value || !/\d/.test(value)) return null
+
+  const lastDot = value.lastIndexOf(".")
+  const lastComma = value.lastIndexOf(",")
+
+  let decimalSep: "." | "," | null = null
+  if (lastDot !== -1 && lastComma !== -1) {
+    // Both present: the last one is the decimal separator.
+    decimalSep = lastDot > lastComma ? "." : ","
+  } else if (lastComma !== -1) {
+    // Only commas: a decimal separator if 1-2 digits follow, else thousands.
+    const after = value.length - lastComma - 1
+    decimalSep = after === 1 || after === 2 ? "," : null
+  } else if (lastDot !== -1) {
+    const after = value.length - lastDot - 1
+    decimalSep = after === 1 || after === 2 ? "." : null
+  }
+
+  if (decimalSep === ".") {
+    return value.split(",").join("")
+  }
+  if (decimalSep === ",") {
+    return value.split(".").join("").replace(/,/g, ".")
+  }
+  // No decimal separator: every dot/comma is a thousands separator.
+  return value.replace(/[.,]/g, "")
+}
+
 function parseAmount(raw: string): number | null {
-  const cleaned = raw.replace(/[,\s]/g, "")
-  const n = Number(cleaned)
+  const normalized = normalizeAmountString(raw)
+  if (normalized == null) return null
+  const n = Number(normalized)
   if (!Number.isFinite(n) || n === 0) return null
   return Math.abs(n)
+}
+
+/** A category available to a user, as stored in the Category table. */
+export interface UserCategory {
+  name: string
+  type: string
+}
+
+/** Normalize a category name for matching ("OTHER EXPENSE" === "other_expense"). */
+function normalizeCategoryName(name: string): string {
+  return name.trim().toLowerCase().replace(/[_\s]+/g, " ")
+}
+
+/** Format a category name for display: "OTHER_EXPENSE" -> "Other expense". */
+function formatCategoryOption(name: string): string {
+  const spaced = name.replace(/_/g, " ").trim()
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase()
+}
+
+/**
+ * Categories a transaction of `type` can use: the app's predefined income or
+ * expense list plus the user's own categories of that type. This mirrors the
+ * category dropdown on the Transactions page so the chatbot only ever writes
+ * an existing category.
+ */
+function categoryOptionsForType(
+  userCategories: UserCategory[] | undefined,
+  type: "INCOME" | "EXPENSE",
+): string[] {
+  const predefined: readonly string[] =
+    type === "INCOME" ? PREDEFINED_INCOME : PREDEFINED_EXPENSE
+  const seen = new Set(predefined.map(normalizeCategoryName))
+  const userNames = (userCategories ?? [])
+    .filter((c) => c.type === type)
+    .map((c) => c.name)
+    .filter((name) => !seen.has(normalizeCategoryName(name)))
+  return [...predefined, ...userNames]
+}
+
+/** Human-friendly suggestions for the category prompt. */
+function categorySuggestions(options: string[]): string[] {
+  return options.slice(0, 6).map(formatCategoryOption)
 }
 
 function transactionPrompt(
@@ -197,7 +369,18 @@ function transactionPrompt(
     category?: string
     notes?: string
   },
+  userCategories?: UserCategory[],
 ): ChatResponse {
+  // Ask for the type first when the user didn't already imply it.
+  if (fields.type == null) {
+    return {
+      kind: "prompt",
+      message: "Got it. Is this an expense or an income?",
+      field: "type",
+      suggestions: ["Expense", "Income"],
+    }
+  }
+
   if (fields.amount == null) {
     return {
       kind: "prompt",
@@ -207,15 +390,14 @@ function transactionPrompt(
     }
   }
 
-  // Default to expense when the user hasn't specified a type.
-  const resolvedType: "INCOME" | "EXPENSE" = fields.type ?? "EXPENSE"
-
   if (fields.category == null) {
     return {
       kind: "prompt",
-      message: `Okay, ${resolvedType === "INCOME" ? "income" : "expense"} of ${formatAmount(fields.amount!)}. Which category should I use?`,
+      message: `Okay, ${fields.type === "INCOME" ? "income" : "expense"} of ${formatAmount(fields.amount)}. Which category should I use?`,
       field: "category",
-      suggestions: ["Salary", "Food", "Transport", "Other"],
+      suggestions: categorySuggestions(
+        categoryOptionsForType(userCategories, fields.type),
+      ),
     }
   }
 
@@ -269,6 +451,45 @@ export async function POST(request: Request) {
     ) as { role: "assistant"; content: string; _state?: ChatState } | undefined
 
   const state: ChatState = lastAssistant?._state ?? { flow: "idle" }
+
+  // Undo a transaction the bot created earlier in this conversation. The id is
+  // carried in the state of the last assistant message.
+  if (matchesAny(text, UNDO_PATTERNS)) {
+    const lastId = state.data?.lastTransactionId
+    if (typeof lastId === "string") {
+      return undoLastTransaction(userId, lastId)
+    }
+    return jsonResponse(
+      {
+        kind: "text",
+        message: "There's nothing to undo right now.",
+        suggestions: ["add expense 10000", "Help"],
+      },
+      { flow: "idle" },
+    )
+  }
+
+  // Cancel an in-progress multi-step flow without saving anything.
+  if (matchesAny(text, CANCEL_PATTERNS)) {
+    if (state.flow === "add-transaction-field") {
+      return jsonResponse(
+        {
+          kind: "text",
+          message: "No problem — I've cancelled that. Nothing was saved.",
+          suggestions: ["add expense 10000", "add income 10000"],
+        },
+        { flow: "idle" },
+      )
+    }
+    return jsonResponse(
+      {
+        kind: "text",
+        message: "There's nothing in progress to cancel.",
+        suggestions: ["Help", "Dashboard"],
+      },
+      { flow: "idle" },
+    )
+  }
 
   // Resume a multi-step flow first.
   if (state.flow === "add-transaction-field" && state.data) {
@@ -471,22 +692,34 @@ async function startAddTransactionFlow(
   userId: string,
   parsed: ParsedAddTransaction,
 ): Promise<NextResponse> {
-  const prompt = transactionPrompt({
-    type: parsed.type,
-    amount: parsed.amount,
-  })
-
-  const resolvedType: "INCOME" | "EXPENSE" | undefined = parsed.type ?? "EXPENSE"
-
   const userCategories = await loadUserCategories(userId)
+
+  const data: Record<string, unknown> = {}
+  if (parsed.type) data.type = parsed.type
+  if (parsed.amount != null) data.amount = parsed.amount
+  if (parsed.remainder) data.remainder = parsed.remainder
+
+  // The message may already carry the category (and notes) after the amount.
+  applyRemainder(data, userCategories)
+
+  // Everything needed came in one message → create it without asking anything.
+  if (data.type != null && data.amount != null && data.category != null) {
+    return createAndRespond(userId, data)
+  }
+
+  const prompt = transactionPrompt(
+    {
+      type: data.type as "INCOME" | "EXPENSE" | undefined,
+      amount: data.amount as number | undefined,
+      category: data.category as string | undefined,
+    },
+    userCategories,
+  )
 
   const state: ChatState = {
     flow: "add-transaction-field",
     command: "add-transaction",
-    data: {
-    ...(resolvedType ? { type: resolvedType } : {}),
-    ...(parsed.amount != null ? { amount: parsed.amount as number } : {}),
-    },
+    data,
     field: prompt.field,
     suggestions: prompt.suggestions,
     userCategories,
@@ -530,6 +763,12 @@ async function continueAddTransactionFlow(
     data.type = nextType
   }
 
+  // A one-shot message may have included "<category> <notes>" that we couldn't
+  // resolve until the type was known.
+  if (state.field !== "notes") {
+    applyRemainder(data, state.userCategories ?? [])
+  }
+
   // --- amount (allow correcting it mid-flow) ---
   if (state.field === "amount") {
     const parsed = parseAddTransaction(answer)
@@ -567,95 +806,83 @@ async function continueAddTransactionFlow(
 
   // --- category ---
   if (state.field === "category") {
-    const category = upper
+    const resolvedType: "INCOME" | "EXPENSE" =
+      data.type === "INCOME" ? "INCOME" : "EXPENSE"
+    const options = categoryOptionsForType(state.userCategories, resolvedType)
+
+    const answer = upper
       .replace(/^(category|buat|kategori|gunakan|pakai)\s*/i, "")
       .replace(/^(for|untuk|karena|as|like|itu)$/i, "")
       .trim()
-    if (!category || category.length < 1) {
+
+    if (!answer) {
       return jsonResponse(
         {
           kind: "prompt",
           message: "Could you give me a category name, like Food or Salary?",
           field: "category",
-          suggestions: ["Salary", "Food", "Transport", "Other"],
+          suggestions: categorySuggestions(options),
         },
         { ...state, flow: "add-transaction-field", field: "category" },
       )
     }
-    data.category = category.slice(0, 100)
 
-    // If the category doesn't exist for this user, don't create the transaction
-    // yet — ask them to confirm or choose a different one.
-    if (state.userCategories == null) {
-      return jsonResponse(
-        {
-          kind: "prompt",
-          message: `I'm not sure I recognize the category "${data.category}". Is that right, or would you prefer a different one?`,
-          field: "category",
-          suggestions: ["Use a different category", "I meant another category"],
-        },
-        { ...state, flow: "add-transaction-field", field: "category", userCategories: [] },
-      )
-    }
-
-    const normalized = category.trim().toLowerCase()
-    const match = state.userCategories.find(
-      (c) => c.trim().toLowerCase() === normalized,
-    )
+    // Only accept a category the user already has for this type, matched case-
+    // and format-insensitively. Store the canonical name so the transaction
+    // lines up with the rest of the app.
+    const normalized = normalizeCategoryName(answer)
+    const match = options.find((opt) => normalizeCategoryName(opt) === normalized)
     if (!match) {
       return jsonResponse(
         {
           kind: "prompt",
-          message: `I don't have a category called "${data.category}" in your account. Try one of these, or say "Other" if none fit:`,
+          message: `I don't have a category called "${answer}" for your ${resolvedType === "INCOME" ? "income" : "expense"} transactions in your account. Try one of these:`,
           field: "category",
-          suggestions: [...state.userCategories.slice(0, 6), "Other"],
+          suggestions: categorySuggestions(options),
         },
         { ...state, flow: "add-transaction-field", field: "category" },
       )
     }
+
+    data.category = match
   }
 
   // --- notes (optional) ---
   if (state.field === "notes") {
-    const yesPatterns = /^(yes|yah|y|iya|bisa|gitu|selesai|done|no problem|ok|oke|sure|ya)/i
-    const addNotePatterns = /^(add|yes,? add|tambah|plus|bisa.*tambah|note.*:\s*\w)/i
-
-    if (yesPatterns.test(upper) && !addNotePatterns.test(upper)) {
-      // Skip notes.
-    } else if (addNotePatterns.test(upper) || upper.length > 1) {
-      const note = upper.replace(/^(note|notes|catatan|tambahan|add|plus)\s*:?\s*/i, "").trim()
-      if (note && note.length > 1) {
-        data.notes = note.slice(0, 500)
-      }
+    const trimmed = upper.trim()
+    // Exact "no"/"skip"-style answers mean "don't add a note"; anything else
+    // is treated as the note itself.
+    const skipPatterns =
+      /^(no|nope|nah|none|skip|n\/?a|nothing(\s+else)?|no\s+thanks?|tidak|gak|ga|udah|sudah|selesai|done|ok|oke|sure|iya|bisa|gitu|y|yes|yah|ya|-)$/i
+    if (!skipPatterns.test(trimmed)) {
+      const note = trimmed
+        .replace(/^(note|notes|catatan|tambahan|add\s+note|add|plus)\s*:?\s*/i, "")
+        .trim()
+      if (note) data.notes = note.slice(0, 500)
     }
   }
 
-  // Validate required fields.
-  const required: Array<keyof typeof data> = ["type", "amount", "category"]
-  const missing = required.filter((k) => data[k] == null)
-  if (missing.length > 0) {
-    const field = missing[0]
-    return jsonResponse(
-      {
-        kind: "prompt",
-        message: `Missing: ${field}. ${field === "type" ? "Is it income or expense?" : field === "amount" ? "What's the amount?" : "Which category?"}`,
-        field,
-        suggestions:
-          field === "type" ? ["Income", "Expense"] :
-          field === "amount" ? ["10000", "50000", "100000"] :
-          ["Salary", "Food", "Transport", "Other"],
-      },
-      { ...state, flow: "add-transaction-field", field },
-    )
+  // Ask for the next unanswered field (type → amount → category → notes).
+  // The transaction is only created once notes have been offered and answered.
+  const missing = (["type", "amount", "category"] as const).filter(
+    (k) => data[k] == null,
+  )
+
+  // The original message already supplied the category (and maybe notes), so
+  // once the type is known there's nothing left to ask — create it now.
+  if (state.field !== "notes" && missing.length === 0 && data.oneShot === true) {
+    return createAndRespond(userId, data)
   }
 
-  // If we haven't asked about notes yet, do that now.
-  if (state.field !== "notes") {
-    const next = transactionPrompt({
-      type: data.type as "INCOME" | "EXPENSE",
-      amount: data.amount as number,
-      category: data.category as string,
-    })
+  if (state.field !== "notes" || missing.length > 0) {
+    const next = transactionPrompt(
+      {
+        type: data.type as "INCOME" | "EXPENSE" | undefined,
+        amount: data.amount as number | undefined,
+        category: data.category as string | undefined,
+      },
+      state.userCategories,
+    )
     return jsonResponse(next, {
       ...state,
       flow: "add-transaction-field",
@@ -665,15 +892,21 @@ async function continueAddTransactionFlow(
     })
   }
 
-  // Create the transaction.
+  // Everything is answered → create the transaction.
+  return createAndRespond(userId, data)
+}
+
+/** Create the assembled transaction and reply with a success + undo affordance. */
+async function createAndRespond(
+  userId: string,
+  data: Record<string, unknown>,
+): Promise<NextResponse> {
   const createRes = await createTransactionForUser(userId, {
     type: data.type as "INCOME" | "EXPENSE",
     category: data.category as string,
     amount: data.amount as number,
     notes: (data.notes as string) ?? undefined,
   })
-
-  const doneState: ChatState = { flow: "idle" }
 
   if ("error" in createRes) {
     return jsonResponse(
@@ -682,7 +915,7 @@ async function continueAddTransactionFlow(
         message: createRes.error,
         suggestions: ["Try again", "Add another transaction", "Help"],
       },
-      doneState,
+      { flow: "idle" },
     )
   }
 
@@ -691,19 +924,48 @@ async function continueAddTransactionFlow(
       kind: "feature",
       message: `Done! I've added your ${createRes.type === "INCOME" ? "income" : "expense"} of ${formatAmount(createRes.amount)} to **${createRes.category}**${createRes.notes ? ` (${createRes.notes})` : ""}${createRes.id ? ` (ID: ${createRes.id})` : ""}.\n\nYou can view it in your Transactions.`,
       action: { label: "Open transactions", href: "/transactions" },
-      suggestions: ["Add another transaction", "Dashboard", "Help"],
+      suggestions: ["Undo", "Dashboard", "Help"],
     },
-    doneState,
+    // Keep the created id so the user can say "undo" next.
+    { flow: "idle", data: { lastTransactionId: createRes.id } },
   )
 }
 
-async function loadUserCategories(userId: string): Promise<string[]> {
-  const categories = await prisma.category.findMany({
+/** Delete a transaction the chatbot created earlier in this conversation. */
+async function undoLastTransaction(
+  userId: string,
+  id: string,
+): Promise<NextResponse> {
+  const existing = await prisma.transaction.findUnique({ where: { id } })
+  if (!existing || existing.userId !== userId) {
+    return jsonResponse(
+      {
+        kind: "text",
+        message:
+          "I couldn't find that transaction to undo — it may have already been removed.",
+        suggestions: ["Help", "Dashboard"],
+      },
+      { flow: "idle" },
+    )
+  }
+
+  await prisma.transaction.delete({ where: { id } })
+  return jsonResponse(
+    {
+      kind: "text",
+      message: `Done, I removed the ${existing.type === "INCOME" ? "income" : "expense"} of ${formatAmount(existing.amount)} (${existing.category}).`,
+      suggestions: ["add expense 10000", "Help"],
+    },
+    { flow: "idle" },
+  )
+}
+
+async function loadUserCategories(userId: string): Promise<UserCategory[]> {
+  return prisma.category.findMany({
     where: { userId },
     orderBy: { name: "asc" },
-    select: { name: true },
+    select: { name: true, type: true },
   })
-  return categories.map((c) => c.name)
 }
 
 interface CreateTxResult {

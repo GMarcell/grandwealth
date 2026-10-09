@@ -90,6 +90,7 @@ export async function GET(req: Request) {
         category: tx.category,
         amount: tx.amount,
         description: tx.description,
+        notes: tx.notes,
         date: tx.date.toISOString(),
       }))
     )
@@ -128,6 +129,7 @@ export async function GET(req: Request) {
     category: tx.category,
     amount: tx.amount,
     description: tx.description,
+    notes: tx.notes,
     date: tx.date.toISOString(),
   }))
 

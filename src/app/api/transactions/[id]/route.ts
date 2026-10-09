@@ -47,6 +47,7 @@ export async function PATCH(
       category: updated.category,
       amount: updated.amount,
       description: updated.description,
+      notes: updated.notes,
       date: updated.date.toISOString(),
     })
   } catch (error) {
