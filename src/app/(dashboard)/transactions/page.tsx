@@ -23,6 +23,7 @@ import {
   Filter,
   Download,
   FileUp,
+  AlertTriangle,
   Home,
   Sparkles,
   PiggyBank,
@@ -36,6 +37,7 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -96,6 +98,11 @@ export default function TransactionsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] =
     useState<TransactionInterface | null>(null);
+  const [importReport, setImportReport] = useState<{
+    imported: number;
+    total: number;
+    errors: { line: number; error: string }[];
+  } | null>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Debounce search input (300ms) before sending to server
@@ -732,15 +739,24 @@ export default function TransactionsPage() {
 
                   if (!res.ok) {
                     toast.error(result.error || "Import failed");
-                    if (result.importErrors?.length > 0) {
-                      console.error("Import errors:", result.importErrors);
-                    }
                   } else {
                     toast.success(result.message);
                     queryClient.invalidateQueries({
                       queryKey: ["transactions"],
                     });
                     queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+                  }
+
+                  // Rows the route skipped, both when the whole upload failed
+                  // and when only part of it was imported.
+                  const rowErrors: { line: number; error: string }[] =
+                    result.errors ?? result.importErrors ?? [];
+                  if (rowErrors.length > 0) {
+                    setImportReport({
+                      imported: result.imported ?? 0,
+                      total: result.total ?? 0,
+                      errors: rowErrors,
+                    });
                   }
                 } catch {
                   toast.dismiss();
@@ -914,6 +930,42 @@ export default function TransactionsPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Per-row reasons a CSV row was skipped during import */}
+      <Dialog
+        open={importReport !== null}
+        onOpenChange={(open) => !open && setImportReport(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              {importReport && importReport.imported > 0
+                ? "Some rows were skipped"
+                : "Nothing was imported"}
+            </DialogTitle>
+            <DialogDescription>
+              {importReport && importReport.imported > 0
+                ? `Imported ${importReport.imported} of ${importReport.total} transactions. These rows were skipped:`
+                : "The file contained no usable rows. These rows were skipped:"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+            {importReport?.errors.map((row) => (
+              <div
+                key={`${row.line}:${row.error}`}
+                className="rounded-lg bg-destructive/10 px-3 py-2 text-sm"
+              >
+                <span className="font-medium">Line {row.line}</span>
+                <span className="text-muted-foreground"> — {row.error}</span>
+              </div>
+            ))}
+          </div>
+          <Button className="w-full" onClick={() => setImportReport(null)}>
+            Close
+          </Button>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Card>
