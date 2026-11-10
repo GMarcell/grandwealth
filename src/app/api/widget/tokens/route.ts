@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server"
-import { requireUser } from "@/lib/api-access"
+import { withUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import { createWidgetToken } from "@/lib/widget-token"
 
 /** List the user's widget tokens (never returns the plaintext). */
-export async function GET() {
-  const userId = await requireUser()
-  if (userId instanceof NextResponse) return userId
+export const GET = withUser(GET_handler)
+
+async function GET_handler(userId: string) {
 
   const tokens = await prisma.widgetToken.findMany({
     where: { userId: userId },
@@ -24,9 +24,9 @@ export async function GET() {
 }
 
 /** Create a new widget token. The plaintext is returned ONCE here. */
-export async function POST(req: Request) {
-  const userId = await requireUser()
-  if (userId instanceof NextResponse) return userId
+export const POST = withUser(POST_handler)
+
+async function POST_handler(userId: string, req: Request) {
 
   const body = await req.json().catch(() => ({}))
   const label =
@@ -40,9 +40,9 @@ export async function POST(req: Request) {
 }
 
 /** Revoke a token by id. */
-export async function DELETE(req: Request) {
-  const userId = await requireUser()
-  if (userId instanceof NextResponse) return userId
+export const DELETE = withUser(DELETE_handler)
+
+async function DELETE_handler(userId: string, req: Request) {
 
   const { searchParams } = new URL(req.url)
   const id = searchParams.get("id")

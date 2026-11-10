@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireUser } from "@/lib/api-access"
+import { withUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 import { trialRequestSchema, safeParseBody } from "@/lib/validation"
@@ -58,9 +58,9 @@ async function loadTrialState(userId: string) {
  * request is pending review, and when a running trial ends. Drives the
  * Settings → Pro trial card.
  */
-export async function GET() {
-  const userId = await requireUser()
-  if (userId instanceof NextResponse) return userId
+export const GET = withUser(GET_handler)
+
+async function GET_handler(userId: string) {
 
   try {
     const loaded = await loadTrialState(userId)
@@ -85,9 +85,9 @@ export async function GET() {
  * Records a request for a free Pro trial and notifies the administrators, who
  * approve (granting 30 days of Pro) or decline it from the admin panel.
  */
-export async function POST(req: Request) {
-  const userId = await requireUser()
-  if (userId instanceof NextResponse) return userId
+export const POST = withUser(POST_handler)
+
+async function POST_handler(userId: string, req: Request) {
 
   // Rate limit: 3 requests per hour per IP — each one emails every admin.
   const limiter = await rateLimit(`trial-request:${getRateLimitKey(req)}`, {

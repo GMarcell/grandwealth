@@ -16,6 +16,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -61,12 +62,14 @@ import {
 import { RULE_TYPE_ORDER, RULE_TYPE_CONFIGS } from "@/lib/rule-type";
 import { CHART_COLORS } from "@/lib/chart-colors";
 import { PASSWORD_MIN_LENGTH } from "@/lib/password";
-import { FormError } from "@/components/ui/form-error";
+import { FormError, fieldErrorProps } from "@/components/ui/form-error";
+import { apiGet } from "@/lib/api-get";
 import { toast } from "sonner";
 import { apiMutate, isQueuedResult } from "@/lib/api-mutate";
 import { SubscriptionCard } from "@/components/settings/subscription-card";
 import { TrialRequestCard } from "@/components/settings/trial-request-card";
 import { WidgetCard } from "@/components/settings/widget-card";
+import { AlertsCard } from "@/components/settings/alerts-card";
 
 interface Category {
   id: string;
@@ -156,9 +159,11 @@ export default function SettingsPage() {
   }>({
     queryKey: ["budget-settings"],
     queryFn: async () => {
-      const res = await fetch("/api/user/budget-settings");
-      if (!res.ok) throw new Error("Failed to fetch budget settings");
-      return res.json();
+      return apiGet<{
+        budgetStartDay: number;
+        carryOverEnabled: boolean;
+        carryDeficitEnabled: boolean;
+      }>("/api/user/budget-settings");
     },
   });
 
@@ -671,6 +676,9 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Daily email alerts */}
+      <AlertsCard />
+
       {/* Theme */}
       <Card>
         <CardHeader>
@@ -749,6 +757,7 @@ export default function SettingsPage() {
                   <Input
                     id="catName"
                     placeholder="e.g., PETROL"
+                    {...fieldErrorProps(errors, "name")}
                     {...register("name", { required: true })}
                   />
                   <FormError errors={errors} name="name" />
@@ -887,8 +896,12 @@ export default function SettingsPage() {
                     >
                       {cat.name.replace("_", " ")}
                       <button
-                        onClick={() => {
-                          if (confirm(`Delete "${cat.name}" category?`)) {
+                        onClick={async () => {
+                          if (
+                            await confirmDialog({
+                              title: `Delete "${cat.name}" category?`,
+                            })
+                          ) {
                             deleteMutation.mutate(cat.id);
                           }
                         }}
@@ -973,8 +986,12 @@ export default function SettingsPage() {
                     >
                       {cat.name.replace("_", " ")}
                       <button
-                        onClick={() => {
-                          if (confirm(`Delete "${cat.name}" category?`)) {
+                        onClick={async () => {
+                          if (
+                            await confirmDialog({
+                              title: `Delete "${cat.name}" category?`,
+                            })
+                          ) {
                             deleteMutation.mutate(cat.id);
                           }
                         }}

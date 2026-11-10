@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { hash } from "bcryptjs"
 import { prisma } from "@/lib/prisma"
-import { requireAdminUser } from "@/lib/api-access"
+import { withAdminUser } from "@/lib/api-handler"
 import { DEFAULT_PASSWORD } from "@/lib/password"
 
 /**
@@ -12,12 +12,13 @@ import { DEFAULT_PASSWORD } from "@/lib/password"
  * response so the admin can pass it on; the user is expected to change it from
  * Settings afterwards.
  */
-export async function POST(
+export const POST = withAdminUser(POST_handler)
+
+async function POST_handler(
+  userId: string,
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const userId = await requireAdminUser()
-  if (userId instanceof NextResponse) return userId
 
   const { id } = await params
 

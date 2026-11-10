@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireAdminUser } from "@/lib/api-access"
+import { withAdminUser } from "@/lib/api-handler"
 import { adminTrialRequestDecisionSchema, safeParseBody } from "@/lib/validation"
 import { proTrialPeriodEnd } from "@/lib/subscription"
 import { notifyUserOfApprovedTrial } from "@/lib/trial-request"
@@ -13,12 +13,13 @@ import { notifyUserOfApprovedTrial } from "@/lib/trial-request"
  * (30) days — the account drops back to FREE automatically at the period end
  * via `expireLapsedTrials`, so nothing has to be scheduled here.
  */
-export async function PATCH(
+export const PATCH = withAdminUser(PATCH_handler)
+
+async function PATCH_handler(
+  userId: string,
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const userId = await requireAdminUser()
-  if (userId instanceof NextResponse) return userId
 
   const { id } = await params
 

@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
-import { requireProUser } from "@/lib/api-access"
+import { withProUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import { fetchStockPrices } from "@/lib/prices"
 
-export async function POST() {
-  const userId = await requireProUser()
-  if (userId instanceof NextResponse) return userId
+export const POST = withProUser(POST_handler)
+
+async function POST_handler(userId: string) {
 
   try {
     const stocks = await prisma.stock.findMany({

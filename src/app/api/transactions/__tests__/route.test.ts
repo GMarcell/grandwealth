@@ -134,9 +134,10 @@ describe("GET /api/transactions — month filter", () => {
       // 27 Sep, end-of-day so transactions dated on the last day count.
       lte: new Date(2026, 8, 27, 23, 59, 59, 999),
     })
+    // One lookup now serves the month window and the carry-over chain.
     expect(mockFindUser).toHaveBeenCalledWith({
       where: { id: "user-1" },
-      select: { budgetStartDay: true },
+      select: { budgetStartDay: true, carryDeficitEnabled: true },
     })
   })
 

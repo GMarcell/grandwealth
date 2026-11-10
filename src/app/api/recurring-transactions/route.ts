@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server"
-import { requireProUser } from "@/lib/api-access"
+import { withProUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import { createRecurringSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 
-export async function GET(req: Request) {
-  const userId = await requireProUser()
-  if (userId instanceof NextResponse) return userId
+export const GET = withProUser(GET_handler)
 
-  const limiter = await rateLimit(`recurring-get:${getRateLimitKey(req)}`, {
+async function GET_handler(userId: string, req: Request) {
+
+  const limiter = await rateLimit(`recurring-get:${getRateLimitKey(req, userId)}`, {
     limit: 60,
     windowMs: 60_000,
   })
@@ -41,9 +41,9 @@ export async function GET(req: Request) {
   )
 }
 
-export async function POST(req: Request) {
-  const userId = await requireProUser()
-  if (userId instanceof NextResponse) return userId
+export const POST = withProUser(POST_handler)
+
+async function POST_handler(userId: string, req: Request) {
 
   const limiter = await rateLimit(`recurring:${userId}`, {
     limit: 20,

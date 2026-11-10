@@ -9,6 +9,7 @@ const mockUserUpdateMany = vi.hoisted(() => vi.fn())
 const mockFetchStockPrices = vi.hoisted(() => vi.fn())
 const mockApplyDue = vi.hoisted(() => vi.fn())
 const mockGenerateAnalysis = vi.hoisted(() => vi.fn())
+const mockSendDailyAlerts = vi.hoisted(() => vi.fn())
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -24,11 +25,15 @@ vi.mock("@/lib/recurring", () => ({
 vi.mock("@/lib/analysis-generator", () => ({
   generateAnalysisForUserAndMonth: mockGenerateAnalysis,
 }))
+vi.mock("@/lib/alerts", () => ({
+  sendDailyAlerts: mockSendDailyAlerts,
+}))
 
 // Import after mocks
 const { GET: updatePricesGET } = await import("../update-prices/route")
 const { GET: applyRecurringGET } = await import("../apply-recurring/route")
 const { GET: monthlyAnalysisGET } = await import("../monthly-analysis/route")
+const { GET: dailyAlertsGET } = await import("../daily-alerts/route")
 
 // ─── Helpers ─────────────────────────────────
 
@@ -38,6 +43,7 @@ const routes: Array<{ name: string; get: (req: Request) => Promise<Response> }> 
   { name: "update-prices", get: updatePricesGET },
   { name: "apply-recurring", get: applyRecurringGET },
   { name: "monthly-analysis", get: monthlyAnalysisGET },
+  { name: "daily-alerts", get: dailyAlertsGET },
 ]
 
 const makeRequest = (secret?: string) =>
@@ -70,6 +76,7 @@ describe("cron endpoints — CRON_SECRET fail-closed", () => {
       expect(mockUserFindMany).not.toHaveBeenCalled()
       expect(mockApplyDue).not.toHaveBeenCalled()
       expect(mockGenerateAnalysis).not.toHaveBeenCalled()
+      expect(mockSendDailyAlerts).not.toHaveBeenCalled()
     }
   )
 
@@ -83,6 +90,7 @@ describe("cron endpoints — CRON_SECRET fail-closed", () => {
       expect(mockStockFindMany).not.toHaveBeenCalled()
       expect(mockUserFindMany).not.toHaveBeenCalled()
       expect(mockApplyDue).not.toHaveBeenCalled()
+      expect(mockSendDailyAlerts).not.toHaveBeenCalled()
     }
   )
 
@@ -119,5 +127,19 @@ describe("cron endpoints — CRON_SECRET fail-closed", () => {
     const res = await applyRecurringGET(makeRequest(SECRET))
     expect(res.status).toBe(200)
     expect(mockApplyDue).toHaveBeenCalled()
+  })
+
+  it("daily-alerts proceeds with a valid secret", async () => {
+    process.env.CRON_SECRET = SECRET
+    mockSendDailyAlerts.mockResolvedValue({
+      usersChecked: 1,
+      emailsSent: 1,
+      alertsRecorded: 2,
+      skipped: 0,
+    })
+
+    const res = await dailyAlertsGET(makeRequest(SECRET))
+    expect(res.status).toBe(200)
+    expect(mockSendDailyAlerts).toHaveBeenCalled()
   })
 })

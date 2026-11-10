@@ -30,13 +30,6 @@ export async function requireProAccess(
 }
 
 /**
- * Authorize access to an admin-only API route.
- *
- * @param sessionUserId The authenticated user's id (from `auth()`).
- * @returns The user id when access is allowed, otherwise a `NextResponse`
- *          (401 Unauthorized / 403 Forbidden) that the caller should return.
- */
-/**
  * Require a signed-in, non-suspended account.
  *
  * @returns The user id, or a 401 `NextResponse` the caller should return.

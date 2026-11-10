@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireUser } from "@/lib/api-access"
+import { withUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import { isAdminUser, isProPlusUser, isProUser } from "@/lib/subscription"
 import { expireLapsedTrials } from "@/lib/trial"
@@ -10,9 +10,9 @@ import { expireLapsedTrials } from "@/lib/trial"
  * authoritative and reflects admin changes immediately (used by Settings
  * and any plan-aware UI).
  */
-export async function GET() {
-  const userId = await requireUser()
-  if (userId instanceof NextResponse) return userId
+export const GET = withUser(GET_handler)
+
+async function GET_handler(userId: string) {
 
   try {
     // Self-heal: if this account's trial just ended, downgrade it before

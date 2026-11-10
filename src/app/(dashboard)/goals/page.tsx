@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { apiGet } from "@/lib/api-get"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -23,11 +24,12 @@ import {
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { confirmDialog } from "@/components/ui/confirm-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { FormError } from "@/components/ui/form-error"
+import { FormError, fieldErrorProps } from "@/components/ui/form-error"
 import {
   Dialog,
   DialogContent,
@@ -179,9 +181,7 @@ export default function GoalsPage() {
   const { data: goals, isLoading } = useQuery<Goal[]>({
     queryKey: ["goals"],
     queryFn: async () => {
-      const res = await fetch("/api/goals")
-      if (!res.ok) throw new Error("Failed to fetch goals")
-      return res.json()
+      return apiGet<Goal[]>("/api/goals")
     },
   })
 
@@ -355,6 +355,7 @@ export default function GoalsPage() {
                 <Input
                   id="name"
                   placeholder="e.g., Emergency fund"
+                  {...fieldErrorProps(errors, "name")}
                   {...register("name", { required: true })}
                 />
                 <FormError errors={errors} name="name" />
@@ -365,9 +366,11 @@ export default function GoalsPage() {
                   <Label htmlFor="targetAmount">Target (Rp)</Label>
                   <Input
                     id="targetAmount"
-                    type="number"
-                    min="1"
+                    type="text"
+                    inputMode="numeric"
                     placeholder="10000000"
+                    delimiters="period"
+                    {...fieldErrorProps(errors, "targetAmount")}
                     {...register("targetAmount", { required: true })}
                   />
                   <FormError errors={errors} name="targetAmount" />
@@ -616,8 +619,12 @@ export default function GoalsPage() {
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      onClick={() => {
-                        if (confirm(`Delete the "${goal.name}" goal?`)) {
+                      onClick={async () => {
+                        if (
+                          await confirmDialog({
+                            title: `Delete the "${goal.name}" goal?`,
+                          })
+                        ) {
                           deleteMutation.mutate(goal.id)
                         }
                       }}
@@ -661,9 +668,10 @@ export default function GoalsPage() {
               <Label htmlFor="contributeAmount">Amount to add (Rp)</Label>
               <Input
                 id="contributeAmount"
-                type="number"
-                min="1"
+                type="text"
+                inputMode="numeric"
                 placeholder="500000"
+                delimiters="period"
                 value={contributeAmount}
                 onChange={(e) => setContributeAmount(e.target.value)}
                 autoFocus

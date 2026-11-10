@@ -83,7 +83,8 @@ const nextConfig: NextConfig = {
   // Enables React strict mode for development
   reactStrictMode: true,
 
-  // Increase server body size limit
+  // Prisma's `pg` driver must stay a runtime require rather than being
+  // bundled into the server build.
   serverExternalPackages: ["pg"],
 };
 

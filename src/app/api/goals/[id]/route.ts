@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireProUser } from "@/lib/api-access"
+import { withProUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import { updateGoalSchema, contributeGoalSchema, safeParseBody } from "@/lib/validation"
 import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
@@ -10,12 +10,13 @@ async function getOwnedGoal(id: string, userId: string) {
   return goal
 }
 
-export async function PATCH(
+export const PATCH = withProUser(PATCH_handler)
+
+async function PATCH_handler(
+  userId: string,
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const userId = await requireProUser()
-  if (userId instanceof NextResponse) return userId
 
   const { id } = await params
 
@@ -65,12 +66,13 @@ export async function PATCH(
  * Add to / deduct from a goal's saved amount.
  * Body: { amount: number } — positive adds, negative withdraws.
  */
-export async function POST(
+export const POST = withProUser(POST_handler)
+
+async function POST_handler(
+  userId: string,
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const userId = await requireProUser()
-  if (userId instanceof NextResponse) return userId
 
   const { id } = await params
 
@@ -110,12 +112,13 @@ export async function POST(
   }
 }
 
-export async function DELETE(
+export const DELETE = withProUser(DELETE_handler)
+
+async function DELETE_handler(
+  userId: string,
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const userId = await requireProUser()
-  if (userId instanceof NextResponse) return userId
 
   const { id } = await params
 

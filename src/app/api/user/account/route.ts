@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireUser } from "@/lib/api-access"
+import { withUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 
@@ -13,9 +13,9 @@ import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
  *
  * This action is irreversible.
  */
-export async function DELETE(req: Request) {
-  const userId = await requireUser()
-  if (userId instanceof NextResponse) return userId
+export const DELETE = withUser(DELETE_handler)
+
+async function DELETE_handler(userId: string, req: Request) {
 
   // Rate limit: 2 account deletion attempts per 10 minutes per IP
   const limiter = await rateLimit(`delete-account:${getRateLimitKey(req)}`, {

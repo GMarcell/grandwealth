@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { confirmDialog } from "@/components/ui/confirm-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
@@ -47,7 +48,8 @@ import {
 } from "@/components/ui/command"
 import { formatIDR, formatDate, cn, type PaginatedResponse } from "@/lib/utils"
 import { Pagination } from "@/components/ui/pagination"
-import { FormError } from "@/components/ui/form-error"
+import { FormError, fieldErrorProps } from "@/components/ui/form-error"
+import { apiGet } from "@/lib/api-get"
 import { toast } from "sonner"
 import { apiMutate, isQueuedResult } from "@/lib/api-mutate"
 
@@ -146,10 +148,7 @@ export default function SavingsPage() {
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), pageSize: "25" })
       if (debouncedSearch) params.set("search", debouncedSearch)
-      const res = await fetch(`/api/savings?${params}`);
-      if (!res.ok) throw new Error("Failed to fetch savings");
-      const json: PaginatedResponse<BankSaving> = await res.json();
-      return json;
+      return apiGet<PaginatedResponse<BankSaving>>(`/api/savings?${params}`);
     },
   })
 
@@ -438,9 +437,11 @@ export default function SavingsPage() {
                 <Label htmlFor="amount">Amount (Rp)</Label>
                 <Input
                   id="amount"
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="numeric"
                   placeholder="1000000"
+                  delimiters="period"
+                  {...fieldErrorProps(errors, "amount")}
                   {...register("amount", { required: true })}
                 />
                 <FormError errors={errors} name="amount" />
@@ -451,6 +452,7 @@ export default function SavingsPage() {
                 <Input
                   id="date"
                   type="date"
+                  {...fieldErrorProps(errors, "date")}
                   {...register("date", { required: true })}
                 />
                 <FormError errors={errors} name="date" />
@@ -647,8 +649,12 @@ export default function SavingsPage() {
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      onClick={() => {
-                        if (confirm("Delete this savings record?")) {
+                      onClick={async () => {
+                        if (
+                          await confirmDialog({
+                            title: "Delete this savings record?",
+                          })
+                        ) {
                           deleteMutation.mutate(s.id)
                         }
                       }}

@@ -20,6 +20,7 @@ import {
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { confirmDialog } from "@/components/ui/confirm-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
@@ -46,7 +47,8 @@ import {
 } from "@/components/ui/command"
 import { formatIDR, formatDate, cn, type PaginatedResponse } from "@/lib/utils"
 import { Pagination } from "@/components/ui/pagination"
-import { FormError } from "@/components/ui/form-error"
+import { FormError, fieldErrorProps } from "@/components/ui/form-error"
+import { apiGet } from "@/lib/api-get"
 import { DividendsPanel } from "@/components/stocks/dividends-panel"
 import { toast } from "sonner"
 import { apiMutate, isQueuedResult } from "@/lib/api-mutate"
@@ -175,10 +177,7 @@ export default function StocksPage() {
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), pageSize: "25" })
       if (debouncedSearch) params.set("search", debouncedSearch)
-      const res = await fetch(`/api/stocks?${params}`);
-      if (!res.ok) throw new Error("Failed to fetch stocks");
-      const json: PaginatedResponse<Stock> = await res.json();
-      return json;
+      return apiGet<PaginatedResponse<Stock>>(`/api/stocks?${params}`);
     },
   })
 
@@ -481,6 +480,7 @@ export default function StocksPage() {
                       min="1"
                       placeholder="1"
                       className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      {...fieldErrorProps(errors, "quantity")}
                       {...register("quantity", { required: true })}
                     />
                     <FormError errors={errors} name="quantity" />
@@ -495,6 +495,7 @@ export default function StocksPage() {
                   <Input
                     id="name"
                     placeholder="e.g., Bank Central Asia Tbk."
+                    {...fieldErrorProps(errors, "name")}
                     {...register("name", { required: true })}
                   />
                   <FormError errors={errors} name="name" />
@@ -508,6 +509,7 @@ export default function StocksPage() {
                     min="0"
                     placeholder="1025000"
                     className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    {...fieldErrorProps(errors, "buyPrice")}
                     {...register("buyPrice", { required: true })}
                   />
                   <FormError errors={errors} name="buyPrice" />
@@ -530,6 +532,7 @@ export default function StocksPage() {
                   <Input
                     id="date"
                     type="date"
+                    {...fieldErrorProps(errors, "date")}
                     {...register("date", { required: true })}
                   />
                   <FormError errors={errors} name="date" />
@@ -702,8 +705,12 @@ export default function StocksPage() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          onClick={() => {
-                            if (confirm(`Delete ${s.symbol} from portfolio?`)) {
+                          onClick={async () => {
+                            if (
+                              await confirmDialog({
+                                title: `Delete ${s.symbol} from portfolio?`,
+                              })
+                            ) {
                               deleteMutation.mutate(s.id)
                             }
                           }}

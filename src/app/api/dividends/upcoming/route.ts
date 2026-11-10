@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireProUser } from "@/lib/api-access"
+import { withProUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 import {
@@ -20,13 +20,13 @@ import { SHARES_PER_LOT } from "@/lib/wealth-history"
  * is an estimate. Amounts are derived from the last actual payment and from the
  * trailing 12-month total per share, never invented.
  */
-export async function GET(req: Request) {
-  const userId = await requireProUser()
-  if (userId instanceof NextResponse) return userId
+export const GET = withProUser(GET_handler)
+
+async function GET_handler(userId: string, req: Request) {
 
   // This endpoint fans out to Yahoo Finance per holding, so it needs its own
   // throttle on top of the Pro gate.
-  const limiter = await rateLimit(`dividends-upcoming:${getRateLimitKey(req)}`, {
+  const limiter = await rateLimit(`dividends-upcoming:${getRateLimitKey(req, userId)}`, {
     limit: 20,
     windowMs: 60_000,
   })

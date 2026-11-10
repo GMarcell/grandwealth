@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -38,7 +39,8 @@ import {
 } from "@/components/ui/select";
 import { formatIDR, formatDate, type PaginatedResponse } from "@/lib/utils";
 import { Pagination } from "@/components/ui/pagination";
-import { FormError } from "@/components/ui/form-error";
+import { FormError, fieldErrorProps } from "@/components/ui/form-error";
+import { apiGet } from "@/lib/api-get";
 import { toast } from "sonner";
 import { apiMutate, isQueuedResult } from "@/lib/api-mutate";
 
@@ -123,10 +125,7 @@ export default function GoldPage() {
       });
       if (debouncedSearch) params.set("search", debouncedSearch);
       if (typeFilter !== "ALL") params.set("type", typeFilter);
-      const res = await fetch(`/api/gold?${params}`);
-      if (!res.ok) throw new Error("Failed to fetch gold deposits");
-      const json: PaginatedResponse<GoldDeposit> = await res.json();
-      return json;
+      return apiGet<PaginatedResponse<GoldDeposit>>(`/api/gold?${params}`);
     },
   });
 
@@ -335,6 +334,7 @@ export default function GoldPage() {
                   type="number"
                   min="0"
                   placeholder="10.00"
+                  {...fieldErrorProps(errors, "weight")}
                   {...register("weight", { required: true })}
                 />
                 <FormError errors={errors} name="weight" />
@@ -347,6 +347,7 @@ export default function GoldPage() {
                   type="number"
                   min="0"
                   placeholder="1000000"
+                  {...fieldErrorProps(errors, "price")}
                   {...register("price", { required: true })}
                 />
                 <FormError errors={errors} name="price" />
@@ -366,6 +367,7 @@ export default function GoldPage() {
                 <Input
                   id="date"
                   type="date"
+                  {...fieldErrorProps(errors, "date")}
                   {...register("date", { required: true })}
                 />
                 <FormError errors={errors} name="date" />
@@ -601,8 +603,10 @@ export default function GoldPage() {
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      onClick={() => {
-                        if (confirm("Delete this gold record?")) {
+                      onClick={async () => {
+                        if (
+                          await confirmDialog({ title: "Delete this gold record?" })
+                        ) {
                           deleteMutation.mutate(d.id);
                         }
                       }}

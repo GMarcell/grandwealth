@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireProUser } from "@/lib/api-access"
+import { withProUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import { budgetPlanSchema, safeParseBody } from "@/lib/validation"
 import { generateBudgetPlanForUser, BudgetPlanError } from "@/lib/budget-planner"
@@ -14,9 +14,9 @@ import { rateLimit } from "@/lib/rate-limit"
  * AI call — the plan is computed from existing data. By default it is returned
  * for preview only; pass `apply: true` to upsert it over the month's budgets.
  */
-export async function POST(req: Request) {
-  const userId = await requireProUser()
-  if (userId instanceof NextResponse) return userId
+export const POST = withProUser(POST_handler)
+
+async function POST_handler(userId: string, req: Request) {
 
   const limiter = await rateLimit(`budget-plan:${userId}`, {
     limit: 10,

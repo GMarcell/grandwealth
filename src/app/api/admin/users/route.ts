@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireAdminUser } from "@/lib/api-access"
+import { withAdminUser } from "@/lib/api-handler"
 import { adminUsersQuerySchema } from "@/lib/validation"
 import { buildPagination } from "@/lib/utils"
 import { expireLapsedTrials } from "@/lib/trial"
@@ -10,9 +10,9 @@ import type { Prisma } from "@prisma/client"
  * Admin-only user listing. Supports search (name/email), plan/role/status
  * filters, suspended filter, and pagination.
  */
-export async function GET(req: Request) {
-  const userId = await requireAdminUser()
-  if (userId instanceof NextResponse) return userId
+export const GET = withAdminUser(GET_handler)
+
+async function GET_handler(userId: string, req: Request) {
 
   const url = new URL(req.url)
   const parsed = adminUsersQuerySchema.safeParse({

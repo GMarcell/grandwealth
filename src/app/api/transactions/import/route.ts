@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireUser } from "@/lib/api-access"
+import { withUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import { parseCsv } from "@/lib/csv"
 import { rateLimit } from "@/lib/rate-limit"
@@ -9,9 +9,9 @@ const MAX_IMPORT_BYTES = 2 * 1024 * 1024 // 2 MB
 /** Upper bound on imported rows per request (matches the batch writer). */
 const MAX_IMPORT_ROWS = 5_000
 
-export async function POST(req: Request) {
-  const userId = await requireUser()
-  if (userId instanceof NextResponse) return userId
+export const POST = withUser(POST_handler)
+
+async function POST_handler(userId: string, req: Request) {
 
   // Imports write to the database in bulk, so they get the same kind of
   // per-user throttle the other write routes use.

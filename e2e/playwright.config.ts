@@ -4,11 +4,11 @@ import { defineConfig, devices } from "@playwright/test"
 /**
  * Playwright E2E configuration for GrandWealth.
  *
- * The app must be running on the BASE_URL before tests execute.
- * Use `npm run dev:e2e` to start the dev server with the test env.
+ * Unless BASE_URL points at a server that is already running, Playwright
+ * starts `npm run dev` itself (see `webServer` below).
  *
  * Run tests with:
- *   npm run test:e2e              (requires dev server running)
+ *   npm run test:e2e              (starts the dev server if needed)
  *   npm run test:e2e:headed       (run with visible browser)
  *   npm run test:e2e:ui           (run with Playwright UI mode)
  */
@@ -22,6 +22,16 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   workers: 1,
   reporter: [["html", { outputFolder: "playwright-report" }]],
+  // Start the app automatically. Without this, `npm run test:e2e` failed with
+  // connection errors unless a server happened to be running already.
+  webServer: process.env.BASE_URL
+    ? undefined
+    : {
+        command: "npm run dev",
+        url: "http://localhost:3000",
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000,
+      },
   use: {
     baseURL: process.env.BASE_URL || "http://localhost:3000",
     trace: "on-first-retry",

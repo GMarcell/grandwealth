@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireAdminUser } from "@/lib/api-access"
+import { withAdminUser } from "@/lib/api-handler"
 import { adminTrialRequestsQuerySchema } from "@/lib/validation"
 import { buildPagination } from "@/lib/utils"
 import { expireLapsedTrials } from "@/lib/trial"
@@ -13,9 +13,9 @@ import type { Prisma } from "@prisma/client"
  * first, then the most recent decisions. Drives the admin panel's trial
  * requests card and the sidebar badge.
  */
-export async function GET(req: Request) {
-  const userId = await requireAdminUser()
-  if (userId instanceof NextResponse) return userId
+export const GET = withAdminUser(GET_handler)
+
+async function GET_handler(userId: string, req: Request) {
 
   const url = new URL(req.url)
   const parsed = adminTrialRequestsQuerySchema.safeParse({

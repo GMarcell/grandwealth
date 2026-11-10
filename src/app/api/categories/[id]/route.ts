@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server"
-import { requireUser } from "@/lib/api-access"
+import { withUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import { updateCategorySchema, safeParseBody } from "@/lib/validation"
 import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 
-export async function PATCH(
+export const PATCH = withUser(PATCH_handler)
+
+async function PATCH_handler(
+  userId: string,
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const userId = await requireUser()
-  if (userId instanceof NextResponse) return userId
 
   const { id } = await params
 
@@ -56,12 +57,13 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
+export const DELETE = withUser(DELETE_handler)
+
+async function DELETE_handler(
+  userId: string,
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const userId = await requireUser()
-  if (userId instanceof NextResponse) return userId
 
   const { id } = await params
 

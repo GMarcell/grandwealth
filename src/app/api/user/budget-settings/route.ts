@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireUser } from "@/lib/api-access"
+import { withUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 
 const DEFAULTS = {
@@ -8,9 +8,9 @@ const DEFAULTS = {
   carryDeficitEnabled: true,
 }
 
-export async function GET() {
-  const userId = await requireUser()
-  if (userId instanceof NextResponse) return userId
+export const GET = withUser(GET_handler)
+
+async function GET_handler(userId: string) {
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -24,9 +24,9 @@ export async function GET() {
   })
 }
 
-export async function PATCH(req: Request) {
-  const userId = await requireUser()
-  if (userId instanceof NextResponse) return userId
+export const PATCH = withUser(PATCH_handler)
+
+async function PATCH_handler(userId: string, req: Request) {
 
   try {
     const body = await req.json()

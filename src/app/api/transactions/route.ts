@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireUser } from "@/lib/api-access"
+import { withUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import { createTransactionSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
@@ -11,11 +11,11 @@ import { isValidRuleType } from "@/lib/rule-type"
 import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 import type { Prisma } from "@prisma/client"
 
-export async function GET(req: Request) {
-  const userId = await requireUser()
-  if (userId instanceof NextResponse) return userId
+export const GET = withUser(GET_handler)
 
-  const limiter = await rateLimit(`transactions-get:${getRateLimitKey(req)}`, {
+async function GET_handler(userId: string, req: Request) {
+
+  const limiter = await rateLimit(`transactions-get:${getRateLimitKey(req, userId)}`, {
     limit: 60,
     windowMs: 60_000,
   })
@@ -43,12 +43,19 @@ export async function GET(req: Request) {
 
   // Month filter uses the user's budget-month boundaries so it lines up with
   // budgets, the dashboard, and the analysis pages.
-  if (monthFilter && monthFilter !== "ALL") {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { budgetStartDay: true },
-    })
-    const startDay = user?.budgetStartDay ?? 1
+  const needsMonthWindow = !!monthFilter && monthFilter !== "ALL"
+
+  // One lookup serves both the month window and the carry-over chain below;
+  // this request used to read the same user row twice.
+  const budgetSettings = needsMonthWindow
+    ? await prisma.user.findUnique({
+        where: { id: userId },
+        select: { budgetStartDay: true, carryDeficitEnabled: true },
+      })
+    : null
+  const startDay = budgetSettings?.budgetStartDay ?? 1
+
+  if (needsMonthWindow && monthFilter) {
     const { start, end } = getBudgetMonthRangeInclusive(monthFilter, startDay)
     where.date = { gte: start, lte: end }
   }
@@ -75,26 +82,10 @@ export async function GET(req: Request) {
     }
   }
 
-  const pagination = parsePagination(req.url)
-
-  if (!pagination) {
-    // Legacy: return plain array when no pagination params
-    const transactions = await prisma.transaction.findMany({
-      where,
-      orderBy: { date: "desc" },
-    })
-    return NextResponse.json(
-      transactions.map((tx) => ({
-        id: tx.id,
-        type: tx.type,
-        category: tx.category,
-        amount: tx.amount,
-        description: tx.description,
-        notes: tx.notes,
-        date: tx.date.toISOString(),
-      }))
-    )
-  }
+  // A request without pagination params gets the first page. The old
+  // unpaginated branch returned the user's whole history, so the payload grew
+  // with the account — and no caller needs all of it at once.
+  const pagination = parsePagination(req.url) ?? { page: 1, pageSize: 50 }
 
   const [transactions, total, summaryRows, categoryRows] = await Promise.all([
     prisma.transaction.findMany({
@@ -152,12 +143,7 @@ export async function GET(req: Request) {
   // type, and category filters cannot hide a deficit owed from the previous
   // month.
   let carryOver = { carryIn: 0, netCashflow: 0, carriedBalance: 0 }
-  if (monthFilter && monthFilter !== "ALL") {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { budgetStartDay: true, carryDeficitEnabled: true },
-    })
-    const startDay = user?.budgetStartDay ?? 1
+  if (needsMonthWindow && monthFilter) {
     const { end } = getBudgetMonthRangeInclusive(monthFilter, startDay)
     const history = await prisma.transaction.findMany({
       where: { userId: userId, date: { lte: end } },
@@ -184,7 +170,7 @@ export async function GET(req: Request) {
       const chain = computeMonthlyBalanceChain(
         points.slice(0, selectedIndex + 1),
         0,
-        user?.carryDeficitEnabled ?? true,
+        budgetSettings?.carryDeficitEnabled ?? true,
       )
       const current = chain[chain.length - 1]
       carryOver = {
@@ -201,9 +187,9 @@ export async function GET(req: Request) {
   })
 }
 
-export async function POST(req: Request) {
-  const userId = await requireUser()
-  if (userId instanceof NextResponse) return userId
+export const POST = withUser(POST_handler)
+
+async function POST_handler(userId: string, req: Request) {
 
   // Rate limit: 30 transactions per minute per user
   const limiter = await rateLimit(`transactions:${userId}`, {

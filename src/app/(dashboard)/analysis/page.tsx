@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { apiGet } from "@/lib/api-get"
 import {
   Brain,
   TrendingUp,
@@ -201,9 +202,7 @@ export default function AnalysisPage() {
   const { data: budgetSettings } = useQuery<{ budgetStartDay: number }>({
     queryKey: ["budget-settings"],
     queryFn: async () => {
-      const res = await fetch("/api/user/budget-settings")
-      if (!res.ok) throw new Error("Failed to fetch budget settings")
-      return res.json()
+      return apiGet<{ budgetStartDay: number }>("/api/user/budget-settings")
     },
   })
   const budgetStartDay = budgetSettings?.budgetStartDay ?? 1
@@ -217,9 +216,7 @@ export default function AnalysisPage() {
   }>({
     queryKey: ["analysis-list"],
     queryFn: async () => {
-      const res = await fetch("/api/analysis")
-      if (!res.ok) throw new Error("Failed to fetch analysis list")
-      return res.json()
+      return apiGet<{ analyses: AnalysisSummary[] }>("/api/analysis")
     },
   })
 
@@ -251,9 +248,7 @@ export default function AnalysisPage() {
     queryKey: ["analysis", effectiveMonth],
     queryFn: async () => {
       if (!effectiveMonth) throw new Error("No month selected")
-      const res = await fetch(`/api/analysis?month=${effectiveMonth}`)
-      if (!res.ok) throw new Error("Failed to fetch analysis")
-      return res.json()
+      return apiGet<FullAnalysis>(`/api/analysis?month=${effectiveMonth}`)
     },
     enabled: !!effectiveMonth,
   })

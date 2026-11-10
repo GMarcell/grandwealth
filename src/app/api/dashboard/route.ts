@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireUser } from "@/lib/api-access"
+import { withUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import {
   generateBudgetMonths,
@@ -16,9 +16,9 @@ import { computeMonthlyBalanceChain } from "@/lib/monthly-balance"
 import { computeGoldPortfolio } from "@/lib/gold"
 import { fetchGoldPriceIdr } from "@/lib/prices"
 
-export async function GET() {
-  const userId = await requireUser()
-  if (userId instanceof NextResponse) return userId
+export const GET = withUser(GET_handler)
+
+async function GET_handler(userId: string) {
 
   try {
     // Get user's budget start day setting
@@ -174,7 +174,8 @@ export async function GET() {
     let goldPricePerGram: number | null = null
     if (totalGoldWeight > 0) {
       try {
-        const live = await fetchGoldPriceIdr()
+        // Reuse a recent quote: a page load must not wait on two Yahoo calls.
+        const live = await fetchGoldPriceIdr({ maxAgeMs: 5 * 60 * 1000 })
         goldPricePerGram = live.pricePerGramIdr
       } catch (error) {
         console.warn(

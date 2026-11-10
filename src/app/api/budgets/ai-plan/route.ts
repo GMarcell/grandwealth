@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireAdminOrProPlusUser } from "@/lib/api-access"
+import { withAdminOrProPlusUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import { aiBudgetPlanSchema, safeParseBody } from "@/lib/validation"
 import { generateAiBudgetPlanForUser, BudgetAiError } from "@/lib/budget-ai"
@@ -24,11 +24,11 @@ import {
  * Categories with `canReduce: false` in existing budgets will not have their
  * budget reduced by the AI.
  */
-export async function POST(req: Request) {
-  // Pro+ exclusive (admins always pass) — this endpoint calls an external,
-  // metered AI service.
-  const userId = await requireAdminOrProPlusUser()
-  if (userId instanceof NextResponse) return userId
+// Pro+ exclusive (admins always pass) — this endpoint calls an external,
+// metered AI service.
+export const POST = withAdminOrProPlusUser(POST_handler)
+
+async function POST_handler(userId: string, req: Request) {
 
   const limiter = await rateLimit(`budget-ai-plan:${userId}`, {
     limit: 5,

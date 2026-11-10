@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { apiGet } from "@/lib/api-get"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -22,6 +23,7 @@ import {
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { confirmDialog } from "@/components/ui/confirm-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
@@ -42,7 +44,7 @@ import {
 } from "@/components/ui/select"
 import { formatDate } from "@/lib/utils"
 import { formatIDR } from "@/lib/utils"
-import { FormError } from "@/components/ui/form-error"
+import { FormError, fieldErrorProps } from "@/components/ui/form-error"
 import { toast } from "sonner"
 import { apiMutate, isQueuedResult } from "@/lib/api-mutate"
 
@@ -146,27 +148,25 @@ export default function RecurringPage() {
   const { data: recurring, isLoading } = useQuery<RecurringTransaction[]>({
     queryKey: ["recurring-transactions"],
     queryFn: async () => {
-      const res = await fetch("/api/recurring-transactions");
-      if (!res.ok) throw new Error("Failed to fetch recurring transactions");
-      return res.json();
+      return apiGet<RecurringTransaction[]>("/api/recurring-transactions");
     },
   })
 
   const { data: goals } = useQuery<Array<{ id: string; name: string; targetAmount: number; savedAmount: number }>>({
     queryKey: ["goals"],
     queryFn: async () => {
-      const res = await fetch("/api/goals");
-      if (!res.ok) throw new Error("Failed to fetch goals");
-      return res.json();
+      return apiGet<
+        Array<{ id: string; name: string; targetAmount: number; savedAmount: number }>
+      >("/api/goals");
     },
   })
 
   const { data: customCategories } = useQuery<Array<{ id: string; name: string; type: string }>>({
     queryKey: ["categories"],
     queryFn: async () => {
-      const res = await fetch("/api/categories");
-      if (!res.ok) throw new Error("Failed to fetch categories");
-      return res.json();
+      return apiGet<Array<{ id: string; name: string; type: string }>>(
+        "/api/categories",
+      );
     },
   })
 
@@ -353,7 +353,7 @@ export default function RecurringPage() {
                   control={control}
                   render={({ field }) => (
                     <Select value={field.value} onValueChange={field.onChange} required>
-                      <SelectTrigger>
+                      <SelectTrigger {...fieldErrorProps(errors, "category")}>
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
@@ -373,9 +373,11 @@ export default function RecurringPage() {
                 <Label htmlFor="amount">Amount (Rp)</Label>
                 <Input
                   id="amount"
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="numeric"
                   placeholder="100000"
+                  delimiters="period"
+                  {...fieldErrorProps(errors, "amount")}
                   {...register("amount", { required: true })}
                 />
                 <FormError errors={errors} name="amount" />
@@ -386,6 +388,7 @@ export default function RecurringPage() {
                 <Input
                   id="desc"
                   placeholder="e.g., Monthly salary"
+                  {...fieldErrorProps(errors, "description")}
                   {...register("description", { required: true })}
                 />
                 <FormError errors={errors} name="description" />
@@ -422,6 +425,7 @@ export default function RecurringPage() {
                   <Input
                     id="startDate"
                     type="date"
+                    {...fieldErrorProps(errors, "startDate")}
                     {...register("startDate", { required: true })}
                   />
                   <FormError errors={errors} name="startDate" />
@@ -431,6 +435,7 @@ export default function RecurringPage() {
                   <Input
                     id="nextDate"
                     type="date"
+                    {...fieldErrorProps(errors, "nextDate")}
                     {...register("nextDate", { required: true })}
                   />
                   <FormError errors={errors} name="nextDate" />
@@ -655,8 +660,12 @@ export default function RecurringPage() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          onClick={() => {
-                            if (confirm(`Delete "${r.description}" recurring transaction?`)) {
+                          onClick={async () => {
+                            if (
+                              await confirmDialog({
+                                title: `Delete "${r.description}" recurring transaction?`,
+                              })
+                            ) {
                               deleteMutation.mutate(r.id)
                             }
                           }}

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireUser } from "@/lib/api-access"
+import { withUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import { computeNetWorthHistory } from "@/lib/wealth-history"
 import { computeGoldPortfolio } from "@/lib/gold"
@@ -9,9 +9,9 @@ import { fetchGoldPriceIdr } from "@/lib/prices"
  * GET /api/net-worth?months=12
  * Returns a month-by-month net-worth series computed from the user's records.
  */
-export async function GET(req: Request) {
-  const userId = await requireUser()
-  if (userId instanceof NextResponse) return userId
+export const GET = withUser(GET_handler)
+
+async function GET_handler(userId: string, req: Request) {
 
   const url = new URL(req.url)
   const monthsParam = parseInt(url.searchParams.get("months") ?? "12", 10)
@@ -58,7 +58,7 @@ export async function GET(req: Request) {
     let goldPricePerGram: number | null = null
     if (heldGoldWeight > 0) {
       try {
-        const price = await fetchGoldPriceIdr()
+        const price = await fetchGoldPriceIdr({ maxAgeMs: 5 * 60 * 1000 })
         goldPricePerGram = price.pricePerGramIdr
       } catch {
         console.warn("Could not fetch gold price for net-worth history; using cost basis")

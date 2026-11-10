@@ -67,6 +67,14 @@ model User {
   // When false, only surpluses carry — each month starts at 0 (or its
   // accumulated surplus), so a deficit never reduces the following month.
   carryDeficitEnabled Boolean    @default(true)
+  // Daily email alerts: upcoming recurring bills and budgets nearing their
+  // limit. Opt-in — the cron sends nothing until the user enables it in
+  // Settings, so nobody receives mail they never asked for.
+  alertsEnabled        Boolean @default(false)
+  // How many days ahead a recurring bill is included in the alert email (1-14).
+  billReminderDays     Int     @default(3)
+  // Percentage of a category's effective budget that triggers a warning (50-100).
+  budgetAlertThreshold Int     @default(80)
   transactions         Transaction[]
   goldDeposits         GoldDeposit[]
   stocks               Stock[]
@@ -83,6 +91,7 @@ model User {
   trialRequests         TrialRequest[]
   widgetTokens          WidgetToken[]
   aiUsages              AiUsage[]
+  alertSends            AlertSend[]
   createdAt             DateTime     @default(now())
   updatedAt             DateTime     @updatedAt
 }
@@ -391,6 +400,22 @@ model AiUsage {
 
   @@unique([userId, monthKey])
   @@index([userId, monthKey])
+}
+
+/// One row per alert email actually sent. The `key` identifies the exact thing
+/// that was alerted on (one bill occurrence, or one category crossing a budget
+/// level in a given month), so a retried or manually re-run cron never sends
+/// the same alert twice.
+model AlertSend {
+  id     String   @id @default(cuid())
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "bill:<recurringId>:<YYYY-MM-DD>" or "budget:<month>:<category>:<level>"
+  key    String
+  sentAt DateTime @default(now())
+
+  @@unique([userId, key])
+  @@index([userId, sentAt])
 }
 
 model MonthlyAnalysis {

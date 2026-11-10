@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { formatCompactIDR, formatIDR } from "@/lib/utils";
+import { ForecastCard } from "@/components/dashboard/forecast-card";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 
@@ -883,6 +884,9 @@ export function DashboardContent() {
           </CardContent>
         </Card>
       )}
+
+      {/* 30-day cash flow forecast */}
+      <ForecastCard />
 
       {/* Recent Transactions */}
       <Card>

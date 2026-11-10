@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireProUser } from "@/lib/api-access"
+import { withProUser } from "@/lib/api-handler"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 import YahooFinance from "yahoo-finance2"
 
 const yahooFinance = new YahooFinance()
 
-export async function GET(req: NextRequest) {
-  const userId = await requireProUser()
-  if (userId instanceof NextResponse) return userId
+export const GET = withProUser(GET_handler)
 
-  const limiter = await rateLimit(`stocks-search:${getRateLimitKey(req)}`, {
+async function GET_handler(userId: string, req: NextRequest) {
+
+  const limiter = await rateLimit(`stocks-search:${getRateLimitKey(req, userId)}`, {
     limit: 30,
     windowMs: 60_000,
   })

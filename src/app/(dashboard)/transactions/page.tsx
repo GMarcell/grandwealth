@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { confirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -48,7 +49,8 @@ import {
 } from "@/components/ui/select";
 import { formatDate, formatIDR, type PaginatedResponse } from "@/lib/utils";
 import { Pagination } from "@/components/ui/pagination";
-import { FormError } from "@/components/ui/form-error";
+import { FormError, fieldErrorProps } from "@/components/ui/form-error";
+import { apiGet } from "@/lib/api-get";
 import {
   RULE_TYPES,
   RULE_TYPE_CONFIGS,
@@ -160,9 +162,7 @@ export default function TransactionsPage() {
   const { data: budgetSettings } = useQuery<{ budgetStartDay: number }>({
     queryKey: ["budget-settings"],
     queryFn: async () => {
-      const res = await fetch("/api/user/budget-settings");
-      if (!res.ok) throw new Error("Failed to fetch budget settings");
-      return res.json();
+      return apiGet<{ budgetStartDay: number }>("/api/user/budget-settings");
     },
   });
   const startDay = budgetSettings?.budgetStartDay ?? 1;
@@ -214,13 +214,9 @@ export default function TransactionsPage() {
       if (debouncedSearch) params.set("search", debouncedSearch);
       if (typeFilter !== "ALL") params.set("type", typeFilter);
       if (ruleFilter !== "ALL") params.set("rule", ruleFilter);
-      const res = await fetch(`/api/transactions?${params}`);
-      if (!res.ok) throw new Error("Failed to fetch transactions");
-      const json: PaginatedResponse<
-        TransactionInterface,
-        TransactionSummary
-      > = await res.json();
-      return json;
+      return apiGet<PaginatedResponse<TransactionInterface, TransactionSummary>>(
+        `/api/transactions?${params}`,
+      );
     },
   });
 
@@ -241,10 +237,9 @@ export default function TransactionsPage() {
         type: "EXPENSE",
         summaryByCategory: "1",
       });
-      const res = await fetch(`/api/transactions?${params}`);
-      if (!res.ok) throw new Error("Failed to fetch month spending");
-      const json: PaginatedResponse<TransactionInterface, TransactionSummary> =
-        await res.json();
+      const json = await apiGet<
+        PaginatedResponse<TransactionInterface, TransactionSummary>
+      >(`/api/transactions?${params}`);
       return json.summary?.byCategory ?? {};
     },
   });
@@ -672,8 +667,12 @@ export default function TransactionsPage() {
                             <Button
                               variant="ghost"
                               size="icon-sm"
-                              onClick={() => {
-                                if (confirm("Delete this transaction?")) {
+                              onClick={async () => {
+                                if (
+                                  await confirmDialog({
+                                    title: "Delete this transaction?",
+                                  })
+                                ) {
                                   deleteMutation.mutate(tx.id);
                                 }
                               }}
@@ -850,7 +849,7 @@ export default function TransactionsPage() {
                       onValueChange={field.onChange}
                       required
                     >
-                      <SelectTrigger>
+                      <SelectTrigger {...fieldErrorProps(errors, "category")}>
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
@@ -869,9 +868,11 @@ export default function TransactionsPage() {
                 <Label htmlFor="amount">Amount (Rp)</Label>
                 <Input
                   id="amount"
-                  type="number"
-                  min="0"
+                  type="text"
+                  inputMode="numeric"
                   placeholder="100000"
+                  delimiters="period"
+                  {...fieldErrorProps(errors, "amount")}
                   {...register("amount", { required: true })}
                 />
                 <FormError errors={errors} name="amount" />
@@ -882,6 +883,7 @@ export default function TransactionsPage() {
                 <Input
                   id="description"
                   placeholder="What was this for?"
+                  {...fieldErrorProps(errors, "description")}
                   {...register("description", { required: true })}
                 />
                 <FormError errors={errors} name="description" />
@@ -892,6 +894,7 @@ export default function TransactionsPage() {
                 <Input
                   id="date"
                   type="date"
+                  {...fieldErrorProps(errors, "date")}
                   {...register("date", { required: true })}
                 />
                 <FormError errors={errors} name="date" />

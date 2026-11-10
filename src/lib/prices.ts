@@ -53,11 +53,25 @@ function getCurrency(quote: QuoteData): string | undefined {
   return quote?.currency ?? undefined
 }
 
+let cachedGoldPrice: { value: GoldPriceResult; expiresAt: number } | null = null
+
 /**
  * Fetch the current gold spot price in IDR per gram.
  * Uses GC=F (Gold Futures) for the gold price and IDR=X for USD/IDR exchange rate.
+ *
+ * @param options.maxAgeMs Reuse the last successful quote while it is younger
+ *   than this. Read paths (dashboard, net worth) pass a few minutes so a page
+ *   load never blocks on Yahoo Finance; the price cron passes nothing and
+ *   always fetches live.
  */
-export async function fetchGoldPriceIdr(): Promise<GoldPriceResult> {
+export async function fetchGoldPriceIdr(
+  options: { maxAgeMs?: number } = {},
+): Promise<GoldPriceResult> {
+  const { maxAgeMs = 0 } = options
+  if (maxAgeMs > 0 && cachedGoldPrice && cachedGoldPrice.expiresAt > Date.now()) {
+    return cachedGoldPrice.value
+  }
+
   const [goldQuote, usdIdrQuote] = await Promise.all([
     yahooFinance.quote("GC=F") as unknown as QuoteData,
     yahooFinance.quote("IDR=X") as unknown as QuoteData,
@@ -70,13 +84,19 @@ export async function fetchGoldPriceIdr(): Promise<GoldPriceResult> {
   const pricePerGramIdr = (pricePerOunceUsd / 31.1035) * usdIdrRate
   const pricePerOunceIdr = pricePerOunceUsd * usdIdrRate
 
-  return {
+  const result: GoldPriceResult = {
     pricePerGramIdr: Math.round(pricePerGramIdr),
     pricePerOunceIdr: Math.round(pricePerOunceIdr),
     pricePerOunceUsd: pricePerOunceUsd,
     usdIdrRate: usdIdrRate,
     updatedAt: new Date().toISOString(),
   }
+
+  if (maxAgeMs > 0) {
+    cachedGoldPrice = { value: result, expiresAt: Date.now() + maxAgeMs }
+  }
+
+  return result
 }
 
 /**

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { apiGet } from "@/lib/api-get"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -21,11 +22,12 @@ import {
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { confirmDialog } from "@/components/ui/confirm-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { FormError } from "@/components/ui/form-error"
+import { FormError, fieldErrorProps } from "@/components/ui/form-error"
 import {
   Dialog,
   DialogContent,
@@ -89,9 +91,7 @@ export default function DebtsPage() {
   const { data: loans, isLoading } = useQuery<Loan[]>({
     queryKey: ["loans"],
     queryFn: async () => {
-      const res = await fetch("/api/loans")
-      if (!res.ok) throw new Error("Failed to fetch loans")
-      return res.json()
+      return apiGet<Loan[]>("/api/loans")
     },
   })
 
@@ -232,6 +232,7 @@ export default function DebtsPage() {
                 <Input
                   id="name"
                   placeholder="e.g., KPR House, Car loan, KTA"
+                  {...fieldErrorProps(errors, "name")}
                   {...register("name", { required: true })}
                 />
                 <FormError errors={errors} name="name" />
@@ -245,6 +246,7 @@ export default function DebtsPage() {
                     type="number"
                     min="1"
                     placeholder="250000000"
+                    {...fieldErrorProps(errors, "principal")}
                     {...register("principal", { required: true })}
                   />
                   <FormError errors={errors} name="principal" />
@@ -256,6 +258,7 @@ export default function DebtsPage() {
                     type="number"
                     min="0"
                     placeholder="150000000"
+                    {...fieldErrorProps(errors, "remainingBalance")}
                     {...register("remainingBalance", { required: true })}
                   />
                   <FormError errors={errors} name="remainingBalance" />
@@ -295,6 +298,7 @@ export default function DebtsPage() {
                 <Input
                   id="startDate"
                   type="date"
+                  {...fieldErrorProps(errors, "startDate")}
                   {...register("startDate", { required: true })}
                 />
                 <FormError errors={errors} name="startDate" />
@@ -499,8 +503,12 @@ export default function DebtsPage() {
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      onClick={() => {
-                        if (confirm(`Delete the "${loan.name}" loan?`)) {
+                      onClick={async () => {
+                        if (
+                          await confirmDialog({
+                            title: `Delete the "${loan.name}" loan?`,
+                          })
+                        ) {
                           deleteMutation.mutate(loan.id)
                         }
                       }}

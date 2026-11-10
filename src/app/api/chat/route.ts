@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireUser } from "@/lib/api-access"
+import { withUser } from "@/lib/api-handler"
 import { getAccessRecord } from "@/lib/account-access"
 import { isAdminUser, isProUser, planLabel } from "@/lib/subscription"
 import { prisma } from "@/lib/prisma"
@@ -421,9 +421,9 @@ function jsonResponse(response: ChatResponse, state?: ChatState): NextResponse {
   return NextResponse.json(body)
 }
 
-export async function POST(request: Request) {
-  const userId = await requireUser()
-  if (userId instanceof NextResponse) return userId
+export const POST = withUser(POST_handler)
+
+async function POST_handler(userId: string, request: Request) {
 
   const body = await request.json().catch(() => null)
   const messages = body?.messages

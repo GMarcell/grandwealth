@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireProUser } from "@/lib/api-access"
+import { withProUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import { generateAnalysisForUserAndMonth } from "@/lib/analysis-generator"
 import { getLastCompletedBudgetMonthKey } from "@/lib/budget-months"
@@ -11,9 +11,9 @@ import {
   serializeQuotaRemaining,
 } from "@/lib/ai-usage-quota"
 
-export async function GET(req: Request) {
-  const userId = await requireProUser()
-  if (userId instanceof NextResponse) return userId
+export const GET = withProUser(GET_handler)
+
+async function GET_handler(userId: string, req: Request) {
 
   const { searchParams } = new URL(req.url)
   const month = searchParams.get("month") // optional: filter by specific month
@@ -93,9 +93,9 @@ export async function GET(req: Request) {
   }
 }
 
-export async function POST(req: Request) {
-  const userId = await requireProUser()
-  if (userId instanceof NextResponse) return userId
+export const POST = withProUser(POST_handler)
+
+async function POST_handler(userId: string, req: Request) {
 
   let month: string
 
@@ -146,7 +146,7 @@ export async function POST(req: Request) {
   }
 
   // Short-term rate limit: max 3 regenerations per 60 seconds per user.
-  const rateLimitKey = `analysis:regenerate:${getRateLimitKey(req)}:${userId}`
+  const rateLimitKey = `analysis:regenerate:${getRateLimitKey(req, userId)}`
   const shortLimit = await rateLimit(rateLimitKey, {
     limit: 3,
     windowMs: 60_000,

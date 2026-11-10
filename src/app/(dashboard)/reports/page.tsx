@@ -36,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { exportReportExcel, exportReportPdf } from "@/lib/export"
+import { apiGet } from "@/lib/api-get"
 
 // Dynamic import chart components (ships recharts only when rendered)
 const MonthlyBarChart = dynamic(
@@ -135,11 +136,7 @@ export default function ReportsPage() {
 
   const { data, isLoading, refetch } = useQuery<ReportData>({
     queryKey: ["reports", monthRange],
-    queryFn: async () => {
-      const res = await fetch(`/api/reports?months=${monthRange}`);
-      if (!res.ok) throw new Error("Failed to fetch reports");
-      return res.json();
-    },
+    queryFn: () => apiGet<ReportData>(`/api/reports?months=${monthRange}`),
   })
 
   if (isLoading) return <ReportSkeleton />

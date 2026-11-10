@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { confirmDialog } from "@/components/ui/confirm-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
@@ -200,8 +201,15 @@ export function WidgetCard() {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => {
-                    if (confirm(`Revoke "${t.label}"?`)) {
+                  onClick={async () => {
+                    if (
+                      await confirmDialog({
+                        title: `Revoke "${t.label}"?`,
+                        description:
+                          "The widget using this token stops working immediately.",
+                        confirmLabel: "Revoke",
+                      })
+                    ) {
                       deleteMutation.mutate(t.id)
                     }
                   }}

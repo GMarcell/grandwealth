@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server"
-import { requireProUser } from "@/lib/api-access"
+import { withProUser } from "@/lib/api-handler"
 import { fetchGoldPriceIdr } from "@/lib/prices"
 
-export async function GET() {
-  const userId = await requireProUser()
-  if (userId instanceof NextResponse) return userId
+export const GET = withProUser(GET_handler)
+
+async function GET_handler() {
 
   try {
     const price = await fetchGoldPriceIdr()

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireProUser } from "@/lib/api-access"
+import { withProUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import { createStockSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
@@ -8,11 +8,11 @@ import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 import { parsePagination, paginatedResponse } from "@/lib/utils"
 import type { Prisma } from "@prisma/client"
 
-export async function GET(req: Request) {
-  const userId = await requireProUser()
-  if (userId instanceof NextResponse) return userId
+export const GET = withProUser(GET_handler)
 
-  const limiter = await rateLimit(`stocks-get:${getRateLimitKey(req)}`, {
+async function GET_handler(userId: string, req: Request) {
+
+  const limiter = await rateLimit(`stocks-get:${getRateLimitKey(req, userId)}`, {
     limit: 60,
     windowMs: 60_000,
   })
@@ -83,9 +83,9 @@ export async function GET(req: Request) {
   return NextResponse.json(paginatedResponse(mapped, total, pagination))
 }
 
-export async function POST(req: Request) {
-  const userId = await requireProUser()
-  if (userId instanceof NextResponse) return userId
+export const POST = withProUser(POST_handler)
+
+async function POST_handler(userId: string, req: Request) {
 
   const limiter = await rateLimit(`stocks:${userId}`, {
     limit: 20,

@@ -139,9 +139,14 @@ export async function rateLimit(
 
 /**
  * Derive a rate-limit key from the incoming request.
- * Uses the client IP (from x-forwarded-for) as the identifier.
+ *
+ * Authenticated endpoints should pass the user id: an IP is shared by everyone
+ * behind carrier-grade NAT, and `x-forwarded-for` is only trustworthy when the
+ * hosting proxy sets it. Unauthenticated endpoints (sign-in, registration) fall
+ * back to the client IP.
  */
-export function getRateLimitKey(request: Request): string {
+export function getRateLimitKey(request: Request, userId?: string): string {
+  if (userId) return `user:${userId}`
   const forwarded = request.headers.get("x-forwarded-for")
   const ip = forwarded?.split(",")[0]?.trim() ?? "unknown"
   return ip

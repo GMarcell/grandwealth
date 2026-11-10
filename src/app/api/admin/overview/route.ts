@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireAdminUser } from "@/lib/api-access"
+import { withAdminUser } from "@/lib/api-handler"
 import { PRO_PRICE_IDR, PRO_PLUS_PRICE_IDR } from "@/lib/subscription"
 import { expireLapsedTrials } from "@/lib/trial"
 
 /**
  * Admin-only aggregate stats for the admin dashboard.
  */
-export async function GET() {
-  const userId = await requireAdminUser()
-  if (userId instanceof NextResponse) return userId
+export const GET = withAdminUser(GET_handler)
+
+async function GET_handler() {
 
   try {
     // End lapsed trials first so counts & MRR don't include them.

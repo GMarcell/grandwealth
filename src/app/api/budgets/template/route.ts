@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireProUser } from "@/lib/api-access"
+import { withProUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import { budgetTemplateSchema, safeParseBody } from "@/lib/validation"
 import { buildBudgetTemplate } from "@/lib/budget-template"
@@ -13,9 +13,9 @@ import { rateLimit } from "@/lib/rate-limit"
  * Auto-generates budgets for the given month using the 50/30/20 rule,
  * based on the month's income and the user's NEED/WANT/SAVINGS classifications.
  */
-export async function POST(req: Request) {
-  const userId = await requireProUser()
-  if (userId instanceof NextResponse) return userId
+export const POST = withProUser(POST_handler)
+
+async function POST_handler(userId: string, req: Request) {
 
   const limiter = await rateLimit(`budget-template:${userId}`, {
     limit: 10,

@@ -1,5 +1,4 @@
-import { NextResponse } from "next/server"
-import { requireUser } from "@/lib/api-access"
+import { withUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import { escapeCsvField } from "@/lib/csv"
 
@@ -13,9 +12,9 @@ const BATCH_SIZE = 1_000
  * `findMany`, so a long transaction history can't exhaust the serverless
  * function's memory or time budget. Only the exported columns are selected.
  */
-export async function GET() {
-  const userId = await requireUser()
-  if (userId instanceof NextResponse) return userId
+export const GET = withUser(GET_handler)
+
+async function GET_handler(userId: string) {
 
   const encoder = new TextEncoder()
 

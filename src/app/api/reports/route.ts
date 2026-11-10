@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { requireProUser } from "@/lib/api-access"
+import { withProUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import {
   generateBudgetMonths,
@@ -8,9 +8,9 @@ import {
   getBudgetMonthRangeInclusive,
 } from "@/lib/budget-months"
 
-export async function GET(req: Request) {
-  const userId = await requireProUser()
-  if (userId instanceof NextResponse) return userId
+export const GET = withProUser(GET_handler)
+
+async function GET_handler(userId: string, req: Request) {
 
   const { searchParams } = new URL(req.url)
   const monthsParam = searchParams.get("months")

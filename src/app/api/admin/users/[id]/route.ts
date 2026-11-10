@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireAdminUser } from "@/lib/api-access"
+import { withAdminUser } from "@/lib/api-handler"
 import { adminUpdateUserSchema, safeParseBody } from "@/lib/validation"
 
 const USER_SELECT = {
@@ -43,12 +43,13 @@ async function ensureNotLastAdmin(targetId: string): Promise<string | null> {
   return otherAdmins > 0 ? null : "Cannot demote or remove the last administrator"
 }
 
-export async function PATCH(
+export const PATCH = withAdminUser(PATCH_handler)
+
+async function PATCH_handler(
+  userId: string,
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const userId = await requireAdminUser()
-  if (userId instanceof NextResponse) return userId
 
   const { id } = await params
   const actingUserId = userId
@@ -150,12 +151,13 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
+export const DELETE = withAdminUser(DELETE_handler)
+
+async function DELETE_handler(
+  userId: string,
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const userId = await requireAdminUser()
-  if (userId instanceof NextResponse) return userId
 
   const { id } = await params
 

@@ -80,11 +80,34 @@ Unused budget rolls into the next month. A month's *overall* deficit (expenses
 | --- | --- | --- |
 | `transactions` GET | 60 | 1 minute |
 | `transactions` POST | 30 | 1 minute |
+| `transactions/import` POST | 5 | 1 minute |
 | `budgets` POST | 20 | 1 minute |
-| `savings` POST | 20 | 1 minute |
-| `gold` POST | 20 | 1 minute |
+| `budgets/plan` POST | 10 | 1 minute |
+| `budgets/template` POST | 10 | 1 minute |
+| `budgets/ai-plan` POST | 5 | 1 minute |
+| `savings` GET / POST | 60 / 20 | 1 minute |
+| `gold` GET / POST | 60 / 20 | 1 minute |
+| `stocks` GET / POST | 60 / 20 | 1 minute |
+| `stocks/search` GET | 30 | 1 minute |
+| `categories` GET / POST | 60 / 20 | 1 minute |
+| `recurring-transactions` GET / POST | 60 / 20 | 1 minute |
+| `goals` POST | 30 | 1 minute |
+| `goals/ai-plan` POST | 5 | 1 minute |
+| `loans` POST | 30 | 1 minute |
+| `dividends` POST | 30 | 1 minute |
+| `dividends/upcoming` GET | 20 | 1 minute |
+| `analysis` regenerate | 3 | 1 minute |
+| `widget/data` GET | 60 | 1 minute |
+| `auth/register` | 5 | 10 minutes |
+| `auth/forgot-password` | 5 | 1 hour |
+| `auth/reset-password` | 10 | 1 hour |
+| `user/password` | 5 | 15 minutes |
+| `user/account` DELETE | 2 | 10 minutes |
+| `user/trial-request` | 3 | 1 hour |
 
-Stored in Upstash Redis when configured; otherwise a local in-memory fallback.
+Authenticated limits are keyed by user id; unauthenticated ones (register,
+password reset) fall back to the client IP. Stored in Upstash Redis when
+configured; otherwise a local in-memory fallback.
 
 ---
 
@@ -96,7 +119,10 @@ Create a `.env.local` (from `.env.example` if you have one) and fill in:
 - `AUTH_SECRET` — NextAuth signing secret
 - `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` — optional; enables the
   distributed rate limiter
-- `ADMIN_EMAILS` / `PRO_TRIAL_DAYS` — admin bootstrap & trial configuration
+- `ADMIN_EMAILS` — comma-separated emails granted the admin role on sign-in
+
+The free-trial length is not an environment variable: it is the
+`PRO_TRIAL_DAYS` constant in `src/lib/subscription.ts`.
 - `NEXT_PUBLIC_SITE_URL` — public URL (canonical metadata + widget deep links)
 
 ---
@@ -247,10 +273,3 @@ https://grandwealth.example.com/transactions?add=1
 opens the add-transaction dialog immediately. Add `?add=1&type=EXPENSE` to
 preselect an expense. Point any widget tap at this URL for a true one-tap
 add.
-
----
-
-## Legacy — what to delete when you're done
-
-- `prisma/migrations/20260929000000_add_carry_deficit_setting/migration.sql`
-- `prisma/seed.ts` (if unused)

@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { confirmDialog } from "@/components/ui/confirm-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -312,8 +313,14 @@ export function DividendsPanel() {
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      onClick={() => {
-                        if (confirm("Delete this dividend record?")) deleteMutation.mutate(d.id)
+                      onClick={async () => {
+                        if (
+                          await confirmDialog({
+                            title: "Delete this dividend record?",
+                          })
+                        ) {
+                          deleteMutation.mutate(d.id)
+                        }
                       }}
                       className="lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
                       aria-label="Delete dividend"

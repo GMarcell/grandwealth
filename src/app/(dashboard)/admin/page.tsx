@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { apiGet } from "@/lib/api-get"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
@@ -26,6 +27,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { confirmDialog } from "@/components/ui/confirm-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -143,9 +145,7 @@ export default function AdminPage() {
   const { data: overview } = useQuery<Overview>({
     queryKey: ["admin-overview"],
     queryFn: async () => {
-      const res = await fetch("/api/admin/overview")
-      if (!res.ok) throw new Error("Failed to load overview")
-      return res.json()
+      return apiGet<Overview>("/api/admin/overview")
     },
   })
 
@@ -162,9 +162,9 @@ export default function AdminPage() {
   }>({
     queryKey: ["admin-users", params.toString()],
     queryFn: async () => {
-      const res = await fetch(`/api/admin/users?${params.toString()}`)
-      if (!res.ok) throw new Error("Failed to load users")
-      return res.json()
+      return apiGet<{ data: AdminUser[]; pagination: Pagination }>(
+        `/api/admin/users?${params.toString()}`,
+      )
     },
   })
 
@@ -174,9 +174,9 @@ export default function AdminPage() {
   }>({
     queryKey: ["admin-trial-requests"],
     queryFn: async () => {
-      const res = await fetch("/api/admin/trial-requests?status=PENDING&pageSize=20")
-      if (!res.ok) throw new Error("Failed to load trial requests")
-      return res.json()
+      return apiGet<{ data: AdminTrialRequest[]; pagination: Pagination }>(
+        "/api/admin/trial-requests?status=PENDING&pageSize=20",
+      )
     },
   })
 
@@ -347,12 +347,13 @@ export default function AdminPage() {
           className="text-red-600 hover:text-red-600"
           title="Delete user"
           disabled={deleteMutation.isPending}
-          onClick={() => {
-            if (
-              confirm(
-                `Delete ${user.email}? This permanently removes their account and ALL their data. This cannot be undone.`
-              )
-            ) {
+          onClick={async () => {
+            const confirmed = await confirmDialog({
+              title: `Delete ${user.email}?`,
+              description:
+                "This permanently removes their account and ALL their data. This cannot be undone.",
+            })
+            if (confirmed) {
               deleteMutation.mutate(user.id)
             }
           }}

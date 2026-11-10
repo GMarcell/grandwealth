@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { compare, hash } from "bcryptjs"
-import { requireUser } from "@/lib/api-access"
+import { withUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import { changePasswordSchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
@@ -13,9 +13,9 @@ import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
  * match — except for accounts that don't have one yet (created through an
  * OAuth provider), where this acts as a first-time "set a password".
  */
-export async function PATCH(req: Request) {
-  const userId = await requireUser()
-  if (userId instanceof NextResponse) return userId
+export const PATCH = withUser(PATCH_handler)
+
+async function PATCH_handler(userId: string, req: Request) {
 
   // Rate limit: 5 password changes per 15 minutes per IP — the current-password
   // check would otherwise be a place to guess credentials.

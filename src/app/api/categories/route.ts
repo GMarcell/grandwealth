@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server"
-import { requireUser } from "@/lib/api-access"
+import { withUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
 import { createCategorySchema, safeParseBody } from "@/lib/validation"
 import { rateLimit, getRateLimitKey } from "@/lib/rate-limit"
 import { shortCircuitIdempotent, recordIdempotencyKey } from "@/lib/idempotency"
 
-export async function GET(req: Request) {
-  const userId = await requireUser()
-  if (userId instanceof NextResponse) return userId
+export const GET = withUser(GET_handler)
 
-  const limiter = await rateLimit(`categories-get:${getRateLimitKey(req)}`, {
+async function GET_handler(userId: string, req: Request) {
+
+  const limiter = await rateLimit(`categories-get:${getRateLimitKey(req, userId)}`, {
     limit: 60,
     windowMs: 60_000,
   })
@@ -25,9 +25,9 @@ export async function GET(req: Request) {
   return NextResponse.json(categories)
 }
 
-export async function POST(req: Request) {
-  const userId = await requireUser()
-  if (userId instanceof NextResponse) return userId
+export const POST = withUser(POST_handler)
+
+async function POST_handler(userId: string, req: Request) {
 
   const limiter = await rateLimit(`categories:${userId}`, {
     limit: 20,
