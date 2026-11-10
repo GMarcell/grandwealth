@@ -343,7 +343,14 @@ export function useBudgets() {
   }, [monthBudgets]);
 
   function saveQuickBudget(categoryName: string) {
-    const amount = Number(quickAmounts[categoryName] || 0);
+    // An emptied field must not fall through as `0`: that would save a zero
+    // budget without the user asking for one.
+    const raw = quickAmounts[categoryName]?.trim() ?? "";
+    if (!raw) {
+      toast.error("Enter a budget amount");
+      return;
+    }
+    const amount = Number(raw);
     if (!Number.isFinite(amount) || amount < 0) {
       toast.error("Enter a valid budget amount");
       return;

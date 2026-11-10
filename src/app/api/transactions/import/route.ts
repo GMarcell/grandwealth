@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { withUser } from "@/lib/api-handler"
 import { prisma } from "@/lib/prisma"
-import { parseCsv } from "@/lib/csv"
+import { parseCsv, parseCsvAmount } from "@/lib/csv"
 import { rateLimit } from "@/lib/rate-limit"
 
 /** Reject uploads larger than this before reading them into memory. */
@@ -100,7 +100,10 @@ async function POST_handler(userId: string, req: Request) {
 
       const type = cols[typeIdx]?.toUpperCase() as CsvTransactionType | undefined
       const category = cols[categoryIdx]?.toUpperCase()
-      const amount = parseFloat(cols[amountIdx])
+      // Grouped ("1.500.000") and localized ("1.500,75") amounts must be read
+      // as the amounts they represent: `parseFloat` stops at the first
+      // separator and would store 1.5 for both.
+      const amount = parseCsvAmount(cols[amountIdx] ?? "")
       const description = cols[descriptionIdx]
 
       if (!type || !validTypes.includes(type)) {
@@ -111,7 +114,7 @@ async function POST_handler(userId: string, req: Request) {
         errors.push({ line: i + 1, error: "Category is required" })
         continue
       }
-      if (isNaN(amount) || amount <= 0) {
+      if (amount === null || amount <= 0) {
         errors.push({ line: i + 1, error: `Invalid amount "${cols[amountIdx]}"` })
         continue
       }

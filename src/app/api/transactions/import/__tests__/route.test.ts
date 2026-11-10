@@ -106,6 +106,19 @@ describe("POST /api/transactions/import", () => {
     expect(mockCreateMany).toHaveBeenCalledTimes(1)
   })
 
+  it("parses grouped and localized amounts instead of stopping at the first separator", async () => {
+    signIn()
+
+    await POST(
+      uploadRequest(
+        `${HEADER}\nEXPENSE,FOOD,1.500.000,Lunch,2026-09-01\nINCOME,SALARY,"1.500,75",Pay,2026-09-02`,
+      ),
+    )
+
+    const rows = mockCreateMany.mock.calls[0][0].data as Array<{ amount: number }>
+    expect(rows.map((row) => row.amount)).toEqual([1500000, 1501])
+  })
+
   it("normalises categories the same way the rest of the app stores them", async () => {
     signIn()
 
