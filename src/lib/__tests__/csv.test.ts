@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { escapeCsvField, parseCsv, parseCsvAmount, parseCsvRow } from "@/lib/csv"
+import {
+  escapeCsvField,
+  parseCsv,
+  parseCsvAmount,
+  parseCsvRow,
+  transactionsImportTemplate,
+} from "@/lib/csv"
 
 describe("CSV helpers", () => {
   it("round-trips commas and quotes in fields", () => {
@@ -25,6 +31,18 @@ describe("CSV helpers", () => {
 
   it("rejects unclosed quoted fields", () => {
     expect(() => parseCsvRow('INCOME,"broken')).toThrow("Unclosed quoted CSV field")
+  })
+
+  it("builds a template the import route accepts", () => {
+    const rows = parseCsv(transactionsImportTemplate())
+
+    expect(rows[0]).toEqual(["type", "category", "amount", "description", "date"])
+    expect(rows).toHaveLength(3)
+    for (const row of rows.slice(1)) {
+      expect(row).toHaveLength(5)
+      expect(["INCOME", "EXPENSE"]).toContain(row[0])
+      expect(parseCsvAmount(row[2])).toBeGreaterThan(0)
+    }
   })
 })
 

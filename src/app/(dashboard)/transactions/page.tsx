@@ -23,6 +23,7 @@ import {
   Filter,
   Download,
   FileUp,
+  FileDown,
   AlertTriangle,
   Home,
   Sparkles,
@@ -53,6 +54,7 @@ import { formatDate, formatIDR, type PaginatedResponse } from "@/lib/utils";
 import { Pagination } from "@/components/ui/pagination";
 import { FormError, fieldErrorProps } from "@/components/ui/form-error";
 import { apiGet } from "@/lib/api-get";
+import { transactionsImportTemplate } from "@/lib/csv";
 import {
   RULE_TYPES,
   RULE_TYPE_CONFIGS,
@@ -104,6 +106,20 @@ export default function TransactionsPage() {
     errors: { line: number; error: string }[];
   } | null>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function downloadImportTemplate() {
+    const blob = new Blob([transactionsImportTemplate()], {
+      type: "text/csv;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "transactions-import-template.csv";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
 
   // Debounce search input (300ms) before sending to server
   const debouncedSetSearch = useCallback((value: string) => {
@@ -712,8 +728,24 @@ export default function TransactionsPage() {
           <p className="text-sm text-muted-foreground">
             Track your income and expenses
           </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            CSV import columns: type, category, amount, description, date
+            (optional)
+          </p>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
+          {/* Import template: a sample file with the required columns */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={downloadImportTemplate}
+            title="Download a sample CSV (columns: type, category, amount, description, date)"
+            aria-label="Download CSV template"
+            className="shrink-0"
+          >
+            <FileDown className="h-4 w-4 sm:mr-1" />
+            <span className="hidden sm:inline">Template</span>
+          </Button>
           {/* Import button */}
           <div className="relative">
             <input

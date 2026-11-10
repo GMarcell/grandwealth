@@ -99,6 +99,23 @@ export function parseCsvAmount(raw: string): number | null {
   return negative ? -rounded : rounded
 }
 
+/**
+ * Sample file for the transactions import: the header the route expects plus
+ * one expense and one income row. It is offered for download next to the
+ * import button, so it has to stay importable as-is — no comment or blank rows.
+ */
+export function transactionsImportTemplate(): string {
+  const today = new Date().toISOString().split("T")[0]
+  return [
+    ["type", "category", "amount", "description", "date"],
+    ["EXPENSE", "FOOD", "150000", "Lunch with the team", today],
+    ["INCOME", "SALARY", "5000000", "Monthly salary", today],
+  ]
+    .map((row) => row.map(escapeCsvField).join(","))
+    .join("\n")
+    .concat("\n")
+}
+
 /** Parse a CSV document with quoted fields. Newlines inside fields are not supported. */
 export function parseCsv(text: string): string[][] {
   return text
