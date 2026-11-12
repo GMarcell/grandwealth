@@ -38,6 +38,7 @@ import {
 import { formatIDR, formatCompactIDR, formatDate } from "@/lib/utils"
 import { toast } from "sonner"
 import { apiMutate, isQueuedResult } from "@/lib/api-mutate"
+import { PayoffPlanner } from "@/components/debts/payoff-planner"
 
 interface Loan {
   id: string
@@ -381,6 +382,9 @@ export default function DebtsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Extra-payment simulator */}
+      {!isLoading && <PayoffPlanner loans={loans ?? []} />}
 
       {/* Loan cards */}
       {isLoading ? (

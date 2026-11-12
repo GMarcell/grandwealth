@@ -26,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { formatCompactIDR, formatIDR } from "@/lib/utils";
 import { ForecastCard } from "@/components/dashboard/forecast-card";
+import { OnboardingCard } from "@/components/dashboard/onboarding-card";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 
@@ -253,6 +254,15 @@ export function DashboardContent() {
 
   return (
     <>
+      {data && (
+        <OnboardingCard
+          hasTransactions={data.recentTransactions.length > 0}
+          hasBudget={data.budgetSummary.budgetCount > 0}
+          hasInvestment={data.totalGoldWeight > 0 || data.stockCount > 0}
+          hasSavings={data.savingsAccountCount > 0}
+        />
+      )}
+
       {/* Quick Actions + Refresh */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <Card>

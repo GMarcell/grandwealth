@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { Sidebar } from "./sidebar";
-import { Menu, Wallet } from "lucide-react";
+import { Menu, Search, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Chatbot } from "@/components/chatbot/chatbot";
+import { CommandPalette } from "./command-palette";
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
 
   // Lock body scroll when mobile sidebar is open
   useEffect(() => {
@@ -26,7 +28,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <Sidebar
         isMobileOpen={isMobileOpen}
         onMobileClose={() => setIsMobileOpen(false)}
+        onOpenCommandPalette={() => setIsPaletteOpen(true)}
       />
+      <CommandPalette open={isPaletteOpen} onOpenChange={setIsPaletteOpen} />
       {/* min-w-0: without it this flex item refuses to shrink below its
           content's min-content width, which pushes the whole page wider than
           the phone screen instead of letting inner content scroll. */}
@@ -48,6 +52,15 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <Wallet className="h-5 w-5 text-primary" />
             <span className="font-bold">GrandWealth</span>
           </div>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setIsPaletteOpen(true)}
+            className="ml-auto min-w-[44px] min-h-[44px]"
+            aria-label="Search pages and actions"
+          >
+            <Search className="h-5 w-5" />
+          </Button>
         </div>
         <div className="p-3 sm:p-6 lg:p-8">{children}</div>
       </main>

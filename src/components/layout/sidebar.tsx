@@ -5,11 +5,6 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import {
-  LayoutDashboard,
-  ArrowLeftRight,
-  CircleDollarSign,
-  TrendingUp,
-  Settings,
   LogOut,
   Wallet,
   Sun,
@@ -17,13 +12,7 @@ import {
   Monitor,
   Check,
   X,
-  PiggyBank,
-  Repeat,
-  BarChart3,
-  Brain,
-  Landmark,
-  Target,
-  CreditCard,
+  Search,
   Shield,
 } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -36,28 +25,19 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
-  { href: "/budgets", label: "Budgets", icon: PiggyBank },
-  { href: "/recurring", label: "Recurring", icon: Repeat },
-  { href: "/reports", label: "Reports", icon: BarChart3 },
-  { href: "/analysis", label: "AI Analysis", icon: Brain },
-  { href: "/savings", label: "Savings", icon: Landmark },
-  { href: "/goals", label: "Goals", icon: Target },
-  { href: "/debts", label: "Debts", icon: CreditCard },
-  { href: "/gold", label: "Gold", icon: CircleDollarSign },
-  { href: "/stocks", label: "Stocks", icon: TrendingUp },
-  { href: "/settings", label: "Settings", icon: Settings },
-];
+import { NAV_ITEMS } from "@/lib/navigation";
 
 interface SidebarProps {
   isMobileOpen: boolean;
   onMobileClose: () => void;
+  onOpenCommandPalette: () => void;
 }
 
-export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
+export function Sidebar({
+  isMobileOpen,
+  onMobileClose,
+  onOpenCommandPalette,
+}: SidebarProps) {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
   const { data: session } = useSession();
@@ -66,8 +46,8 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
   // Admin panel entry — appended to the nav only for admins. The /admin
   // layout additionally enforces the role server-side.
   const items = isAdmin
-    ? [...navItems, { href: "/admin", label: "Admin", icon: Shield }]
-    : navItems;
+    ? [...NAV_ITEMS, { href: "/admin", label: "Admin", icon: Shield }]
+    : NAV_ITEMS;
 
   // Fetch budget alert count for sidebar badge (lightweight endpoint)
   const { data: budgetSummary } = useQuery<{ overBudget: number }>({
@@ -180,6 +160,18 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
 
         {/* Navigation */}
         <nav className="flex-1 space-y-1 overflow-y-auto p-4">
+          <button
+            type="button"
+            onClick={onOpenCommandPalette}
+            className="mb-3 flex w-full items-center gap-2 rounded-lg border border-sidebar-border bg-sidebar-accent/40 px-3 py-2 text-xs text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"
+            aria-label="Search pages and actions"
+          >
+            <Search className="h-4 w-4 shrink-0" />
+            <span className="flex-1 truncate text-left">Search…</span>
+            <kbd className="rounded border border-sidebar-border px-1.5 py-0.5 font-mono text-[10px] leading-none">
+              ⌘K
+            </kbd>
+          </button>
           {renderNavItems(onMobileClose)}
         </nav>
 
